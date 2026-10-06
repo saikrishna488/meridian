@@ -1,0 +1,15 @@
+{
+  "name": "meridian-ui",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Web UI surfaces for the Meridian desktop shell",
+  "scripts": {
+    "build": "node scripts/clean.mjs && tsc -p . && node scripts/copy-static.mjs",
+    "check": "tsc -p . --noEmit",
+    "watch": "node scripts/copy-static.mjs && tsc -p . --watch"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.0"
+  }
+}

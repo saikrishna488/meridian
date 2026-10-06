@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src meridian:; style-src meridian:; font-src meridian:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
+    <title>Meridian options</title>
+    <link rel="stylesheet" href="../../lib/base.css" />
+    <link rel="stylesheet" href="../../lib/menu.css" />
+    <link rel="stylesheet" href="options.css" />
+    <script type="module" src="options.js"></script>
+  </head>
+  <body>
+    <div class="scrim" id="scrim"></div>
+    <section class="menu hidden" id="menu" role="dialog" aria-label="Options" tabindex="-1">
+      <div class="row">
+        <span class="label" id="wifi-label">Wi-Fi</span>
+        <button class="switch" id="wifi" role="switch" aria-checked="false" aria-labelledby="wifi-label" disabled>
+          <span class="switch-text">Off</span>
+        </button>
+      </div>
+      <div class="row">
+        <span class="label" id="bluetooth-label">Bluetooth</span>
+        <button class="switch" id="bluetooth" role="switch" aria-checked="false" aria-labelledby="bluetooth-label" disabled>
+          <span class="switch-text">Off</span>
+        </button>
+      </div>
+      <div class="row slider-row">
+        <label class="label" for="brightness">Brightness</label>
+        <input class="slider" id="brightness" type="range" min="0" max="100" step="1" value="0" disabled />
+        <output class="value" id="brightness-value" for="brightness">—</output>
+      </div>
+      <div class="row slider-row">
+        <label class="label" for="volume">Volume</label>
+        <input class="slider" id="volume" type="range" min="0" max="100" step="1" value="0" disabled />
+        <output class="value" id="volume-value" for="volume">—</output>
+      </div>
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+    </section>
+  </body>
+</html>

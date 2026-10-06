@@ -1,0 +1,41 @@
+[workspace]
+resolver = "3"
+members = ["protocol", "services", "shell"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+license = "GPL-3.0-or-later"
+repository = "https://example.invalid/meridian"
+
+[workspace.dependencies]
+meridian-protocol = { path = "protocol" }
+meridian-services = { path = "services" }
+
+# GTK is used only as the Wayland surface / WebView container (see ADR-0001).
+gtk = { package = "gtk4", version = "0.11", features = ["v4_18"] }
+gio = "0.22"
+# GDesktopAppInfo (desktop-entry parsing and launching) lives in GioUnix.
+gio-unix = "0.22"
+# fd watches on the GLib main loop (Wayland connection for the window list).
+glib-unix = "0.22"
+glib = "0.22"
+webkit6 = { version = "0.6", features = ["v2_52"] }
+gtk4-layer-shell = "0.8"
+# Window list for the top bar (wlr-foreign-toplevel-management), on the
+# shell's own small Wayland connection.
+wayland-client = "0.31"
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ts-rs = { version = "12", features = ["serde-compat"] }
+log = "0.4"
+env_logger = { version = "0.11", default-features = false, features = ["auto-color", "humantime"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = "debuginfo"

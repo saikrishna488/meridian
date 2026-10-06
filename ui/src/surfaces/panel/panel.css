@@ -1,0 +1,91 @@
+/* Top bar: Applications · running windows · Options. Text only. */
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: var(--bar-height);
+  padding: 0 6px;
+  background: rgb(14 16 26 / 0.72);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  border-bottom: 1px solid rgb(255 255 255 / 0.08);
+  font-size: var(--text-sm);
+}
+
+.bar-button,
+.window {
+  flex: none;
+  height: 26px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+  transition: background-color var(--dur-fast) var(--ease-standard);
+}
+
+.bar-button {
+  font-weight: var(--weight-semibold);
+}
+
+.bar-button:hover,
+.window:hover {
+  background: rgb(255 255 255 / 0.1);
+}
+
+.bar-button[aria-expanded="true"] {
+  background: rgb(255 255 255 / 0.18);
+}
+
+#options {
+  margin-left: auto;
+}
+
+/* ---- running windows ---------------------------------------------------- */
+
+.windows {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  margin: 0 0 0 6px;
+  padding: 0 0 0 10px;
+  border-left: 1px solid rgb(255 255 255 / 0.14);
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.windows::-webkit-scrollbar {
+  display: none;
+}
+
+.window {
+  position: relative;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--on-wallpaper-muted);
+}
+
+.window[aria-pressed="true"] {
+  color: var(--on-wallpaper);
+  background: rgb(255 255 255 / 0.08);
+}
+
+/* Focus marker: a short line under the focused window's name. */
+.window[aria-pressed="true"]::after {
+  content: "";
+  position: absolute;
+  left: 30%;
+  right: 30%;
+  bottom: 1px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+
+.windows-empty {
+  color: rgb(255 255 255 / 0.4);
+  padding: 0 4px;
+}

@@ -1,0 +1,20 @@
+[package]
+name = "meridian-shell"
+description = "Meridian desktop shell and login screen: web UI surfaces on Wayland layer-shell"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+meridian-protocol.workspace = true
+meridian-services.workspace = true
+gtk.workspace = true
+gio.workspace = true
+glib.workspace = true
+webkit6.workspace = true
+gtk4-layer-shell.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true
+env_logger.workspace = true

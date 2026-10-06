@@ -1,0 +1,3 @@
+[env]
+# Where ts-rs writes the generated TypeScript protocol types.
+TS_RS_EXPORT_DIR = { value = "ui/src/lib/generated", relative = true }

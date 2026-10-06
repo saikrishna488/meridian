@@ -1,0 +1,17 @@
+[package]
+name = "meridian-services"
+description = "System integrations (apps, search, power) for the Meridian shell"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+meridian-protocol.workspace = true
+gio.workspace = true
+gio-unix.workspace = true
+glib-unix.workspace = true
+glib.workspace = true
+log.workspace = true
+wayland-client.workspace = true
+wayland-protocols-wlr.workspace = true

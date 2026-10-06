@@ -1,0 +1,45 @@
+/* Dropdown menus under the top bar (Applications, Options). The surface
+   starts just below the bar; the scrim catches outside clicks. */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+}
+
+.menu {
+  position: fixed;
+  top: 6px;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 18px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  /* Nearly opaque: backdrop-filter can't blur other apps' windows, so a
+     translucent menu would show sharp content through it. */
+  background: rgb(24 26 36 / 0.97);
+  box-shadow: var(--shadow-lg);
+  outline: none;
+  transition:
+    opacity var(--dur-med) var(--ease-out),
+    transform var(--dur-med) var(--ease-out);
+}
+
+.menu.hidden {
+  opacity: 0;
+  transform: translateY(-6px) scale(0.98);
+  transition-duration: var(--dur-fast);
+  transition-timing-function: var(--ease-in);
+}
+
+.status {
+  margin: 0;
+  padding: 0 16px;
+  font-size: var(--text-xs);
+  color: rgb(255 170 160);
+}
+.status:empty {
+  display: none;
+}
+.status:not(:empty) {
+  padding-bottom: 12px;
+}

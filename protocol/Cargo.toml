@@ -1,0 +1,14 @@
+[package]
+name = "meridian-protocol"
+description = "Typed IPC messages between Meridian UI surfaces and the shell host"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+# Generates the TypeScript protocol definitions for the UI from these types,
+# so the two sides cannot drift apart.
+ts-rs.workspace = true

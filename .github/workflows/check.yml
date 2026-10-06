@@ -1,0 +1,23 @@
+name: check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    container: registry.fedoraproject.org/fedora:44
+    steps:
+      - name: Install build dependencies
+        run: >
+          dnf install -y --setopt=install_weak_deps=False
+          git rust cargo rustfmt clippy nodejs npm
+          gtk4-devel webkitgtk6.0-devel gtk4-layer-shell-devel
+      - uses: actions/checkout@v4
+      - name: Check
+        env:
+          MERIDIAN_NO_TOOLBOX: "1"
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          tools/check.sh

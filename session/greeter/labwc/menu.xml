@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- No menus on the login screen. -->
+<openbox_menu>
+  <menu id="root-menu" label="" />
+</openbox_menu>

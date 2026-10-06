@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Meridian
+Comment=Meridian desktop (labwc + meridian-shell)
+Exec=meridian-session
+Type=Application
+DesktopNames=Meridian

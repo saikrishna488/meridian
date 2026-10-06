@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src meridian:; style-src meridian:; font-src meridian:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
+    <title>Meridian applications</title>
+    <link rel="stylesheet" href="../../lib/base.css" />
+    <link rel="stylesheet" href="../../lib/menu.css" />
+    <link rel="stylesheet" href="applications.css" />
+    <script type="module" src="applications.js"></script>
+  </head>
+  <body>
+    <div class="scrim" id="scrim"></div>
+    <section class="menu hidden" id="menu" role="dialog" aria-label="Applications">
+      <input id="search" class="search" type="text" placeholder="Search applications" autocomplete="off"
+        spellcheck="false" aria-label="Search applications" aria-controls="list" aria-autocomplete="list" />
+      <div class="scroller" id="scroller">
+        <ul class="list" id="list" role="listbox" aria-label="Applications"></ul>
+        <p class="empty" id="empty" hidden>No matching applications</p>
+      </div>
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+    </section>
+  </body>
+</html>

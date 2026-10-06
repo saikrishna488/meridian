@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<!--
+  labwc configuration for the login screen (greetd runs
+  `labwc -C <this dir> -S meridian-greeter`). Locked down: defining any
+  keybind stops labwc from loading its defaults, so there are no shortcuts
+  to open a terminal, menus, or switch windows before login.
+-->
+<labwc_config>
+  <keyboard>
+    <keybind key="W-Return"><action name="None" /></keybind>
+  </keyboard>
+  <mouse>
+    <context name="Root">
+      <mousebind button="Right" action="Press"><action name="None" /></mousebind>
+      <mousebind button="Middle" action="Press"><action name="None" /></mousebind>
+    </context>
+  </mouse>
+</labwc_config>

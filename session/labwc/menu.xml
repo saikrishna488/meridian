@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Meridian has no desktop menu: right-click on the desktop does nothing.
+     Root menu intentionally empty. -->
+<openbox_menu>
+  <menu id="root-menu" label="" />
+</openbox_menu>

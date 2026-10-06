@@ -1,0 +1,7 @@
+/* The wallpaper layer, shared by the home and wallpaper surfaces. */
+.wallpaper {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: #1b2140 url("meridian://assets/wallpapers/meridian-dusk.svg") center / cover no-repeat;
+}

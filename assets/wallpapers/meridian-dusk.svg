@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3840 2160" preserveAspectRatio="xMidYMid slice">
+  <!-- "Meridian Dusk" — original Meridian wallpaper. Gradients only: cheap to
+       rasterize at any resolution and no banding-prone blur filters. -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0f1430"/>
+      <stop offset="0.45" stop-color="#28306a"/>
+      <stop offset="0.78" stop-color="#7a4d8f"/>
+      <stop offset="1" stop-color="#e48d7c"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="1.05" r="0.75">
+      <stop offset="0" stop-color="#ffd2a1" stop-opacity="0.9"/>
+      <stop offset="0.35" stop-color="#f29a8a" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#f29a8a" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="haze" cx="0.18" cy="0.2" r="0.6">
+      <stop offset="0" stop-color="#5b74d6" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#5b74d6" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="arc" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#fff1e0" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="hill1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a2f63"/>
+      <stop offset="1" stop-color="#1a1838"/>
+    </linearGradient>
+    <linearGradient id="hill2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#221d45"/>
+      <stop offset="1" stop-color="#0e0d22"/>
+    </linearGradient>
+  </defs>
+  <rect width="3840" height="2160" fill="url(#sky)"/>
+  <rect width="3840" height="2160" fill="url(#haze)"/>
+  <rect width="3840" height="2160" fill="url(#glow)"/>
+  <!-- The meridian: a single thin arc across the sky. -->
+  <path d="M-200 1900 Q1920 -380 4040 1900" fill="none" stroke="url(#arc)" stroke-width="5"/>
+  <path d="M-200 1960 Q1920 -260 4040 1960" fill="none" stroke="url(#arc)" stroke-width="2" opacity="0.5"/>
+  <path d="M0 1720 C640 1560 1180 1640 1720 1700 C2300 1764 2900 1590 3840 1640 L3840 2160 L0 2160 Z" fill="url(#hill1)"/>
+  <path d="M0 1900 C820 1790 1500 1880 2200 1900 C2900 1920 3360 1820 3840 1850 L3840 2160 L0 2160 Z" fill="url(#hill2)"/>
+</svg>

@@ -1,0 +1,63 @@
+/* Meridian design tokens: the one place for type, color, shape and motion. */
+
+:root {
+  /* Typography */
+  --font-ui: "Inter Variable", "Inter", "Cantarell", "Noto Sans", system-ui, sans-serif;
+  --font-display: "Inter Display", var(--font-ui);
+  --text-xs: 11.5px;
+  --text-sm: 13px;
+  --text-md: 15px;
+  --text-lg: 17px;
+  --text-xl: 22px;
+  --text-display: 52px;
+
+  /* Layout */
+  --bar-height: 36px; /* keep in sync with PANEL_HEIGHT in shell/src/surface.rs */
+  --weight-regular: 420;
+  --weight-medium: 520;
+  --weight-semibold: 600;
+  --tracking-tight: -0.011em;
+  --tracking-display: -0.025em;
+
+  /* Shape */
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-pill: 999px;
+
+  /* Color: content sits on the wallpaper, so text is light with a soft shadow. */
+  --on-wallpaper: rgb(255 255 255 / 0.96);
+  --on-wallpaper-muted: rgb(255 255 255 / 0.7);
+  --wallpaper-text-shadow: 0 1px 2px rgb(0 0 0 / 0.35);
+  --accent: rgb(122 162 255);
+  --focus-ring: rgb(255 255 255 / 0.85);
+
+  /* Glass surfaces (search field, Control Center card) */
+  --glass-bg: rgb(26 28 38 / 0.5);
+  --glass-bg-strong: rgb(24 26 34 / 0.78);
+  --glass-border: rgb(255 255 255 / 0.14);
+  --glass-blur: 28px;
+  --tile-bg: rgb(255 255 255 / 0.08);
+  --tile-bg-hover: rgb(255 255 255 / 0.13);
+  --tile-bg-active: rgb(255 255 255 / 0.92);
+  --tile-fg-active: rgb(20 22 30);
+  --scrim: rgb(8 10 16 / 0.28);
+  --shadow-lg: 0 24px 60px rgb(0 0 0 / 0.35), 0 2px 8px rgb(0 0 0 / 0.2);
+
+  /* Motion: short, decelerating. Never tied to a frame rate. */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.55, 0, 1, 0.45);
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur-med: 180ms;
+  --dur-slow: 240ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur-med: 0ms;
+    --dur-slow: 0ms;
+  }
+}

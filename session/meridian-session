@@ -1,0 +1,22 @@
+#!/bin/sh
+# Start a Meridian session: labwc (compositor) + meridian-shell.
+#
+# Installed by tools/install.sh, which fills in @SHARE_DIR@. Override
+# locations with the variables below.
+set -eu
+
+share="${MERIDIAN_SHARE_DIR:-@SHARE_DIR@}"
+
+export XDG_CURRENT_DESKTOP="Meridian:wlroots"
+export XDG_SESSION_DESKTOP="meridian"
+export XDG_SESSION_TYPE="wayland"
+export MERIDIAN_UI_DIR="${MERIDIAN_UI_DIR:-$share/ui}"
+export MERIDIAN_ASSETS_DIR="${MERIDIAN_ASSETS_DIR:-$share/assets}"
+
+# Keep systemd/D-Bus activated services (portals, …) in sync with our env.
+if command -v dbus-update-activation-environment >/dev/null 2>&1; then
+    dbus-update-activation-environment --systemd XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP 2>/dev/null || true
+fi
+
+# `-s`: if the shell crashes, apps keep running (log out with Super+Shift+Q).
+exec labwc -C "${MERIDIAN_LABWC_CONFIG:-$share/labwc}" -s "${MERIDIAN_SHELL:-meridian-shell}"
