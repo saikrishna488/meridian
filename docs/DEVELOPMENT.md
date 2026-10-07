@@ -10,9 +10,11 @@ tools/dev-env.sh
 ```
 
 It installs: Rust (cargo, rustfmt, clippy), Node.js + npm (TypeScript),
-`gtk4-devel`, `webkitgtk6.0-devel`, `gtk4-layer-shell-devel`, labwc, Xwayland,
-Inter fonts, foot (a terminal to launch), grim (screenshots), and
-WirePlumber (`wpctl`, used for volume).
+`gtk4-devel`, `webkitgtk6.0-devel`, `gtk4-layer-shell-devel` (≥ 1.2.0, for
+the lock screen's session-lock surfaces too), `pam-devel` (lock screen
+password check), `clang-devel` (libclang: `gtk4-session-lock-sys` generates
+its bindings at build time), labwc, Xwayland, Inter fonts, foot (a terminal
+to launch), grim (screenshots), and WirePlumber (`wpctl`, used for volume).
 
 The `tools/*.sh` scripts re-run themselves inside the toolbox
 automatically. To build on the host instead, install the same packages with
@@ -25,6 +27,28 @@ automatically. To build on the host instead, install the same packages with
 cargo build -p meridian-shell        # → target/debug/meridian-shell
 ```
 
+The UI uses React and TypeScript. Each surface has an HTML entry point and a
+React component in `ui/src/surfaces/<name>/<name>.tsx`; shared components live
+in `ui/src/components`. The typed host bridge remains in `ui/src/lib/bridge.ts`.
+Esbuild bundles React locally into each surface's JavaScript file, preserving
+the `meridian://ui/surfaces/<name>/index.html` URLs and existing CSS.
+
+Use `applyAppearance()` and `useAppearance()` from `ui/src/lib/appearance.ts`
+for system-app appearance behavior. The shared mount layer reads the persisted
+mode and applies it to the document root, so CSS should use `[data-theme="dark"]`
+or theme variables rather than maintaining private appearance state. React
+surfaces that need to repaint non-CSS content can subscribe with
+`subscribeAppearance()` or use the hook. Terminal emulator output intentionally
+uses a fixed black-on-white palette; its surrounding window controls remain
+theme-aware.
+
+- `cd ui && npm run check` checks TypeScript, including JSX.
+- `cd ui && npm test` builds and tests surface interactions with a mocked host.
+- `cd ui && npm run watch` rebuilds JavaScript and copies HTML/CSS on changes.
+  Reload the WebView through the inspector, or restart the nested session, to
+  see changes. Watch builds include React's development diagnostics.
+
+
 ## Run
 
 ```sh
@@ -34,15 +58,19 @@ tools/dev-session.sh --release
 
 This opens a **nested labwc** window (1280×720, resizable) running
 `meridian-shell`. Closing the window ends the session.
+Each nested session uses its own D-Bus session bus so an existing shell
+cannot intercept startup or keyboard shortcuts.
 
 - Dev mode (`MERIDIAN_DEV=1`) enables WebKit's inspector: right-click →
   Inspect Element.
 - Logs: `RUST_LOG=debug tools/dev-session.sh`.
-- Drive it from another terminal (inside the toolbox):
+- Drive it from a terminal launched inside the nested desktop (so it
+  inherits that desktop's private D-Bus session bus):
   ```sh
   export WAYLAND_DISPLAY=wayland-1           # the nested compositor
   gapplication action org.meridian.Shell toggle-applications
   gapplication action org.meridian.Shell toggle-options
+  gapplication action org.meridian.Shell lock-session
   grim shot.png                              # screenshot
   ```
 - **Your installed apps in the toolbox.** The container can't run the
@@ -57,6 +85,13 @@ This opens a **nested labwc** window (1280×720, resizable) running
   XWayland there.
 - **Options controls change your real hardware** (Wi-Fi, Bluetooth,
   backlight, volume), even in the nested session.
+- **Sleep and Sign out act on your real session, not the nested one.**
+  They go through logind for the process that's actually running
+  `meridian-shell` — your host (or toolbox) login session — so clicking
+  them suspends your real machine or ends the session you're developing
+  from. Lock is safe to try: it only locks screens it can reach
+  (`gtk4_session_lock::is_supported()` must be true for the nested labwc,
+  which it is).
 
 ### Running on the host instead
 

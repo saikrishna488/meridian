@@ -23,6 +23,13 @@ glib-unix = "0.22"
 glib = "0.22"
 webkit6 = { version = "0.6", features = ["v2_52"] }
 gtk4-layer-shell = "0.8"
+# Lock screen surfaces (ext-session-lock-v1), via the same C library as
+# gtk4-layer-shell (>= 1.2.0, for the per-monitor `monitor` signal; see
+# ADR-0007).
+gtk4-session-lock = { version = "0.4", features = ["v1_2"] }
+# Password verification for the lock screen (PAM), against the
+# `meridian-lock` service (see session/meridian-lock.pam).
+pam-client = { version = "0.5", default-features = false }
 # Window list for the top bar (wlr-foreign-toplevel-management), on the
 # shell's own small Wayland connection.
 wayland-client = "0.31"

@@ -25,6 +25,7 @@ pub struct App {
     /// Desktop-file id, e.g. `org.mozilla.firefox.desktop`.
     pub id: String,
     pub name: String,
+    pub icon: Option<String>,
     pub generic_name: Option<String>,
     pub keywords: Vec<String>,
     pub description: Option<String>,
@@ -32,7 +33,7 @@ pub struct App {
     pub wm_class: Option<String>,
     pub(crate) search: SearchFields,
     info: Option<gio_unix::DesktopAppInfo>,
-    source: Option<PathBuf>,
+    pub source: Option<PathBuf>,
 }
 
 impl App {
@@ -45,7 +46,18 @@ impl App {
         let search = SearchFields::new(&name, generic_name.as_deref(), &keywords, description.as_deref());
         let wm_class = info.startup_wm_class().map(|s| s.to_string());
         let source = info.filename();
-        Some(App { id, name, generic_name, keywords, description, wm_class, search, info: Some(info), source })
+        Some(App {
+            id,
+            name,
+            icon: info.icon().and_then(|i| i.to_string()).map(|s| s.to_string()),
+            generic_name,
+            keywords,
+            description,
+            wm_class,
+            search,
+            info: Some(info),
+            source,
+        })
     }
 
     #[cfg(test)]
@@ -53,6 +65,7 @@ impl App {
         App {
             id: format!("{}.desktop", name.to_lowercase().replace(' ', "-")),
             name: name.into(),
+            icon: None,
             generic_name: generic.map(Into::into),
             keywords: keywords.to_vec(),
             description: description.map(Into::into),
@@ -298,6 +311,7 @@ impl App {
         Some(App {
             id,
             name,
+            icon: get_str("Icon"),
             generic_name,
             keywords,
             description,

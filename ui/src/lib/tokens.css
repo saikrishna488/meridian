@@ -3,6 +3,7 @@
 :root {
   /* Typography */
   --font-ui: "Inter Variable", "Inter", "Cantarell", "Noto Sans", system-ui, sans-serif;
+  --font-mono: "DejaVu Sans Mono", "Cascadia Code", monospace;
   --font-display: "Inter Display", var(--font-ui);
   --text-xs: 11.5px;
   --text-sm: 13px;
@@ -12,7 +13,7 @@
   --text-display: 52px;
 
   /* Layout */
-  --bar-height: 36px; /* keep in sync with PANEL_HEIGHT in shell/src/surface.rs */
+  --dock-surface-height: 128px; /* keep in sync with PANEL_HEIGHT in shell/src/surface.rs */
   --weight-regular: 420;
   --weight-medium: 520;
   --weight-semibold: 600;
@@ -61,3 +62,5 @@
     --dur-slow: 0ms;
   }
 }
+
+:root[data-theme="light"] { --glass-bg: rgb(240 243 250 / .86); --glass-bg-strong: rgb(245 247 252 / .95); --glass-border: rgb(30 40 60 / .16); --tile-bg: rgb(30 40 60 / .06); --tile-bg-hover: rgb(30 40 60 / .12); }

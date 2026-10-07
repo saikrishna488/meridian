@@ -54,6 +54,8 @@ ADR-0003.)
 - **Options menu.** **Wi-Fi** and **Bluetooth** as on/off switches, and
   **Brightness** and **Volume** as percentage sliders. They show and change
   the real system state. Unavailable controls are disabled, never faked.
+  Below them, **Lock**, **Sleep**, and **Sign out**
+  ([ADR-0007](adr/0007-session-controls.md)).
 - **Text only, no icons**, anywhere in the shell
   ([ADR-0004](adr/0004-text-only.md)).
 - **Desktop.** Just the wallpaper.
@@ -68,6 +70,7 @@ Keyboard map (M0):
 | Enter | Launch selected |
 | Esc | Clear query → close menu |
 | Super+C | Toggle Options |
+| Super+L | Lock |
 | Alt+Tab | Switch windows (labwc switcher, text list) |
 
 ## 3. Compositor strategy
@@ -90,7 +93,10 @@ standard Wayland protocols, so it can be swapped without touching the shell.
   - M0: `wlr-layer-shell` (bar, menus, wallpaper),
     `wlr-foreign-toplevel-management` (running windows in the bar)
   - M1: `xdg-activation` (focus handoff on launch)
-  - M3: `ext-session-lock-v1` (lock screen), `ext-idle-notify-v1`
+  - `ext-session-lock-v1` (lock screen): shipped early, in M0/M1, as the
+    Options menu's Lock action ([ADR-0007](adr/0007-session-controls.md))
+  - M3: `ext-idle-notify-v1` (locking on idle; Lock itself needed no idle
+    detection)
   - M4: `ext-workspace-v1`, `ext-image-copy-capture` (screenshots and overview
     thumbnails), `wlr-output-management` (display settings)
 - **Long term:** our own compositor on **Smithay** (Rust). It will add window
@@ -159,7 +165,19 @@ the application's name.
   persistent storage.
 - WebKit's bubblewrap/seccomp sandbox for the web process stays enabled.
 
-### 4.3 Control interface
+### 4.3 Shared UI appearance
+
+Each Meridian surface is a separate WebView. On mount, the shared UI layer reads
+the saved desktop appearance and subscribes to `desktop.changed`. It applies
+`data-theme` and `color-scheme` to the document root, then emits the
+`meridian-theme` event. React system apps can use `useAppearance()` from
+`ui/src/lib/appearance.ts`; CSS-only surfaces use the root theme attribute.
+This keeps live light/dark changes consistent across open and newly opened
+Meridian windows. Applications with their own theme settings remain in control
+of their own appearance. Meridian Terminal keeps its shell canvas black on
+white for legibility while its tabs and controls follow the system appearance.
+
+### 4.4 Control interface
 
 The shell is a `GApplication` with id `org.meridian.Shell`. Fixed,
 argument-less actions are exported on the session bus. The compositor binds
@@ -172,7 +190,7 @@ gapplication action org.meridian.Shell toggle-options
 
 Nothing in this interface takes a command string.
 
-### 4.4 Login screen
+### 4.5 Login screen
 
 `meridian-greeter` ([ADR-0006](adr/0006-login-screen.md)) is a second binary
 built from the same host library (`shell/src/lib.rs`). greetd runs it as the
@@ -221,7 +239,7 @@ UI ── search.activate {provider, item_id} ──▶ provider decides what "a
 
 ## 6. The native/web boundary
 
-**Decision:** UI is written in HTML/CSS/TypeScript and rendered by
+**Decision:** UI is written in React/TypeScript with HTML/CSS and rendered by
 **WebKitGTK 6** inside a thin Rust host. GTK4 is used **only** as the
 window/WebView container, for `gtk4-layer-shell`, and monitor enumeration.
 No GTK widgets are used for UI.
@@ -364,9 +382,12 @@ password entry on the lock screen later. Defenses are layered:
 6. **Login screen** (M0): greetd runs PAM as root. The greeter is
    unprivileged, has a single capability, and never stores or logs the
    password.
-7. **Lock screen (M3)** uses `ext-session-lock-v1`, so a crashed shell leaves
-   the session locked. PAM authentication runs in a small separate helper,
-   not in web content.
+7. **Lock screen** ([ADR-0007](adr/0007-session-controls.md), shipped early)
+   uses `ext-session-lock-v1`, so a crashed shell leaves the session locked
+   rather than exposed. PAM authentication runs in the host process (on
+   `gio::spawn_blocking`'s thread pool, never the GTK main loop or web
+   content) against the password of the already-logged-in user only, the
+   same trust boundary the login screen already carries.
 
 ---
 
@@ -404,14 +425,16 @@ Meridian is a shell, not a platform. Applications don't link against it.
 
 ```
 Cargo.toml          Rust workspace
-shell/              meridian-shell + meridian-greeter: surface host, bridge, URI scheme, greetd client
+shell/              meridian-shell + meridian-greeter: surface host, bridge, URI scheme, greetd client,
+                    logind power actions (power.rs), lock screen PAM check (lock_auth.rs)
 protocol/           meridian-protocol: IPC types (Rust source of truth → generated TS)
 services/           meridian-services: app catalog, search + fuzzy matcher, windows, settings
-ui/                 TypeScript/HTML/CSS for each surface
+ui/                 React/TypeScript/HTML/CSS for each surface
   src/lib/          bridge client, generated protocol types, design tokens
-  src/surfaces/     panel, applications, options, wallpaper, greeter
+  src/surfaces/     panel, applications, options, wallpaper, greeter, locker
 assets/             wallpapers
-session/            labwc configs (session + login screen), session entry, launcher script
+session/            labwc configs (session + login screen), session entry, launcher script,
+                    lock screen PAM service (meridian-lock.pam)
 tools/              dev environment, nested sessions, fake greetd, install script, checks
 docs/               this document, ADRs, development guide
 ```
@@ -435,6 +458,6 @@ Changes from the originally suggested layout:
 | **M0 — Prototype** | Top bar (Applications, running windows, Options), Applications menu (search + text list of real installed apps, keyboard/mouse, launching), Options (real Wi-Fi/Bluetooth switches, brightness/volume sliders), login screen on greetd, installer, fuzzy search provider, typed bridge with capabilities, nested dev session with host apps |
 | **M1 — Windows** | foreign-toplevel: Meridian window overview/switcher replaces labwc's Alt+Tab, focus/minimize from the bar, `xdg-activation` |
 | **M2 — Controls** | `meridian-servicesd` (zbus); native PipeWire volume with change notifications; Wi-Fi network list, Bluetooth devices, power menu (logind), media-key OSD, clock |
-| **M3 — Session** | notifications (server + center), lock screen, idle/DPMS, DDC/CI brightness, calendar |
+| **M3 — Session** | notifications (server + center), ~~lock screen~~ (shipped early, [ADR-0007](adr/0007-session-controls.md)), idle/DPMS, DDC/CI brightness, calendar |
 | **M4 — Search & polish** | settings/calculator/file providers, workspaces, screenshot UI, shortcut config, display settings, accessibility audit |
 | **M5+** | Smithay compositor (window animations, live overview), settings app, file manager, terminal, greeter, ISO/installer, SDK |

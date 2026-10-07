@@ -1,91 +1,166 @@
-/* Top bar: Applications · running windows · Options. Text only. */
+/* Floating glass dock; the native surface is centered on the bottom edge. */
+body {
+  height: var(--dock-surface-height);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 6px 6px;
+}
 
 .bar {
   display: flex;
   align-items: center;
   gap: 4px;
-  height: var(--bar-height);
-  padding: 0 6px;
-  background: rgb(14 16 26 / 0.72);
-  backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
-  border-bottom: 1px solid rgb(255 255 255 / 0.08);
-  font-size: var(--text-sm);
+  max-width: 100%;
+  height: 64px;
+  padding: 4px;
+  border: 1px solid rgb(255 255 255 / 0.24);
+  border-radius: 22px;
+  background: transparent;
+  box-shadow: 0 6px 12px rgb(0 0 0 / 0.28), inset 0 1px 0 rgb(255 255 255 / 0.12);
 }
 
 .bar-button,
 .window {
+  position: relative;
+  display: grid;
+  place-items: center;
   flex: none;
-  height: 26px;
-  padding: 0 12px;
+  width: 52px;
+  height: 54px;
+  padding: 3px 3px 7px;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: 14px;
   background: transparent;
-  font-weight: var(--weight-medium);
-  white-space: nowrap;
-  transition: background-color var(--dur-fast) var(--ease-standard);
-}
-
-.bar-button {
-  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transform-origin: center bottom;
+  transition: transform var(--dur-med) var(--ease-out), background var(--dur-fast);
 }
 
 .bar-button:hover,
-.window:hover {
-  background: rgb(255 255 255 / 0.1);
+.bar-button:focus-visible {
+  transform: translateY(-6px);
 }
 
-.bar-button[aria-expanded="true"] {
-  background: rgb(255 255 255 / 0.18);
+.window:hover,
+.window:focus-visible {
+  transform: translateY(-6px);
 }
 
-#options {
-  margin-left: auto;
+.bar-button[aria-expanded="true"],
+.window[aria-pressed="true"] {
+  background: rgb(255 255 255 / 0.12);
 }
 
-/* ---- running windows ---------------------------------------------------- */
+.dock-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  font-size: 28px;
+  font-weight: var(--weight-semibold);
+  color: white;
+  box-shadow: inset 0 1px 1px rgb(255 255 255 / 0.4), 0 3px 5px rgb(0 0 0 / 0.22);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.2);
+}
+
+.launcher-icon { background: linear-gradient(145deg, #8e9cff, #5751cb); }
+.options-icon { background: linear-gradient(145deg, #a0aabd, #505b73); }
+.app-icon { background: linear-gradient(145deg, hsl(var(--app-hue) 65% 65%), hsl(var(--app-hue) 55% 39%)); font-size: 23px; }
+
+.bar-button::before {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 7px);
+  padding: 4px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 7px;
+  background: var(--glass-bg-strong);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--dur-fast);
+}
+.bar-button:hover::before,
+.bar-button:focus-visible::before { opacity: 1; }
 
 .windows {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 5px;
   min-width: 0;
-  margin: 0 0 0 6px;
-  padding: 0 0 0 10px;
-  border-left: 1px solid rgb(255 255 255 / 0.14);
+  margin: 0;
+  padding: 2px 4px;
+  border-inline: 1px solid rgb(255 255 255 / 0.18);
   list-style: none;
   overflow-x: auto;
   scrollbar-width: none;
 }
-.windows::-webkit-scrollbar {
-  display: none;
-}
+.windows::-webkit-scrollbar { display: none; }
+.windows li { flex: none; }
 
-.window {
-  position: relative;
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--on-wallpaper-muted);
-}
-
-.window[aria-pressed="true"] {
-  color: var(--on-wallpaper);
-  background: rgb(255 255 255 / 0.08);
-}
-
-/* Focus marker: a short line under the focused window's name. */
-.window[aria-pressed="true"]::after {
+.window.running::after {
   content: "";
   position: absolute;
-  left: 30%;
-  right: 30%;
-  bottom: 1px;
-  height: 2px;
-  border-radius: 1px;
-  background: var(--accent);
+  bottom: 0;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.45);
+}
+.window.running[aria-pressed="true"]::after {
+  background: white;
+  box-shadow: 0 0 5px rgb(255 255 255 / 0.7);
+}
+.windows-empty {
+  padding: 0 6px;
+  font-size: var(--text-xs);
+  color: var(--on-wallpaper-muted);
+  white-space: nowrap;
 }
 
-.windows-empty {
-  color: rgb(255 255 255 / 0.4);
-  padding: 0 4px;
+@media (prefers-reduced-motion: reduce) {
+  .bar-button:hover, .bar-button:focus-visible,
+  .window:hover, .window:focus-visible { transform: none; }
 }
+
+.dock-icon img { display: block; width: 100%; height: 100%; object-fit: contain; border-radius: 0; image-rendering: auto; }
+.app-icon.has-image { background: transparent; box-shadow: none; text-shadow: none; }
+.app-icon.system-artwork { overflow: hidden; border-radius: 28%; background: linear-gradient(145deg, #f6f7fb, #dce1ec); box-shadow: inset 0 1px 1px #fff9, 0 2px 4px #0002; }
+.app-icon.system-artwork img { width: 80%; height: 80%; object-fit: contain; }
+/* Keep glass blur on a separate backdrop, away from the icon raster layers. */
+.bar::before { content: ""; position: absolute; inset: 0; z-index: 0; border-radius: inherit; background: linear-gradient(150deg, rgb(220 225 238 / .35), rgb(95 100 120 / .65)); backdrop-filter: blur(var(--glass-blur)) saturate(1.5); pointer-events: none; }
+.bar.drop-active { outline: 2px solid #b9d6ff; background: rgb(120 150 195 / .75); }
+.windows:empty { display: none; }
+.window::before { content: attr(data-tooltip); position: absolute; bottom: calc(100% + 7px); padding: 5px 10px; border-radius: 8px; background: rgb(30 32 40 / .95); font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; }
+.window:hover::before, .window:focus-visible::before { opacity: 1; }
+body.topbar-surface { height: 32px; padding: 0; display: block; }
+.topbar { height: 32px; display: flex; align-items: center; gap: 5px; padding: 0 14px; background: rgb(30 34 48 / .85); box-shadow: inset 0 -1px 0 rgb(255 255 255 / .1); font-size: 13px; }
+.topbar button { display: flex; align-items: center; justify-content: center; height: 28px; padding: 0 10px; border: 0; border-radius: 5px; background: transparent; cursor: pointer; }
+.topbar button:hover, .topbar button[aria-expanded="true"] { background: rgb(255 255 255 / .16); }
+.topbar .menu-brand { font-size: 22px; }
+.topbar #options img { width: 20px; height: 20px; border-radius: 6px; }
+.active-app { padding: 0 8px; max-width: 30vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menu-spacer { flex: 1; }
+.topbar .when { display: flex; align-items: center; gap: 10px; font-size: 12px; white-space: nowrap; }
+.topbar .date { margin: 0; }
+.topbar .clock { order: 1; }
+@media (max-width: 550px) { .topbar .date { display: none; } }
+.bar { position: relative; }
+/* A horizontal scroller also clips vertically. Give its scrollport headroom
+   without changing the visible dock height or icon spacing. */
+.windows.dock-items { position: relative; z-index: 1; padding: 40px 8px 8px; margin: -40px -8px -8px; border: 0; gap: 4px; overflow-y: hidden; }
+.dock-items li { position: relative; }
+.dock-items li:hover, .dock-items li:focus-within { z-index: 2; }
+.trash-icon { color: #e4e7ec; background: linear-gradient(145deg, #a8adb7, #575e6a); }
+.dock-drop-target { outline: 2px solid #a8caff; border-radius: 14px; }
+.dock-context { position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 4px 8px; border-radius: inherit; background: #333747; }
+.dock-context strong { max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dock-context button, .dock-error { border: 0; padding: 8px; border-radius: 8px; background: rgb(255 255 255 / .12); cursor: pointer; }
+.dock-error { position: absolute; inset: 0; background: #553336; font-size: 12px; overflow: auto; z-index: 6; }
+
+.app-icon { border-radius: 28%; }
+.app-icon.generic-image { position: relative; }
+.generic-monogram { position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; color: white; font-weight: 600; }

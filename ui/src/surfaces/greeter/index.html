@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src meridian:; style-src meridian:; img-src meridian:; font-src meridian:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
+      content="default-src 'none'; script-src meridian:; style-src meridian:; img-src meridian:; font-src meridian:; connect-src meridian:; base-uri 'none'; form-action 'none'" />
     <title>Meridian login</title>
     <link rel="stylesheet" href="../../lib/base.css" />
     <link rel="stylesheet" href="../../lib/wallpaper.css" />
@@ -11,36 +11,6 @@
     <script type="module" src="greeter.js"></script>
   </head>
   <body>
-    <div class="wallpaper" aria-hidden="true"></div>
-    <p class="host" id="host"></p>
-
-    <main class="login">
-      <header class="when">
-        <time class="clock" id="clock"></time>
-        <p class="date" id="date"></p>
-      </header>
-
-      <form class="card" id="form" autocomplete="off" novalidate>
-        <label class="field">
-          <span class="field-label">Username</span>
-          <input id="username" name="username" type="text" autocapitalize="off" spellcheck="false" required />
-        </label>
-        <label class="field">
-          <span class="field-label">Password</span>
-          <input id="password" name="password" type="password" required />
-        </label>
-        <label class="field">
-          <span class="field-label">Session</span>
-          <select id="session" name="session"></select>
-        </label>
-        <button class="submit" id="submit" type="submit">Log in</button>
-        <p class="message" id="message" role="alert" aria-live="assertive"></p>
-      </form>
-    </main>
-
-    <nav class="power" aria-label="Power">
-      <button class="power-button" id="reboot" type="button" data-action="reboot" data-label="Restart">Restart</button>
-      <button class="power-button" id="poweroff" type="button" data-action="power-off" data-label="Shut down">Shut down</button>
-    </nav>
+    <div id="root"></div>
   </body>
 </html>

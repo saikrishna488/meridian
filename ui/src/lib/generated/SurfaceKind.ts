@@ -3,4 +3,4 @@
 /**
  * The kinds of UI surfaces the shell hosts.
  */
-export type SurfaceKind = "wallpaper" | "panel" | "applications" | "options" | "greeter";
+export type SurfaceKind = "wallpaper" | "panel" | "topbar" | "desktop-menu" | "applications" | "options" | "preferences" | "finder" | "terminal" | "greeter" | "locker";

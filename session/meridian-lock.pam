@@ -1,0 +1,6 @@
+#%PAM-1.0
+# PAM service for the lock screen (see docs/adr/0007-session-controls.md).
+# Only checks that the running user's own password is correct; it never
+# opens a session. Installed to /etc/pam.d/meridian-lock by tools/install.sh.
+auth       include      system-auth
+account    include      system-auth

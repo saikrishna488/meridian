@@ -1,5 +1,4 @@
-/* Dropdown menus under the top bar (Applications, Options). The surface
-   starts just below the bar; the scrim catches outside clicks. */
+/* Menus above the bottom dock; the scrim catches outside clicks. */
 
 .scrim {
   position: fixed;
@@ -8,7 +7,7 @@
 
 .menu {
   position: fixed;
-  top: 6px;
+  bottom: 6px;
   display: flex;
   flex-direction: column;
   max-height: calc(100vh - 18px);
@@ -26,7 +25,7 @@
 
 .menu.hidden {
   opacity: 0;
-  transform: translateY(-6px) scale(0.98);
+  transform: translateY(6px) scale(0.98);
   transition-duration: var(--dur-fast);
   transition-timing-function: var(--ease-in);
 }

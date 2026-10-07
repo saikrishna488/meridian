@@ -8,3 +8,5 @@ pub mod apps;
 pub mod search;
 pub mod settings;
 pub mod windows;
+
+pub mod displays;

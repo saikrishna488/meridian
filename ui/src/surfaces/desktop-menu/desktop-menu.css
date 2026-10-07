@@ -1,0 +1,20 @@
+.desktop-scrim { position: fixed; inset: 0; }
+.desktop-menu { position: fixed; top: 36px; width: 272px; padding: 6px; border: 1px solid rgb(255 255 255 / .18); border-radius: 10px; background: rgb(32 36 49 / .97); box-shadow: 0 12px 35px rgb(0 0 0 / .35); color: var(--on-wallpaper, white); }
+.desktop-menu.hidden { visibility: hidden; }
+.desktop-menu button { display: block; width: 100%; border: 0; border-radius: 5px; padding: 8px 12px; background: transparent; color: inherit; text-align: left; cursor: pointer; font-size: 13px; }
+.desktop-menu button:hover:not(:disabled), .desktop-menu button:focus-visible { background: rgb(125 162 255 / .3); }
+.desktop-menu button:disabled { opacity: .4; cursor: default; }
+.desktop-menu hr { border: 0; border-top: 1px solid rgb(255 255 255 / .14); margin: 5px; }
+.menu-note { margin: 8px 12px; font-size: 12px; opacity: .65; }
+.desktop-menu.about { top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(440px, calc(100vw - 32px)); padding: 30px; text-align: center; }
+.about .close-about { position: absolute; top: 8px; right: 8px; width: 32px; text-align: center; padding: 4px; font-size: 22px; }
+.meridian-symbol { font-size: 64px; color: #b6c6ff; }
+.about h1 { margin: 8px 0; font-size: 28px; }
+.version { opacity: .7; margin: 0 0 26px; }
+.about dl { text-align: left; margin: 0; }
+.about dl div { padding: 10px 0; border-top: 1px solid rgb(255 255 255 / .1); }
+.about dt { font-size: 11px; opacity: .6; margin-bottom: 4px; }
+.about dd { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+
+.source-link { color: #b6c6ff; text-underline-offset: 3px; }
+.source-link:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }

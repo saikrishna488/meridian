@@ -17,6 +17,11 @@ fi
 
 build_all "${cargo_args[@]}"
 
+# Install only Meridian's own compositor theme for this development session.
+theme_root="${XDG_DATA_HOME:-$HOME/.local/share}/themes/Meridian"
+mkdir -p "$theme_root"
+cp -r "$ROOT/assets/themes/Meridian/." "$theme_root/"
+
 if [ -z "${WAYLAND_DISPLAY:-}" ]; then
     echo "error: run this from a Wayland session (nested labwc needs a host compositor)" >&2
     exit 1
@@ -35,6 +40,9 @@ if [ -e /run/.toolboxenv ]; then
     export MERIDIAN_HOST_APPS=1
 fi
 
-compositor=(labwc -C "$ROOT/session/labwc" -S "$ROOT/target/$profile/meridian-shell")
+# GApplication is unique on the session bus. A previous nested shell (or
+# an installed Meridian session) must not absorb this shell's activation.
+# Include labwc so its gapplication keyboard bindings share the same bus.
+compositor=(dbus-run-session -- labwc -C "$ROOT/session/labwc" -S "$ROOT/target/$profile/meridian-shell")
 
 exec_compositor "${compositor[@]}"

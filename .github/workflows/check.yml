@@ -13,7 +13,7 @@ jobs:
         run: >
           dnf install -y --setopt=install_weak_deps=False
           git rust cargo rustfmt clippy nodejs npm
-          gtk4-devel webkitgtk6.0-devel gtk4-layer-shell-devel
+          gtk4-devel webkitgtk6.0-devel gtk4-layer-shell-devel pam-devel clang-devel
       - uses: actions/checkout@v4
       - name: Check
         env:

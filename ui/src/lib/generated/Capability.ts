@@ -3,4 +3,4 @@
 /**
  * Permissions granted to a surface. Every request requires at most one.
  */
-export type Capability = "search" | "popovers" | "windows" | "settings" | "login";
+export type Capability = "search" | "dock" | "app-management" | "popovers" | "windows" | "settings" | "login" | "session" | "unlock" | "files" | "appearance" | "terminal";

@@ -3,4 +3,4 @@
 /**
  * The shell's menus, opened from the top bar.
  */
-export type Popover = "applications" | "options";
+export type Popover = "desktop-menu" | "applications" | "options";

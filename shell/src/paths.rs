@@ -14,7 +14,11 @@ const INSTALL_DIRS: [&str; 2] = ["/usr/local/share/meridian", "/usr/share/meridi
 /// Where the UI bundle and assets are: `MERIDIAN_UI_DIR`/`MERIDIAN_ASSETS_DIR`
 /// if set, else an installed copy, else this source tree (development).
 pub fn roots() -> Result<Roots, String> {
-    let installed = INSTALL_DIRS.iter().map(std::path::Path::new).find(|d| d.join("ui").is_dir());
+    // A binary built in this checkout must use its matching UI bundle.
+    // An older system installation may have no locker (or an older bridge).
+    let target = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../target").canonicalize().ok();
+    let from_checkout = std::env::current_exe().ok().zip(target).is_some_and(|(exe, target)| exe.starts_with(target));
+    let installed = INSTALL_DIRS.iter().map(std::path::Path::new).find(|d| !from_checkout && d.join("ui").is_dir());
     let (ui_default, assets_default) = match installed {
         Some(dir) => (dir.join("ui").display().to_string(), dir.join("assets").display().to_string()),
         None => (DEV_UI_DIR.to_owned(), DEV_ASSETS_DIR.to_owned()),

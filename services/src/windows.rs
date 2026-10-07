@@ -26,6 +26,7 @@ pub struct Window {
     pub app_id: String,
     pub title: String,
     pub active: bool,
+    pub fullscreen: bool,
 }
 
 struct Toplevel {
@@ -190,7 +191,13 @@ impl Dispatch<ZwlrForeignToplevelManagerV1, ()> for State {
                 state.next_id += 1;
                 state.toplevels.push(Toplevel {
                     handle: toplevel,
-                    window: Window { id, app_id: String::new(), title: String::new(), active: false },
+                    window: Window {
+                        id,
+                        app_id: String::new(),
+                        title: String::new(),
+                        active: false,
+                        fullscreen: false,
+                    },
                     ready: false,
                 });
             }
@@ -227,7 +234,10 @@ impl Dispatch<ZwlrForeignToplevelHandleV1, ()> for State {
         match event {
             handle_v1::Event::Title { title } => t.window.title = title,
             handle_v1::Event::AppId { app_id } => t.window.app_id = app_id,
-            handle_v1::Event::State { state: raw } => t.window.active = is_activated(&raw),
+            handle_v1::Event::State { state: raw } => {
+                t.window.active = is_activated(&raw);
+                t.window.fullscreen = has_state(&raw, handle_v1::State::Fullscreen);
+            }
             // Properties are applied atomically on `done`.
             handle_v1::Event::Done => {
                 t.ready = true;
@@ -240,7 +250,11 @@ impl Dispatch<ZwlrForeignToplevelHandleV1, ()> for State {
 
 /// The `state` event carries an array of native-endian u32 state values.
 fn is_activated(raw: &[u8]) -> bool {
-    raw.as_chunks::<4>().0.iter().map(|c| u32::from_ne_bytes(*c)).any(|s| s == handle_v1::State::Activated as u32)
+    has_state(raw, handle_v1::State::Activated)
+}
+
+fn has_state(raw: &[u8], state: handle_v1::State) -> bool {
+    raw.as_chunks::<4>().0.iter().map(|c| u32::from_ne_bytes(*c)).any(|s| s == state as u32)
 }
 
 #[cfg(test)]
@@ -254,5 +268,9 @@ mod tests {
         assert!(!is_activated(&maximized));
         assert!(is_activated(&[maximized, activated].concat()));
         assert!(!is_activated(&[]));
+        let fullscreen = (handle_v1::State::Fullscreen as u32).to_ne_bytes();
+        assert!(has_state(&[activated, fullscreen].concat(), handle_v1::State::Fullscreen));
+        assert!(!has_state(&maximized, handle_v1::State::Fullscreen));
+        assert!(!has_state(&[], handle_v1::State::Fullscreen));
     }
 }

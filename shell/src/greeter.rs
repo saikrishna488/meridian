@@ -147,27 +147,10 @@ impl Greeter {
     }
 
     async fn power(self: Rc<Self>, action: PowerAction) -> ReplyResult {
-        let method = match action {
-            PowerAction::PowerOff => "PowerOff",
-            PowerAction::Reboot => "Reboot",
-        };
-        let bus = gio::bus_get_future(gio::BusType::System)
-            .await
-            .map_err(|e| ErrorBody::new(ErrorCode::Unavailable, e.message().to_owned()))?;
-        // `interactive = false`: logind's policy decides; the greeter's
-        // session is the active one, so this is normally allowed.
-        bus.call_future(
-            Some("org.freedesktop.login1"),
-            "/org/freedesktop/login1",
-            "org.freedesktop.login1.Manager",
-            method,
-            Some(&(false,).to_variant()),
-            None,
-            gio::DBusCallFlags::NONE,
-            -1,
-        )
-        .await
-        .map_err(|e| ErrorBody::new(ErrorCode::Failed, e.message().to_owned()))?;
+        match action {
+            PowerAction::PowerOff => crate::power::power_off().await,
+            PowerAction::Reboot => crate::power::reboot().await,
+        }?;
         proto::reply_ok(&()).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
     }
 

@@ -25,18 +25,25 @@ pub struct WebEnv {
     /// its web process.
     first_view: RefCell<Option<glib::WeakRef<WebView>>>,
     dev: bool,
+    scheme: Rc<SchemeHandler>,
 }
 
 impl WebEnv {
     pub fn new(scheme: SchemeHandler, dev: bool) -> Self {
+        let scheme = Rc::new(scheme);
         let context = WebContext::new();
         let security = context.security_manager().expect("WebContext always has a security manager");
         security.register_uri_scheme_as_secure(SCHEME);
         // ES module scripts are fetched in CORS mode.
         security.register_uri_scheme_as_cors_enabled(SCHEME);
-        context.register_uri_scheme(SCHEME, move |request| scheme.handle(request));
+        let handler = scheme.clone();
+        context.register_uri_scheme(SCHEME, move |request| handler.handle(request));
 
-        WebEnv { context, session: NetworkSession::new_ephemeral(), first_view: RefCell::new(None), dev }
+        WebEnv { context, session: NetworkSession::new_ephemeral(), first_view: RefCell::new(None), dev, scheme }
+    }
+
+    pub fn check_locker(&self) -> Result<(), String> {
+        self.scheme.check_locker()
     }
 
     fn settings(&self) -> webkit6::Settings {
@@ -92,11 +99,108 @@ impl WebSurface {
     ) -> Rc<Self> {
         let window = gtk::Window::builder().application(app).decorated(false).build();
         window.add_css_class("meridian-surface");
-        configure_layer(&window, kind, monitor);
+        // The locker is assigned to its monitor via `gtk4_session_lock`
+        // instead (a different Wayland surface role; see ADR-0007). It must
+        // stay unrealized until then, so skip layer-shell entirely.
+        if !matches!(kind, SurfaceKind::Locker | SurfaceKind::Preferences | SurfaceKind::Finder | SurfaceKind::Terminal)
+        {
+            configure_layer(&window, kind, monitor);
+        }
 
+        if matches!(kind, SurfaceKind::Preferences | SurfaceKind::Finder | SurfaceKind::Terminal) {
+            let title = match kind {
+                SurfaceKind::Finder => "Finder",
+                SurfaceKind::Terminal => "Terminal",
+                _ => "Settings",
+            };
+            window.set_title(Some(&format!("Meridian {title}")));
+            window.set_decorated(true);
+            window.add_css_class("meridian-preferences");
+            if kind == SurfaceKind::Terminal {
+                window.add_css_class("meridian-terminal");
+            }
+            let header = gtk::HeaderBar::new();
+            header.set_show_title_buttons(false);
+            let controls = gtk::Box::new(gtk::Orientation::Horizontal, 7);
+            controls.add_css_class("meridian-window-controls");
+            for (name, class) in [("Close", "close"), ("Minimize", "minimize"), ("Maximize", "maximize")] {
+                let button = gtk::Button::new();
+                button.update_property(&[gtk::accessible::Property::Label(name)]);
+                let glyph = gtk::DrawingArea::new();
+                glyph.set_content_width(16);
+                glyph.set_content_height(16);
+                glyph.set_draw_func(move |_, cairo, _, _| {
+                    cairo.set_source_rgba(0., 0., 0., 0.65);
+                    cairo.set_line_width(1.25);
+                    match class {
+                        "close" => {
+                            cairo.move_to(5., 5.);
+                            cairo.line_to(11., 11.);
+                            cairo.move_to(11., 5.);
+                            cairo.line_to(5., 11.);
+                        }
+                        "minimize" => {
+                            cairo.move_to(4.5, 8.);
+                            cairo.line_to(11.5, 8.);
+                        }
+                        _ => {
+                            cairo.move_to(5., 11.);
+                            cairo.line_to(11., 5.);
+                            cairo.move_to(6., 5.);
+                            cairo.line_to(11., 5.);
+                            cairo.line_to(11., 10.);
+                        }
+                    }
+                    let _ = cairo.stroke();
+                });
+                button.set_valign(gtk::Align::Center);
+                button.set_halign(gtk::Align::Center);
+                button.set_size_request(18, 18);
+                button.set_child(Some(&glyph));
+                button.set_tooltip_text(Some(name));
+                button.add_css_class("meridian-window-button");
+                button.add_css_class(class);
+                let weak = window.downgrade();
+                button.connect_clicked(move |_| {
+                    if let Some(window) = weak.upgrade() {
+                        match class {
+                            "close" => window.close(),
+                            "minimize" => window.minimize(),
+                            _ if window.is_maximized() => window.unmaximize(),
+                            _ => window.maximize(),
+                        }
+                    }
+                });
+                controls.append(&button);
+            }
+            header.pack_start(&controls);
+            header.set_title_widget(Some(&gtk::Label::new(Some(title))));
+            window.set_titlebar(Some(&header));
+            if kind == SurfaceKind::Finder {
+                window.set_default_size(1100, 720);
+            } else {
+                window.set_default_size(840, 600);
+            }
+            window.connect_close_request(|window| {
+                window.set_visible(false);
+                glib::Propagation::Stop
+            });
+        }
+
+        if crate::desktop::get().appearance == "dark" {
+            window.add_css_class("meridian-dark");
+        }
         let ucm = bridge::content_manager();
         let view = env.create_view(&ucm);
-        view.set_background_color(&gdk::RGBA::new(0.0, 0.0, 0.0, 0.0));
+        if kind == SurfaceKind::Terminal {
+            // Avoid stale accelerated text layers when the terminal is maximized.
+            webkit6::prelude::WebViewExt::settings(&view)
+                .unwrap()
+                .set_hardware_acceleration_policy(webkit6::HardwareAccelerationPolicy::Never);
+            view.set_background_color(&gdk::RGBA::new(0.09, 0.10, 0.125, 1.0));
+        } else {
+            view.set_background_color(&gdk::RGBA::new(0.0, 0.0, 0.0, 0.0));
+        }
         lock_down(&view, env.dev);
         window.set_child(Some(&view));
 
@@ -150,31 +254,49 @@ impl WebSurface {
     }
 }
 
-/// Height of the top bar in logical pixels (matches `--bar-height` in the UI).
-pub const PANEL_HEIGHT: i32 = 36;
+/// Dock surface height, including room for magnification and tooltips.
+pub const PANEL_HEIGHT: i32 = 128;
 
 fn entry_dir(kind: SurfaceKind) -> &'static str {
     match kind {
         SurfaceKind::Wallpaper => "surfaces/wallpaper",
-        SurfaceKind::Panel => "surfaces/panel",
+        SurfaceKind::Panel | SurfaceKind::Topbar => "surfaces/panel",
         SurfaceKind::Applications => "surfaces/applications",
         SurfaceKind::Options => "surfaces/options",
+        SurfaceKind::Preferences => "surfaces/settings",
+        SurfaceKind::Finder => "surfaces/finder",
+        SurfaceKind::Terminal => "surfaces/terminal",
+        SurfaceKind::DesktopMenu => "surfaces/desktop-menu",
         SurfaceKind::Greeter => "surfaces/greeter",
+        SurfaceKind::Locker => "surfaces/locker",
     }
 }
 
+/// Configures everything except [`SurfaceKind::Locker`], which the caller
+/// never passes here (see [`WebSurface::new`]).
 fn configure_layer(window: &gtk::Window, kind: SurfaceKind, monitor: Option<&gdk::Monitor>) {
     window.init_layer_shell();
     window.set_monitor(monitor);
     window.set_namespace(Some(match kind {
         SurfaceKind::Wallpaper => "meridian-wallpaper",
         SurfaceKind::Panel => "meridian-panel",
+        SurfaceKind::Topbar => "meridian-topbar",
         SurfaceKind::Applications => "meridian-applications",
         SurfaceKind::Options => "meridian-options",
+        SurfaceKind::DesktopMenu => "meridian-desktop-menu",
         SurfaceKind::Greeter => "meridian-greeter",
+        SurfaceKind::Preferences | SurfaceKind::Finder | SurfaceKind::Terminal => {
+            unreachable!("preferences is a normal desktop window")
+        }
+        SurfaceKind::Locker => unreachable!("the locker uses gtk4_session_lock, not layer-shell"),
     }));
     let edges: &[Edge] = match kind {
-        SurfaceKind::Panel => &[Edge::Top, Edge::Left, Edge::Right],
+        SurfaceKind::Panel => &[Edge::Bottom],
+        SurfaceKind::Topbar => &[Edge::Top, Edge::Left, Edge::Right],
+        SurfaceKind::Preferences | SurfaceKind::Finder | SurfaceKind::Terminal => {
+            unreachable!("preferences is a normal desktop window")
+        }
+        SurfaceKind::Locker => unreachable!("the locker uses gtk4_session_lock, not layer-shell"),
         _ => &[Edge::Top, Edge::Bottom, Edge::Left, Edge::Right],
     };
     for &edge in edges {
@@ -183,16 +305,24 @@ fn configure_layer(window: &gtk::Window, kind: SurfaceKind, monitor: Option<&gdk
     match kind {
         SurfaceKind::Wallpaper => {
             window.set_layer(Layer::Background);
-            window.set_keyboard_mode(KeyboardMode::None);
+            window.set_keyboard_mode(KeyboardMode::OnDemand);
             // Cover the whole output regardless of the bar.
             window.set_exclusive_zone(-1);
         }
         SurfaceKind::Panel => {
             window.set_layer(Layer::Top);
             window.set_keyboard_mode(KeyboardMode::None);
-            window.set_default_size(1, PANEL_HEIGHT);
-            // Reserve the bar's height so windows don't go under it.
-            window.auto_exclusive_zone_enable();
+            let width = monitor.map_or(720, |m| m.geometry().width().min(720));
+            window.set_default_size(width, PANEL_HEIGHT);
+            // Reserve only the visible dock (64px) and bottom gap (6px).
+            // The rest of the surface is headroom for hover motion/tooltips.
+            window.set_exclusive_zone(70);
+        }
+        SurfaceKind::Topbar => {
+            window.set_layer(Layer::Top);
+            window.set_keyboard_mode(KeyboardMode::None);
+            window.set_default_size(1, 32);
+            window.set_exclusive_zone(32);
         }
         SurfaceKind::Greeter => {
             // Covers everything and owns the keyboard: it's the whole screen.
@@ -200,14 +330,18 @@ fn configure_layer(window: &gtk::Window, kind: SurfaceKind, monitor: Option<&gdk
             window.set_keyboard_mode(KeyboardMode::Exclusive);
             window.set_exclusive_zone(-1);
         }
-        SurfaceKind::Applications | SurfaceKind::Options => {
+        SurfaceKind::Preferences | SurfaceKind::Finder | SurfaceKind::Terminal => {
+            unreachable!("preferences is a normal desktop window")
+        }
+        SurfaceKind::Locker => unreachable!("the locker uses gtk4_session_lock, not layer-shell"),
+        SurfaceKind::Applications | SurfaceKind::Options | SurfaceKind::DesktopMenu => {
             window.set_layer(Layer::Overlay);
-            // Exclusive zone 0: placed below the bar, which stays clickable
+            // Exclusive zone 0: placed above the dock, which stays clickable
             // while a menu is open.
             window.set_exclusive_zone(0);
             // The Applications menu takes the keyboard so typing searches
             // immediately; Options only when clicked.
-            window.set_keyboard_mode(if kind == SurfaceKind::Applications {
+            window.set_keyboard_mode(if matches!(kind, SurfaceKind::Applications | SurfaceKind::DesktopMenu) {
                 KeyboardMode::Exclusive
             } else {
                 KeyboardMode::OnDemand
@@ -230,6 +364,25 @@ fn lock_down(view: &WebView, dev: bool) {
             let allowed = kind == PolicyDecisionType::NavigationAction && uri.starts_with(&format!("{SCHEME}://ui/"));
             if allowed {
                 decision.use_();
+            } else if uri == "https://github.com/saikrishna488/meridian" {
+                decision.ignore();
+                let mut command = if std::env::var_os("MERIDIAN_HOST_APPS").is_some() {
+                    let mut command = std::process::Command::new("flatpak-spawn");
+                    command.args(["--host", "gio", "open"]);
+                    command
+                } else {
+                    let mut command = std::process::Command::new("gio");
+                    command.arg("open");
+                    command
+                };
+                match command.arg(&uri).spawn() {
+                    Ok(mut child) => {
+                        std::thread::spawn(move || {
+                            let _ = child.wait();
+                        });
+                    }
+                    Err(error) => log::warn!("could not open source link: {error}"),
+                }
             } else {
                 log::warn!("blocked navigation to {uri:?}");
                 decision.ignore();

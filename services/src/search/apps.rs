@@ -27,6 +27,7 @@ impl AppsProvider {
         SearchItem {
             id: app.id.clone(),
             title: app.name.clone(),
+            icon: app.icon.clone(),
             subtitle: app.generic_name.clone().or_else(|| app.description.clone()),
         }
     }

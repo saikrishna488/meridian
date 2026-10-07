@@ -1,0 +1,128 @@
+html, body { color: #242428; background: #f5f5f7; font-family: var(--font-ui); }
+.settings-app { display: flex; height: 100vh; min-height: 0; font-size: 13px; }
+.settings-sidebar { width: 242px; flex: none; background: #e8e9ee; border-right: 1px solid #d6d7dd; padding: 22px 14px; overflow-y: auto; }
+.settings-sidebar h1 { font-size: 20px; margin: 0 8px 20px; }
+.settings-sidebar input { width: 100%; height: 30px; border: 1px solid #cccdd4; border-radius: 7px; padding: 0 10px; background: #ddddE5; color: #242428; font: inherit; }
+.profile { display: flex; align-items: center; gap: 10px; margin: 24px 5px; }
+.profile-avatar { display: grid; place-items: center; width: 43px; height: 43px; border-radius: 50%; background: linear-gradient(135deg, #90bbfb, #526bc7); color: white; font-size: 28px; }
+.profile small { display: block; color: #626d80; margin-top: 4px; font-size: 10px; }
+.settings-sidebar nav { display: flex; flex-direction: column; gap: 3px; }
+.settings-sidebar nav button { display: flex; align-items: center; gap: 9px; width: 100%; height: 36px; padding: 0 8px; border: 0; border-radius: 7px; background: transparent; text-align: left; color: #29292e; cursor: pointer; }
+.settings-sidebar nav button:hover { background: #d8dbe4; }
+.settings-sidebar nav button[aria-current="page"] { background: #3478ed; color: white; }
+.category-icon { display: grid; place-items: center; width: 24px; height: 24px; border: 1px solid #0001; border-radius: 6px; color: #fff; font-size: 17px; }
+.settings-content { flex: 1; min-width: 0; padding: 30px 32px; overflow-y: auto; }
+.settings-content h2 { font-size: 23px; margin: 0 0 10px; }
+.prototype-note { color: #626d80; font-size: 11px; margin-bottom: 25px; }
+.settings-card { border: 1px solid #dedee4; border-radius: 10px; background: #fff; overflow: hidden; margin: 16px 0; }
+.settings-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; min-height: 48px; padding: 10px 15px; }
+.settings-row + .settings-row { border-top: 1px solid #eeeef1; }
+.muted, .section-caption { color: #626d80; font-size: 12px; }
+.settings-row select { max-width: 190px; border: 1px solid #d4d4dc; border-radius: 6px; padding: 4px 7px; background: #f7f7fa; font: inherit; color: #303036; }
+.accent-swatches { display: flex; gap: 6px; }
+.accent-swatches i { width: 15px; height: 15px; border-radius: 50%; background: #3478ed; }
+.accent-swatches i:nth-child(2) { background: #9e5fd0; }.accent-swatches i:nth-child(3) { background: #e05e83; }.accent-swatches i:nth-child(4) { background: #7c838f; }
+.preview-switch { width: 32px; height: 19px; border: 0; border-radius: 12px; background: #d7d7de; position: relative; }
+.preview-switch::before { content: ""; position: absolute; width: 15px; height: 15px; left: 2px; top: 2px; background: white; border-radius: 50%; box-shadow: 0 1px 3px #0002; }
+@media (max-width: 640px) { .settings-sidebar { width: 185px; }.settings-content { padding: 24px 16px; }.settings-row { flex-wrap: wrap; } }
+
+.wallpaper-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 14px; padding: 18px; }
+.wallpaper-choice { background: transparent; border: 0; padding: 0; cursor: pointer; color: #596273; text-align: left; font-size: 11px; }
+.wallpaper-choice img { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; border-radius: 7px; border: 3px solid transparent; margin-bottom: 5px; }.wallpaper-choice[aria-pressed="true"] img { border-color: #4b8ddc; }.wallpaper-choice:disabled { opacity: .5; }
+.wallpaper-current { margin: 16px 18px 0; width: calc(100% - 36px); aspect-ratio: 16 / 9; border-radius: 10px; object-fit: cover; }
+.wallpaper-custom { display: flex; align-items: center; gap: 12px; padding: 0 18px 18px; }.wallpaper-custom button { border: 1px solid #ccd4df; background: #fff; color: #455369; border-radius: 6px; padding: 7px 12px; cursor: pointer; }.wallpaper-custom small { color: #929aaa; }
+.settings-error { margin: 12px 18px; color: #a74545; font-size: 12px; }
+.monitor-brightness { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px 16px; padding: 16px 18px; }
+.monitor-brightness input { grid-column: 1 / -1; width: 100%; accent-color: #3478ed; }
+.monitor-brightness span { color: #8b93a1; font-size: 11px; }
+
+html[data-theme="dark"], html[data-theme="dark"] body { background: #25272c; color: #e4e6ec; }
+[data-theme="dark"] .settings-sidebar { background: #303238; border-color: #464951; }
+[data-theme="dark"] .settings-sidebar input, [data-theme="dark"] .settings-row select { background: #3a3d45; color: #e4e6ec; border-color: #545862; }
+[data-theme="dark"] .settings-sidebar nav button { color: #e4e6ec; }
+[data-theme="dark"] .settings-sidebar nav button:hover { background: #424650; }
+[data-theme="dark"] .settings-sidebar nav button[aria-current="page"] { background: #3478ed; }
+[data-theme="dark"] .settings-card { background: #303238; border-color: #464951; }
+[data-theme="dark"] .settings-row + .settings-row { border-color: #464951; }
+[data-theme="dark"] .muted, [data-theme="dark"] .section-caption, [data-theme="dark"] .prototype-note { color: #a7adba; }
+
+.settings-app { font-family: var(--font-ui); letter-spacing: var(--tracking-tight); }
+.settings-content button:not(.meridian-toggle) { border:1px solid #cbd1dc; border-radius:7px; background:#f9fafc; color:#34425a; padding:6px 10px; cursor:pointer; font:inherit; }
+.settings-content button.primary { background:#3478ed; border-color:#3478ed; color:#fff; }
+.settings-content button:disabled { opacity:.45; cursor:default; }
+.row-detail { display:block; color:#68768c; font-size:11px; margin-top:5px; line-height:1.45; }
+.settings-content h3 { font-size:13px; margin:0; }
+.pane-heading { display:flex; justify-content:space-between; align-items:center; margin:24px 0 10px; }
+.device-name { flex:1; min-width:0; overflow-wrap:anywhere; }
+.device-symbol { display:grid; place-items:center; width:32px; height:32px; border-radius:50%; background:#e9f0ff; color:#3478ed; font-size:24px; flex:none; }
+.device-empty { color:#68768c; padding:15px; font-size:12px; }
+.display-arrangement { display:flex; justify-content:center; align-items:flex-start; flex-wrap:wrap; gap:16px; border:1px solid #d7dde6; border-radius:14px; padding:28px 16px; background:#eceff5; margin:18px 0; }
+.settings-content button.display-tile { display:flex; flex-direction:column; align-items:center; gap:9px; border:0; background:transparent; padding:0; max-width:180px; font-size:11px; text-align:center; }
+.display-glass { display:flex; flex-direction:column; align-items:center; justify-content:center; width:145px; height:92px; border:5px solid #465066; border-radius:9px; background:linear-gradient(135deg,#638dce,#8b6ab7); color:white; }
+.display-glass b { font-size:28px; }.display-glass small { font-size:9px; }
+.display-tile.selected .display-glass { outline:3px solid #3478ed; outline-offset:3px; }
+.display-position { display:flex; gap:12px; }.display-position label { display:flex; align-items:center; gap:6px; }.display-position input { width:75px; }
+.settings-content input:not([type="radio"]):not([type="range"]):not([type="checkbox"]) { border:1px solid #cbd1dc; border-radius:6px; padding:6px 8px; font:inherit; color:#34425a; background:#fff; max-width:220px; }
+.settings-actions { display:flex; justify-content:flex-end; gap:9px; margin:16px 0; }
+.card-caption { padding:0 15px 12px; margin:0; }
+.settings-card .slider-row { display:flex; align-items:center; gap:12px; padding:16px; }.settings-card .slider-row .label { flex:1; font-size:12px; }.settings-card .slider { width:130px; accent-color:#3478ed; }.settings-card .value { min-width:65px; font-size:11px; color:#68768c; }
+.device-dialog-scrim { position:fixed; inset:0; z-index:40; display:grid; place-items:center; background:#11182766; padding:20px; }
+.device-dialog { width:min(380px,100%); border:1px solid #d7dde6; border-radius:15px; background:#fafbfe; padding:24px; box-shadow:0 20px 70px #0004; }.device-dialog h3 { font-size:16px; margin-bottom:16px; }.device-dialog label { display:grid; gap:8px; }.device-dialog .settings-actions { margin-bottom:0; }.device-dialog p { color:#68768c; line-height:1.5; }
+[data-theme="dark"] .settings-content button:not(.meridian-toggle) { background:#3b404b; border-color:#525b6c; color:#e4eaf5; }
+[data-theme="dark"] .settings-content button.primary { background:#3478ed; color:white; }
+[data-theme="dark"] .row-detail,[data-theme="dark"] .device-empty,[data-theme="dark"] .settings-card .value { color:#acb9cd; }
+[data-theme="dark"] .display-arrangement { background:#20242c; border-color:#464e5c; }
+[data-theme="dark"] .settings-content button.display-tile { background:transparent; border:0; }
+[data-theme="dark"] .device-dialog { background:#30343e; border-color:#525b6c; color:#e4eaf5; }
+[data-theme="dark"] .device-dialog p { color:#acb9cd; }
+[data-theme="dark"] .settings-content input:not([type="radio"]):not([type="range"]):not([type="checkbox"]) { background:#252a33; color:#e4eaf5; border-color:#525b6c; }
+
+/* Complete palette for rows and controls added by individual settings panes. */
+:root {
+  color-scheme: light;
+  --settings-bg: #f5f5f7;
+  --settings-sidebar-bg: #e8e9ee;
+  --settings-card-bg: #fff;
+  --settings-text: #242428;
+  --settings-muted: #626d80;
+  --settings-border: #dedee4;
+  --settings-divider: #eeeef1;
+  --settings-control-bg: #fff;
+  --settings-control-text: #34425a;
+  --settings-soft-bg: #eceff5;
+  --settings-hover-bg: #d8dbe4;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --settings-bg: #25272c;
+  --settings-sidebar-bg: #303238;
+  --settings-card-bg: #303238;
+  --settings-text: #e4e6ec;
+  --settings-muted: #a7adba;
+  --settings-border: #464951;
+  --settings-divider: #464951;
+  --settings-control-bg: #252a33;
+  --settings-control-text: #e4eaf5;
+  --settings-soft-bg: #20242c;
+  --settings-hover-bg: #424650;
+}
+html, body, .settings-app { background: var(--settings-bg); color: var(--settings-text); }
+.settings-sidebar { background: var(--settings-sidebar-bg); border-color: var(--settings-border); }
+.settings-sidebar input, .settings-row select,
+.settings-content input:not([type="radio"]):not([type="range"]):not([type="checkbox"]) {
+  background: var(--settings-control-bg); color: var(--settings-control-text); border-color: var(--settings-border);
+}
+.settings-sidebar nav button { color: var(--settings-text); }
+.settings-sidebar nav button:hover { background: var(--settings-hover-bg); }
+.settings-sidebar nav button[aria-current="page"] { color: #fff; }
+.settings-card, .device-dialog { color: var(--settings-text); background: var(--settings-card-bg); border-color: var(--settings-border); }
+.settings-row + .settings-row { border-color: var(--settings-divider); }
+.settings-content button:not(.meridian-toggle):not(.primary) { color: var(--settings-control-text); background: var(--settings-control-bg); border-color: var(--settings-border); }
+.settings-content button.display-tile { background: transparent; border-color: transparent; }
+.settings-content h3, .settings-sidebar h1, .settings-content h2 { color: var(--settings-text); }
+.profile small, .muted, .section-caption, .prototype-note, .row-detail,
+.device-empty, .settings-card .value, .monitor-brightness span,
+.wallpaper-choice, .wallpaper-custom small, .device-dialog p { color: var(--settings-muted); }
+.display-arrangement { background: var(--settings-soft-bg); border-color: var(--settings-border); }
+.device-symbol { background: color-mix(in srgb, #3478ed 16%, var(--settings-card-bg)); }
+.wallpaper-custom button { color: var(--settings-control-text); background: var(--settings-control-bg); border-color: var(--settings-border); }
