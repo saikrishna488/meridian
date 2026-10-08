@@ -1,6 +1,11 @@
 # ADR-0007: Session controls in the Options menu (Lock, Sign out, Sleep)
 
-Status: accepted (M1)
+Status: accepted with implementation changes.
+
+> Current implementation: session actions are in the Meridian menu, and the
+> Session capability belongs to DesktopMenu, not Options. Restart and Shut Down
+> are also available. The lock/PAM design below remains relevant; descriptions
+> of the original Options rows are historical. See [current architecture](../ARCHITECTURE.md).
 
 ## Context
 

@@ -1,6 +1,9 @@
 # ADR-0005: Top bar with Applications and Options menus
 
-Status: accepted (M0). Supersedes ADR-0003 (home screen as launcher).
+Status: accepted with implementation changes.
+
+> Partially superseded: the current shell has a 32-pixel menu bar, a separate dock, desktop shortcuts, a clock, and Control Center. The original single-bar layout below is retained as history.
+> See [current architecture](../ARCHITECTURE.md).
 
 ## Context
 

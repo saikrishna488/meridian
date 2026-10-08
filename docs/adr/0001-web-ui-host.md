@@ -1,6 +1,9 @@
 # ADR-0001: Web UI rendered by WebKitGTK 6 in a thin Rust host
 
-Status: accepted (M0)
+Status: accepted with implementation changes.
+
+> Implementation update: the WebKitGTK/Rust choice remains current. GTK also supplies native window controls and dialogs. Terminal disables WebKit hardware acceleration. The original footprint estimate and alternative-engine comparisons below are historical, not measured guarantees or a current compatibility survey.
+> See [current architecture](../ARCHITECTURE.md).
 
 ## Context
 

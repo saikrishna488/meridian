@@ -1,463 +1,250 @@
 # Meridian Desktop — Architecture
 
-Status: **Milestone 0 (prototype)**. This document describes the target
-architecture and marks which parts exist today. The decision records under
-[`docs/adr/`](adr/) explain the most important choices in more depth.
+Status: **working prototype**. This document describes the current implementation.
+Older milestone labels in [decision records](adr/) describe development history;
+they are not a reliable list of what is implemented today.
 
----
+## 1. Overview
 
-## 1. Goals and non-goals
+Meridian is a Linux desktop shell built with Rust and React/TypeScript.
+WebKitGTK renders the web interface, GTK4 hosts its windows, and labwc manages
+application windows and composites the desktop. Linux and existing system
+services continue to provide hardware support, networking, audio, and sessions.
 
-Meridian is an original Linux desktop environment. It aims for the polish of
-the best commercial desktops: consistent visuals, good typography, smooth
-frame pacing, and simple interactions. It keeps Linux's flexibility and
-hardware support.
+The workspace contains three Rust crates: `shell`, `services`, and `protocol`.
+The services crate is linked into the shell; there is no separate
+`meridian-servicesd` executable today. Normal applications run independently
+and communicate with labwc directly, or through XWayland for X11 applications.
 
-Priorities, in order: responsiveness, visual consistency, typography, frame
-pacing, low memory, low idle CPU, hardware acceleration, accessibility,
-modularity, maintainability.
+## 2. Current desktop
 
-Non-goals for now:
+- **Menu bar:** Meridian menu, active application name, File/Edit/View/Window/Help,
+  Control Center, and clock. These are Meridian menus, not imported application
+  menus; Edit commands are currently disabled.
+- **Dock:** icon-based launcher, pinned/running applications, and Trash.
+  Items can be reordered. Opening Applications or a fullscreen window hides
+  the desktop dock.
+- **Applications:** searchable installed applications, icons, launch and
+  window activation actions, pinning, shortcuts, and reviewed removal.
+- **Desktop:** bundled/custom wallpapers and application/file/folder shortcuts.
+  Removing a shortcut preserves its target.
+- **Control Center:** connectivity, appearance, brightness, and volume controls.
+- **Settings:** working wallpaper, light/dark appearance, Wi-Fi, Bluetooth,
+  and display configuration. Sharing is a UI prototype; some other categories
+  and controls remain placeholders.
+- **Finder:** real filesystem browsing, navigation, filtering, folder creation,
+  rename, Trash, and an Applications view.
+- **Terminal:** xterm.js connected to real interactive shells through PTYs.
+- **Session actions:** Lock, Sleep, Restart, Shut Down, and Sign out are in
+  the Meridian menu. Restart, Shut Down, and Sign out require confirmation.
 
-- writing a compositor from scratch (planned later; see §3)
-- a new application ecosystem (normal Wayland, X11, and Flatpak apps must
-  keep working)
-- an Electron-style "desktop as a web app"
+See the [README](../README.md) for shortcuts and usage.
 
----
+## 3. Session and compositor
 
-## 2. The interaction model
+`session/meridian.desktop` registers the login-session entry.
+`session/meridian-session` sets the desktop environment variables and launches
+labwc with `meridian-shell` as its startup command. This permits application
+windows to survive a shell crash while labwc remains running.
 
-([ADR-0005](adr/0005-top-bar.md) supersedes the earlier home-screen design in
-ADR-0003.)
+The compositor provides window placement, focus, Alt+Tab, output composition,
+and XWayland support. Meridian uses layer-shell for desktop surfaces,
+foreign-toplevel management for the window list/activation, output management
+for display configuration, and session-lock for locking.
 
+labwc is the supplied configuration. Other compositors need the corresponding
+protocols; layer-shell support alone does not guarantee full functionality.
+The window list is disabled if its protocol connection is unavailable.
+
+## 4. Native host and surfaces
+
+`shell/src/bin/meridian-shell.rs` creates the GTK application.
+`Shell::start` in `shell/src/shell.rs` initializes the catalog, search, settings,
+window tracking, saved display layout, and surfaces. GTK/GLib coordinates events;
+potentially blocking work is also dispatched to worker threads.
+
+| Surface kind | Role | Placement |
+|---|---|---|
+| Wallpaper | Background and shortcuts | Background layer, every output |
+| Topbar | Menu bar | Top layer, reserves 32 logical pixels |
+| Panel | Dock (the internal name is still Panel) | Bottom-anchored top layer, reserves 70 logical pixels |
+| Applications / Options / DesktopMenu | Launcher and menus | Overlay layer |
+| Preferences / Finder / Terminal | Built-in application windows | Ordinary GTK windows |
+| Locker | Password prompt | Session-lock surface per monitor |
+| Greeter | Login screen in a separate executable | Overlay in the greeter session |
+
+Topbar and Panel share the `surfaces/panel` frontend entry point. The dock
+surface is 128 logical pixels tall to allow hover effects, but reserves only
+70 pixels for its visible dock and bottom gap.
+
+The host watches monitor changes. Each output gets a wallpaper; the first
+monitor reported by GDK receives the topbar and dock and is used for menus.
+This is an implementation choice, not a user-configurable primary-output policy.
+
+## 5. UI and rendering
+
+Each surface loads locally bundled HTML, CSS, and React/TypeScript through
+`meridian://ui/surfaces/<name>/index.html`. Esbuild produces the JavaScript
+bundles; Node.js is a build dependency, not the UI runtime.
+
+WebViews use a shared WebKit context, an ephemeral network session, and related
+views to share a web process. GTK also supplies native window controls,
+file pickers, and other integration; the interface is not exclusively web pixels.
+
+Hardware acceleration is requested for most WebViews. Terminal explicitly
+disables it to avoid stale text rendering when maximized. Actual rendering,
+frame pacing, and memory usage depend on WebKit, drivers, hardware, and workload;
+the repository does not establish a fixed memory budget or zero-idle-CPU result.
+Terminal polls bounded output chunks, and the clock also schedules updates.
+
+Appearance is saved by the host and propagated through `desktop.changed`.
+The shared appearance hook applies document theme/color-scheme state.
+GTK preferences, desktop color-scheme settings, and an available KDE palette
+tool are also updated. External applications can retain their own overrides.
+Terminal text remains black on white while its surrounding UI follows appearance.
+
+## 6. JavaScript–Rust protocol
+
+`protocol/src/lib.rs` is the shared contract: requests, events, data structures,
+error replies, input validation, and per-surface capabilities.
+`ts-rs` generates the TypeScript definitions under `ui/src/lib/generated/`.
+
+1. The UI calls `request()` in `ui/src/lib/bridge.ts`.
+2. WebKit's `meridian` script-message handler receives a JSON string.
+3. `shell/src/bridge.rs` parses it and checks its required capability.
+4. `Shell::dispatch` routes it to the relevant implementation.
+5. A JSON success/error reply resolves the JavaScript promise.
+
+For example:
+
+```json
+{"method":"settings.set_volume","params":{"percent":50}}
 ```
-┌──────────────────────────────────────────────────────────────────────────┐
-│ Applications │ Firefox  Terminal  Files                          Options │  ← top bar
-├──────────────┴───────────┬──────────────────────────────┬───────────────┤
-│ ┌──────────────────────┐ │                              │ Wi-Fi    [On] │
-│ │ Search applications  │ │                              │ Bluetooth[Off]│
-│ │ Firefox  Web Browser │ │       desktop (wallpaper)    │ Brightness 80%│
-│ │ Files    File Manager│ │                              │ Volume     45%│
-│ │ …                    │ │                              └───────────────┘
-│ └──────────────────────┘ │                                              │
-└──────────────────────────────────────────────────────────────────────────┘
-```
 
-- **Top bar.** "Applications" is on the left. Next to it is the list of
-  **running windows**, by app name, with the focused one marked; clicking one
-  focuses it. "Options" is at the far right. Nothing else is on the bar.
-- **Applications menu.** A dropdown with a search field and a **text list**
-  of every installed application (name + one-line description). Typing
-  filters instantly (fuzzy over name, keywords, description). Up/Down move,
-  Enter launches, and Escape clears the query, then closes.
-- **Options menu.** **Wi-Fi** and **Bluetooth** as on/off switches, and
-  **Brightness** and **Volume** as percentage sliders. They show and change
-  the real system state. Unavailable controls are disabled, never faked.
-  Below them, **Lock**, **Sleep**, and **Sign out**
-  ([ADR-0007](adr/0007-session-controls.md)).
-- **Text only, no icons**, anywhere in the shell
-  ([ADR-0004](adr/0004-text-only.md)).
-- **Desktop.** Just the wallpaper.
+The dispatcher calls the settings service, which invokes `wpctl` with fixed
+arguments. Rust can also push typed events through
+`window.__meridianDispatch`; event JSON is passed as an argument rather than
+inserted into JavaScript source. The `shell.hello` handshake marks a surface
+ready for events.
 
-Keyboard map (M0):
+Fixed GApplication actions such as `toggle-applications`, `toggle-options`,
+and `lock-session` expose keyboard-triggered actions over the session bus.
 
-| Keys | Action |
+## 7. Applications and search
+
+`services/src/apps.rs` builds a catalog from XDG desktop entries using GIO,
+and monitors application changes. Installed sessions launch through GIO;
+toolbox development can resolve host entries and launch through
+`flatpak-spawn --host gio launch`.
+
+Search runs in Rust through the apps provider. The fuzzy scorer considers
+names, keywords, generic names, and descriptions. Results carry a serial so
+the UI can discard stale responses. Built-in Settings, Finder, and Terminal
+entries are handled by the shell. Additional search providers remain future work.
+
+Window information comes from a separate Wayland connection integrated with
+the GLib loop. Application identifiers are matched to catalog entries for
+display names and icons. Clicking a window action asks the compositor to
+activate that window.
+
+## 8. System integrations
+
+| Feature | Current implementation |
 |---|---|
-| Super (tap) / Super+Space | Toggle Applications |
-| typing in Applications | Search |
-| ↑ ↓ / Tab / PgUp PgDn | Move selection |
-| Enter | Launch selected |
-| Esc | Clear query → close menu |
-| Super+C | Toggle Options |
-| Super+L | Lock |
-| Alt+Tab | Switch windows (labwc switcher, text list) |
+| Wi-Fi toggle | NetworkManager through D-Bus |
+| Wi-Fi discovery/join | `nmcli`; passwords supplied on stdin |
+| Bluetooth | BlueZ through D-Bus, with a temporary pairing agent |
+| Volume | WirePlumber's `wpctl`, with rapid slider updates coalesced |
+| Built-in backlight | sysfs discovery and logind brightness control |
+| Monitor layout | Wayland output-management test/apply |
+| Suspend/sign out/restart/shutdown | systemd-logind |
+| Lock authentication | PAM via `meridian-lock` |
+| Login | Separate `meridian-greeter` communicating with greetd |
+| App removal | Resolved Flatpak ref or RPM package; RPM removal uses `pkexec dnf` |
 
-## 3. Compositor strategy
+Monitor changes revert after 15 seconds unless kept. Accepted layouts are saved
+for later sessions. External monitor brightness currently directs users to the
+monitor's hardware controls; DDC/CI control is not implemented.
 
-**Decision:** start on an existing compositor. Talk to it only through
-standard Wayland protocols, so it can be swapped without touching the shell.
-([ADR-0002](adr/0002-compositor.md))
+Some operations live in `shell/src/settings_devices.rs` and
+`shell/src/bluetooth_agent.rs`, rather than the services crate.
 
-- **Default session compositor: [labwc](https://labwc.github.io/).** It is a
-  wlroots-based *stacking* (floating-window) compositor. It is small and
-  stable, has XWayland support, and has a built-in Alt+Tab switcher. It
-  implements the protocols the shell needs: `wlr-layer-shell-unstable-v1`,
-  `wlr-foreign-toplevel-management`, `ext-foreign-toplevel-list`,
-  `ext-session-lock-v1`, `wlr-output-management`, `xdg-activation`,
-  `wp-fractional-scale-v1`, and `wp-presentation-time`.
-- **Also works on** any compositor with layer-shell (KWin, sway, Hyprland,
-  niri, Wayfire, COSMIC). Development runs nested: `tools/dev-session.sh`
-  opens labwc as a window inside your current desktop.
-- **Protocols we depend on** (contract with the compositor):
-  - M0: `wlr-layer-shell` (bar, menus, wallpaper),
-    `wlr-foreign-toplevel-management` (running windows in the bar)
-  - M1: `xdg-activation` (focus handoff on launch)
-  - `ext-session-lock-v1` (lock screen): shipped early, in M0/M1, as the
-    Options menu's Lock action ([ADR-0007](adr/0007-session-controls.md))
-  - M3: `ext-idle-notify-v1` (locking on idle; Lock itself needed no idle
-    detection)
-  - M4: `ext-workspace-v1`, `ext-image-copy-capture` (screenshots and overview
-    thumbnails), `wlr-output-management` (display settings)
-- **Long term:** our own compositor on **Smithay** (Rust). It will add window
-  open/close animations, a live window overview,
-  consistent decorations, and tighter frame scheduling. The shell is already
-  a pure protocol client, so the swap doesn't touch it.
+## 9. Finder, Terminal, and persistence
 
-Why not write the compositor now: a production compositor needs years of work
-on input, DRM/KMS, multi-GPU, XWayland, and client quirks. The shell UX is
-where we can show value first.
+Finder's bridge requests reach `shell/src/files.rs`, which operates on the
+user's real filesystem. Rename avoids overwriting another item; deletion uses
+the system Trash. File operations are subject to the user's OS permissions.
 
----
+`shell/src/terminal.rs` creates PTYs and starts the user's interactive shell.
+The frontend renders output with bundled xterm.js. Input, bounded output reads,
+resize, and close travel through the typed bridge. Closing a tab ends its shell
+and foreground job; detached jobs can survive. In toolbox development the shell
+runs inside the toolbox, with the shared home directory.
 
-## 4. Shell architecture
+Preferences use the user's configuration directory, normally
+`~/.config/meridian/`: `desktop.json` stores appearance, wallpaper, and
+shortcuts; `dock-layout.json` stores dock ordering; `displays.json` stores
+accepted monitor layouts. Custom wallpapers are copied into the configuration
+directory so moving the original does not break the selection.
 
-```
-┌──────────────────────────── user session (unprivileged) ─────────────────────────────┐
-│                                                                                       │
-│  ┌──────────────────── meridian-shell (Rust, one process) ────────────────────┐       │
-│  │  Surface host ─ layer-shell surfaces                                       │       │
-│  │    ├─ panel (top bar)          ┐                                           │       │
-│  │    ├─ applications (menu)      │ WebViews: HTML/CSS/TypeScript             │       │
-│  │    ├─ options (menu)           │ meridian:// only · no network · no files  │       │
-│  │    └─ wallpaper (per output)   ┘                                           │       │
-│  │  Bridge ── typed JSON requests/events + per-surface capability checks      │       │
-│  │  Services (Rust)                                                           │       │
-│  │    ├─ search: provider registry ─ apps provider (fuzzy)                    │       │
-│  │    ├─ app catalog (XDG desktop entries)                                    │       │
-│  │    ├─ windows (wlr-foreign-toplevel, own Wayland connection)               │       │
-│  │    └─ settings: Wi-Fi (NM) · Bluetooth (BlueZ) · brightness (logind) ·     │       │
-│  │                 volume (wpctl → PipeWire, M2: native)                      │       │
-│  └──────────────────────────────┬─────────────────────────────────────────────┘       │
-│                                 │ D-Bus (fixed calls only) / Wayland                  │
-│   NetworkManager · BlueZ · logind · PipeWire/WirePlumber · compositor                 │
-└───────────────────────────────────────────────────────────────────────────────────────┘
-```
+## 10. Trust boundaries
 
-### 4.1 Surfaces
+The shell runs as the logged-in user. Privileged system operations are mediated
+by the owning services or authentication helpers.
 
-| Surface | Content | Layer | Keyboard | Where |
-|---|---|---|---|---|
-| `panel` | top bar | top, exclusive zone (36 px) | none | primary output |
-| `applications` | search + app list (dropdown, left) | overlay, below the bar | exclusive while open | primary output |
-| `options` | switches + sliders (dropdown, right) | overlay, below the bar | on-demand | primary output |
-| `wallpaper` | wallpaper | background | none | every output |
+- Requests must deserialize into the closed protocol and pass capability checks.
+  Finder has file-operation capabilities; Terminal has terminal capabilities;
+  Greeter has login and Locker has unlock capabilities.
+- Web content uses local `meridian://` resources. Navigation and permission
+  requests are restricted, and the WebKit network session is ephemeral.
+  The exact repository link is opened externally by the host.
+- UI/assets paths are confined to their roots. Additional routes serve the
+  chosen custom wallpaper, catalog-resolved app icons, and theme icons.
+- Direct browser file access is disabled. Authorized native bridge requests
+  still deliberately allow filesystem operations and terminal input.
+- App launches resolve installed catalog IDs. The Terminal intentionally
+  executes commands entered by the user through a real shell.
+- The lock uses the compositor's session-lock protocol; PAM verification runs
+  off the GTK main thread.
 
-**Menus sit below the bar.** Menu surfaces cover the output with exclusive
-zone 0, so the compositor places them *under* the bar's reserved area. The
-bar stays clickable while a menu is open (Applications → Options switches
-directly). A transparent scrim in the menu surface catches outside clicks to
-close. Menus are created hidden at startup and shown/hidden, so opening is
-instant. The host tells the bar which menu is open, so it can highlight its
-button.
+These are implementation boundaries, not a claim that the prototype has
+completed a security audit.
 
-**Running windows** come from `wlr-foreign-toplevel-management`, on a second,
-tiny Wayland connection owned by the windows service and dispatched from the
-GLib main loop. That keeps the shell's window list independent of GTK.
-Window app ids are matched to desktop entries (id, `StartupWMClass`) to show
-the application's name.
+## 11. Development and verification
 
-### 4.2 Web engine process model
+See [DEVELOPMENT.md](DEVELOPMENT.md) for toolbox setup and nested sessions.
+`tools/check.sh` checks Rust formatting, clippy, Rust tests, generated protocol
+types, and the UI type-check/build. Run `cd ui && npm test` separately for UI
+interaction tests with a mocked host. Those tests do not replace live validation
+of graphics, hardware, PAM, or compositor behavior.
 
-- All WebViews share **one WebKit web process** (`related-view`), so memory
-  stays near one browser tab.
-- The network session is **ephemeral**: no cookies, no disk cache, no
-  persistent storage.
-- WebKit's bubblewrap/seccomp sandbox for the web process stays enabled.
+## 12. Current limits and future work
 
-### 4.3 Shared UI appearance
+Sharing is a UI prototype and does not start services. Settings categories such
+as Sound and Privacy & Security contain placeholders, although Control Center
+already provides working volume controls. Global menu items do not integrate
+with arbitrary applications' menus.
 
-Each Meridian surface is a separate WebView. On mount, the shared UI layer reads
-the saved desktop appearance and subscribes to `desktop.changed`. It applies
-`data-theme` and `color-scheme` to the document root, then emits the
-`meridian-theme` event. React system apps can use `useAppearance()` from
-`ui/src/lib/appearance.ts`; CSS-only surfaces use the root theme attribute.
-This keeps live light/dark changes consistent across open and newly opened
-Meridian windows. Applications with their own theme settings remain in control
-of their own appearance. Meridian Terminal keeps its shell canvas black on
-white for legibility while its tabs and controls follow the system appearance.
-
-### 4.4 Control interface
-
-The shell is a `GApplication` with id `org.meridian.Shell`. Fixed,
-argument-less actions are exported on the session bus. The compositor binds
-keys to them:
-
-```sh
-gapplication action org.meridian.Shell toggle-applications
-gapplication action org.meridian.Shell toggle-options
-```
-
-Nothing in this interface takes a command string.
-
-### 4.5 Login screen
-
-`meridian-greeter` ([ADR-0006](adr/0006-login-screen.md)) is a second binary
-built from the same host library (`shell/src/lib.rs`). greetd runs it as the
-`greetd` user inside a locked-down labwc. Its one surface (`greeter`) holds
-only the `Login` capability: list sessions, log in, restart/shut down.
-greetd does the authentication (PAM). The greeter relays the password over
-greetd's socket and exits on success, and greetd then starts the chosen
-session (Meridian, Plasma, …).
-
-## 5. Search architecture
-
-Search is a **provider registry** in the native layer, not UI-side filtering.
-That way files, settings, calculator, and command providers can be added
-later without changing the UI contract.
-
-```
-UI ── search.query {query, serial} ──▶ SearchService
-                                       ├─ AppsProvider      (M0)
-                                       ├─ SettingsProvider  (M4)
-                                       ├─ CalculatorProvider(M4)
-                                       └─ FilesProvider     (M4, async, via an indexer)
-UI ◀── SearchResults {serial, sections:[{provider, items}]} ──
-UI ── search.activate {provider, item_id} ──▶ provider decides what "activate" means
-```
-
-- **Items are opaque ids.** A result is `{provider, id, title, subtitle}`. Activating it sends the id back to the *same provider*, which
-  resolves it against its own state. The UI never sends anything executable,
-  so a command or settings provider can't be tricked into running
-  UI-supplied strings.
-- **Fast path:** the apps provider ranks about 100–1000 entries per
-  keystroke in well under a millisecond. The bridge round trip is
-  in-process. Results carry the query's `serial`, and the UI drops stale
-  responses.
-- **Async providers** (files, later) return their first section right away
-  and push more as `search.updated` events keyed by serial. The protocol
-  already has the serial for this.
-- **Fuzzy matching** (`services/src/search/fuzzy.rs`) is a subsequence scorer
-  with bonuses for prefix, word-start, and contiguous runs, and penalties for
-  gaps. It is applied to name (weight 1.0), keywords and generic name (0.7),
-  and description (0.4). It is ours (small, tested, no dependency) and can be
-  swapped for `nucleo-matcher` if we need Unicode-aware matching at scale.
-- **Empty query** returns all applications alphabetically. That is the full
-  Applications list.
-
----
-
-## 6. The native/web boundary
-
-**Decision:** UI is written in React/TypeScript with HTML/CSS and rendered by
-**WebKitGTK 6** inside a thin Rust host. GTK4 is used **only** as the
-window/WebView container, for `gtk4-layer-shell`, and monitor enumeration.
-No GTK widgets are used for UI.
-([ADR-0001](adr/0001-web-ui-host.md))
-
-Web content is treated as **untrusted by default**, as if an XSS bug in UI
-code could happen at any time. A compromised surface can only do what its
-capabilities allow:
-
-1. **Content origin is locked.** WebViews load only `meridian://ui/…` and
-   `meridian://assets/…`, served by a Rust handler from two fixed
-   directories. Paths are normalized: no `..`, no absolute paths, and
-   canonicalized paths must stay inside the root, so symlinks can't escape.
-   Other navigation, new windows, downloads, and permission requests are
-   denied.
-2. **No network.** A Content-Security-Policy (`default-src meridian:`,
-   `connect-src 'none'`) blocks fetch/XHR/WebSocket, and the network session
-   is ephemeral.
-3. **No file system.** There is no `file://` access, and the UI never sends
-   a path. Because the shell is text-only, there is no icon endpoint; the
-   only files served are the fixed UI and asset bundles.
-4. **Typed messages only.** Requests must deserialize into the closed
-   `Request` enum (`deny_unknown_fields`). Anything else is rejected.
-5. **Per-surface capabilities.** Each surface gets a fixed capability set
-   when it is created. Every request is checked against it before it runs.
-   The wallpaper surface has none.
-6. **No command strings.** Launching takes a desktop-entry **id**. The id is
-   resolved against the installed catalog and launched by GIO's desktop-entry
-   launcher, which parses `Exec` field codes per the XDG spec and never
-   involves a shell. Launches get a proper `AppLaunchContext` (startup
-   notification / xdg-activation token).
-7. **No raw D-Bus.** Services make fixed calls and expose domain types
-   (`SettingsState`, `WindowInfo`), never bus names or method names.
-
----
-
-## 7. IPC mechanism
-
-### 7.1 UI ⇄ host (in process, per WebView)
-
-- **Requests (JS → Rust):** WebKit script message handler *with reply*. The
-  JS side calls `window.webkit.messageHandlers.meridian.postMessage(json)`,
-  which returns a `Promise`. Request:
-  `{"method": "search.activate", "params": {"provider": "apps", "item_id": "org.gnome.Nautilus.desktop"}}`.
-  Reply: `{"ok": true, "result": …}` or
-  `{"ok": false, "error": {"code": "…", "message": "…"}}`.
-- **Events (Rust → JS):** the host calls one fixed function,
-  `window.__meridianDispatch(event)`, via `call_async_javascript_function`.
-  The JSON is passed as a typed **argument**, never spliced into script
-  source.
-- **Schema:** Rust types in `protocol/` are the single source of truth.
-  TypeScript types in `ui/src/lib/generated/` are generated by `ts-rs`
-  (`cargo test -p meridian-protocol`). `tools/check.sh` fails if they are
-  stale.
-
-### 7.2 Host ⇄ system services (D-Bus)
-
-- **M0:** services run in-process on the GLib main loop and use GIO's D-Bus
-  client. That means no second event loop and no async runtime for a
-  handful of read-only properties.
-- **M2+:** stateful services (network, Bluetooth, audio, notifications, file
-  indexing) move to a **`meridian-servicesd`** user daemon written with
-  `zbus`, exposing typed `org.meridian.*` interfaces. The shell, the settings
-  app, the lock screen, and a CLI become its clients, and a crash on one side
-  doesn't take down the other. The service APIs in `services/` already have
-  the shape that daemon will export, so only the transport changes.
-
----
-
-## 8. Rendering approach
-
-- **GPU end to end:** WebKitGTK renders with Skia on the GPU and hands
-  DMA-BUFs to GTK4. GTK4 composites with GL or Vulkan and commits to the
-  compositor. Hardware acceleration is forced on.
-- **Refresh-rate correct:** GTK4's frame clock is driven by the compositor's
-  `wl_surface.frame` callbacks on each output, so CSS animations and
-  `requestAnimationFrame` run at the output's real rate (60/75/120/144+ Hz).
-  UI rules:
-  - Animate only `transform` and `opacity` (composited, no layout).
-  - Use CSS transitions, or `requestAnimationFrame` with timestamp deltas.
-    Never step animation with timers, and never assume 16.7 ms frames.
-  - Motion and type tokens live in `ui/src/lib/tokens.css`. Durations are
-    120–240 ms with decelerating curves. `prefers-reduced-motion` disables
-    them.
-- **Idle ≈ 0 CPU:** nothing animates or polls at rest. Window changes are
-  pushed by the compositor, Wi-Fi/Bluetooth state by D-Bus signals, and
-  app-catalog updates by `GAppInfoMonitor`. Brightness and volume are re-read
-  only when Options opens.
-- **Scrolling:** native WebKit scrolling, with kinetic touchpad scrolling
-  from GTK. Keyboard navigation scrolls the selection into view with
-  `scroll-behavior: smooth`.
-- **Fractional scaling and resolution:** GTK4 implements
-  `wp-fractional-scale-v1` and `wp-viewporter`, and WebKit renders text at
-  the device scale, so it stays sharp at 125–200%. The list is a centered
-  column sized with `min()`/`clamp()`, so it adapts from 1366×768 to 5K
-  without breakpoints.
-- **Typography:** Inter (variable) for UI text, falling back to Cantarell and
-  Noto Sans. Tabular numerals for time and percentages. The type scale is in
-  `tokens.css`.
-- **Exit plan:** if WebKitGTK becomes limiting, move the host to WPE WebKit's
-  Wayland platform (same engine, no GTK) or to Servo. Only
-  `shell/src/surface.rs`, `bridge.rs`, and `scheme.rs` change.
-
----
-
-## 9. System-service integrations
-
-| Area | Service | Interface | Milestone |
-|---|---|---|---|
-| Applications | XDG desktop entries | GIO `AppInfo` + `AppInfoMonitor` | M0 ✅ |
-| Session actions (logout, suspend, reboot) | systemd-logind | `org.freedesktop.login1` | M2 |
-| Display brightness | logind | `Session.SetBrightness` (no root) | M2 |
-| External monitor brightness | DDC/CI | `i2c-dev` with seat `uaccess` udev rule | M3 |
-| Wi-Fi / networking | NetworkManager | `org.freedesktop.NetworkManager` | M2 |
-| Bluetooth | BlueZ | `org.bluez` | M2 |
-| Audio | PipeWire / WirePlumber | native API via `pipewire-rs` | M2 |
-| Notifications | (we are the server) | `org.freedesktop.Notifications` | M3 |
-| Screenshots / recording | xdg-desktop-portal + compositor | portal backend | M4 |
-
-Privileged operations always go through the owning system service, which
-authorizes with polkit. The shell never needs root.
-
----
-
-## 10. Security model
-
-The shell runs with the user's privileges and draws trusted UI, including
-password entry on the lock screen later. Defenses are layered:
-
-1. **No root, ever.** Privileged actions go to polkit-checked system daemons.
-2. **Least-privileged web content** (§6): fixed origin, CSP, no network, no
-   file access, closed schema, per-surface capabilities, WebKit sandbox on.
-3. **No command strings anywhere.** Not from UI, search results, config, or
-   D-Bus actions. Launching resolves desktop-entry ids against the catalog.
-4. **Narrow D-Bus exposure.** The UI never sees D-Bus. Exported shell actions
-   take no arguments.
-5. **Platform security stays on.** WebKit sandboxing, SELinux, and Flatpak
-   sandboxing are never disabled for convenience. Dev mode (`MERIDIAN_DEV=1`)
-   only enables WebKit's inspector and context menu.
-6. **Login screen** (M0): greetd runs PAM as root. The greeter is
-   unprivileged, has a single capability, and never stores or logs the
-   password.
-7. **Lock screen** ([ADR-0007](adr/0007-session-controls.md), shipped early)
-   uses `ext-session-lock-v1`, so a crashed shell leaves the session locked
-   rather than exposed. PAM authentication runs in the host process (on
-   `gio::spawn_blocking`'s thread pool, never the GTK main loop or web
-   content) against the password of the already-logged-in user only, the
-   same trust boundary the login screen already carries.
-
----
-
-## 11. Application compatibility
-
-Meridian is a shell, not a platform. Applications don't link against it.
-
-- **Wayland apps** talk to the compositor directly.
-- **X11 apps** run through XWayland, which labwc starts on demand.
-- **Flatpak apps** export desktop entries under `…/flatpak/exports/share`,
-  which is on `XDG_DATA_DIRS`. They show up in the Applications list and launch
-  through their exported `Exec` line.
-- Apps with `NoDisplay=true`, `Hidden=true`, or `OnlyShowIn`/`NotShowIn`
-  excluding us are hidden, per the desktop-entry spec. We set
-  `XDG_CURRENT_DESKTOP=Meridian`.
-- **Portals:** M4 adds `meridian-portals.conf`, using the GTK backends until
-  we write our own.
-
----
-
-## 12. Multi-monitor strategy
-
-- The host watches GDK's monitor list, which reflects `wl_output` hot-plug,
-  and reconciles surfaces: every output gets `wallpaper`, and the
-  **primary** output also gets the bar.
-- In M0 the primary output is the first monitor GDK reports. M4 adds
-  output-management configuration and a bar per output.
-- Each surface renders at its own output's fractional scale and refresh rate
-  (one frame clock per surface).
-- Menus open on the primary output, under its bar.
-
----
+A separate services daemon, native PipeWire integration, notification server,
+idle locking, DDC/CI brightness, additional search providers, a custom
+compositor, and an ISO/SDK remain future directions from the older roadmap.
+They are not prerequisites for describing the features already implemented.
 
 ## 13. Repository layout
 
-```
-Cargo.toml          Rust workspace
-shell/              meridian-shell + meridian-greeter: surface host, bridge, URI scheme, greetd client,
-                    logind power actions (power.rs), lock screen PAM check (lock_auth.rs)
-protocol/           meridian-protocol: IPC types (Rust source of truth → generated TS)
-services/           meridian-services: app catalog, search + fuzzy matcher, windows, settings
-ui/                 React/TypeScript/HTML/CSS for each surface
-  src/lib/          bridge client, generated protocol types, design tokens
-  src/surfaces/     panel, applications, options, wallpaper, greeter, locker
-assets/             wallpapers
-session/            labwc configs (session + login screen), session entry, launcher script,
-                    lock screen PAM service (meridian-lock.pam)
-tools/              dev environment, nested sessions, fake greetd, install script, checks
-docs/               this document, ADRs, development guide
-```
-
-Changes from the originally suggested layout:
-
-- **No `/native`.** Rust code is split by responsibility (`shell`,
-  `services`, `protocol`) as workspace crates.
-- **`/session` added** for compositor configuration and session entry points.
-- **No `/apps` or top-level `/tests` yet.** Tests live in each crate
-  (`cargo test`), and UI type-checking runs through `tsc`. These directories
-  will be added with the first app and the first end-to-end harness. We don't
-  create empty placeholders.
-
----
-
-## 14. Development roadmap
-
-| Milestone | Scope |
+| Path | Responsibility |
 |---|---|
-| **M0 — Prototype** | Top bar (Applications, running windows, Options), Applications menu (search + text list of real installed apps, keyboard/mouse, launching), Options (real Wi-Fi/Bluetooth switches, brightness/volume sliders), login screen on greetd, installer, fuzzy search provider, typed bridge with capabilities, nested dev session with host apps |
-| **M1 — Windows** | foreign-toplevel: Meridian window overview/switcher replaces labwc's Alt+Tab, focus/minimize from the bar, `xdg-activation` |
-| **M2 — Controls** | `meridian-servicesd` (zbus); native PipeWire volume with change notifications; Wi-Fi network list, Bluetooth devices, power menu (logind), media-key OSD, clock |
-| **M3 — Session** | notifications (server + center), ~~lock screen~~ (shipped early, [ADR-0007](adr/0007-session-controls.md)), idle/DPMS, DDC/CI brightness, calendar |
-| **M4 — Search & polish** | settings/calculator/file providers, workspaces, screenshot UI, shortcut config, display settings, accessibility audit |
-| **M5+** | Smithay compositor (window animations, live overview), settings app, file manager, terminal, greeter, ISO/installer, SDK |
+| `protocol/src/lib.rs` | Message types, capabilities, validation, JSON replies, generated TS |
+| `services/src/` | App catalog/search, window tracking, settings, output management |
+| `shell/src/shell.rs` | Surface lifecycle and request dispatcher |
+| `shell/src/surface.rs` | GTK/WebKit windows, layer placement, rendering settings |
+| `shell/src/bridge.rs`, `scheme.rs` | Message transport and local resource loading |
+| `shell/src/files.rs`, `terminal.rs`, `desktop.rs` | Built-in app operations and desktop persistence |
+| `shell/src/settings_devices.rs`, `bluetooth_agent.rs` | Device configuration and pairing |
+| `shell/src/greeter.rs`, `greetd.rs`, `lock_auth.rs`, `power.rs` | Login, lock, and session actions |
+| `ui/src/surfaces/` | React interfaces for each surface |
+| `ui/src/components/`, `lib/` | Shared components, hooks, bridge, types, design tokens |
+| `assets/` | Icons, wallpapers, and labwc decoration theme |
+| `session/` | Session entry, launcher, labwc configuration, PAM configuration |
+| `tools/` | Build, development, install, codec, and check scripts |
+| `docs/adr/` | Historical design decisions and implementation updates |
