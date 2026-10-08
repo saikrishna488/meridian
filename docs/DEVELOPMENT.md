@@ -141,11 +141,12 @@ tools/check.sh
 
 This runs rustfmt, clippy (`-D warnings`), all Rust tests, a check that the
 generated TypeScript protocol types are committed, and the UI type-check and
-build.
+build. Run `cd ui && npm test` separately for UI interaction tests with a mocked
+host; these do not validate real hardware.
 
 ## Changing the protocol
 
-1. Edit the types in `protocol/src/lib.rs`.
+1. Edit the message types, validation, and capability definitions in `protocol/src/lib.rs`.
 2. `cargo test -p meridian-protocol` regenerates `ui/src/lib/generated/*.ts`.
 3. Update the result map in `ui/src/lib/bridge.ts` if you added a request,
    and the dispatcher in `shell/src/shell.rs`.
@@ -155,7 +156,6 @@ build.
 ts-rs prints "failed to parse serde attribute: deny_unknown_fields" during
 builds. That's expected: ts-rs doesn't model the attribute, and serde still
 enforces it (see the `rejects_unknown_fields` test).
-
 ## Layout
 
 See [ARCHITECTURE.md §13](ARCHITECTURE.md#13-repository-layout).

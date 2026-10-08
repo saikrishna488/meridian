@@ -1,6 +1,9 @@
 # ADR-0004: Text-only shell UI (no icons)
 
-Status: accepted (M0). Supersedes the "icon-first" home-screen idea.
+Status: superseded.
+
+> Superseded by the current icon-based desktop. Meridian now includes app icons, a dock, shortcuts, and icon resource routes. The original decision below is retained as history.
+> See [current architecture](../ARCHITECTURE.md).
 
 ## Context
 
