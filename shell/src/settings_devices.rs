@@ -32,13 +32,19 @@ pub fn monitor_brightness(choice: MonitorBrightnessRequest) -> Result<MonitorBri
     }
     let (edid, bus) = connector_edid(&choice.connector).ok_or_else(|| error("Monitor EDID is unavailable"))?;
     let selector = edid.iter().map(|b| format!("{b:02x}")).collect::<String>();
-    if bus.is_none() && outputs.iter().filter(|o| o.enabled && o.name != choice.connector).any(|o| {
-        connector_edid(&o.name).is_some_and(|(other, _)| other == edid)
-    }) {
+    if bus.is_none()
+        && outputs
+            .iter()
+            .filter(|o| o.enabled && o.name != choice.connector)
+            .any(|o| connector_edid(&o.name).is_some_and(|(other, _)| other == edid))
+    {
         return Err(error("This monitor cannot be distinguished safely from another connected display"));
     }
-    let selection = if let Some(bus) = &bus { vec!["--bus".to_string(), bus.clone()] }
-        else { vec!["--edid".to_string(), selector] };
+    let selection = if let Some(bus) = &bus {
+        vec!["--bus".to_string(), bus.clone()]
+    } else {
+        vec!["--edid".to_string(), selector]
+    };
     let current = read_ddc_brightness(&selection)?;
     if let Some(percent) = choice.percent {
         let target = (u32::from(percent) * u32::from(current.1) + 50) / 100;
@@ -48,18 +54,31 @@ pub fn monitor_brightness(choice: MonitorBrightnessRequest) -> Result<MonitorBri
         let refs: Vec<_> = args.iter().map(String::as_str).collect();
         run_timeout(&refs, None, Duration::from_secs(12))?;
     }
-    Ok(MonitorBrightness { percent: Some(choice.percent.unwrap_or_else(|| (u32::from(current.0) * 100 / u32::from(current.1)) as u8)) })
+    Ok(MonitorBrightness {
+        percent: Some(choice.percent.unwrap_or_else(|| (u32::from(current.0) * 100 / u32::from(current.1)) as u8)),
+    })
 }
 fn connector_edid(connector: &str) -> Option<(Vec<u8>, Option<String>)> {
     for root in ["/sys/class/drm", "/run/host/sys/class/drm"] {
-        let Ok(entries) = std::fs::read_dir(root) else { continue; };
+        let Ok(entries) = std::fs::read_dir(root) else {
+            continue;
+        };
         for entry in entries.flatten() {
-            if !entry.file_name().to_string_lossy().ends_with(&format!("-{connector}")) { continue; }
+            if !entry.file_name().to_string_lossy().ends_with(&format!("-{connector}")) {
+                continue;
+            }
             let bytes = std::fs::read(entry.path().join("edid")).ok()?;
-            if bytes.len() < 128 || bytes[..8] != [0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00] { continue; }
-            let bus = std::fs::canonicalize(entry.path().join("ddc")).ok()
+            if bytes.len() < 128 || bytes[..8] != [0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00] {
+                continue;
+            }
+            let bus = std::fs::canonicalize(entry.path().join("ddc"))
+                .ok()
                 .and_then(|path| path.file_name()?.to_str().map(str::to_owned))
-                .and_then(|name| name.strip_prefix("i2c-").filter(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())).map(str::to_owned));
+                .and_then(|name| {
+                    name.strip_prefix("i2c-")
+                        .filter(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+                        .map(str::to_owned)
+                });
             return Some((bytes[..128].to_vec(), bus));
         }
     }
@@ -71,14 +90,19 @@ fn read_ddc_brightness(selection: &[String]) -> Result<(u16, u16), ErrorBody> {
     args.extend(["getvcp".into(), "10".into(), "--terse".into()]);
     let refs: Vec<_> = args.iter().map(String::as_str).collect();
     let output = run_timeout(&refs, None, Duration::from_secs(12))?;
-    output.lines().find_map(|line| {
-        let fields: Vec<_> = line.split_whitespace().collect();
-        if fields.len() >= 5 && fields[0] == "VCP" && fields[1].eq_ignore_ascii_case("10") && fields[2] == "C" {
-            let current = fields[3].parse::<u16>().ok()?;
-            let max = fields[4].parse::<u16>().ok()?;
-            (max > 0 && current <= max).then_some((current, max))
-        } else { None }
-    }).ok_or_else(|| error("This monitor does not support DDC/CI brightness control"))
+    output
+        .lines()
+        .find_map(|line| {
+            let fields: Vec<_> = line.split_whitespace().collect();
+            if fields.len() >= 5 && fields[0] == "VCP" && fields[1].eq_ignore_ascii_case("10") && fields[2] == "C" {
+                let current = fields[3].parse::<u16>().ok()?;
+                let max = fields[4].parse::<u16>().ok()?;
+                (max > 0 && current <= max).then_some((current, max))
+            } else {
+                None
+            }
+        })
+        .ok_or_else(|| error("This monitor does not support DDC/CI brightness control"))
 }
 fn run(args: &[&str], input: Option<&str>) -> Result<String, ErrorBody> {
     run_timeout(args, input, Duration::from_secs(40))
