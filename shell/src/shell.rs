@@ -377,7 +377,9 @@ impl Shell {
                 serialize(ok())
             }
             Request::TerminalStart => serialize(proto::reply_ok(&self.terminals.borrow_mut().start()?)),
-            Request::TerminalStartAt(path) => serialize(proto::reply_ok(&self.terminals.borrow_mut().start_at(&path.path)?)),
+            Request::TerminalStartAt(path) => {
+                serialize(proto::reply_ok(&self.terminals.borrow_mut().start_at(&path.path)?))
+            }
             Request::TerminalCopy(text) => {
                 if text.data.len() > 1024 * 1024 {
                     return Err(ErrorBody::new(ErrorCode::InvalidRequest, "Clipboard text is too large."));
