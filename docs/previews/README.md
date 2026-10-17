@@ -1,5 +1,29 @@
 # GUI previews
 
+## Current GUI refresh
+
+Native captures from an isolated headless labwc session, with sample desktop
+files and a private XDG configuration/session bus:
+
+- [Desktop and taskbar](modern-native-desktop.png)
+- [Settings with native window controls](modern-native-settings.png)
+
+WebKit previews with deterministic sample data (hardware and file changes stay
+in the preview fixtures):
+
+- Settings Home: [light](modern-settings-light.png) · [dark](modern-settings-dark.png)
+- Applications: [light](modern-launcher-light.png) · [dark](modern-launcher-dark.png)
+- Orbit: [light](modern-orbit-light.png) · [dark](modern-orbit-dark.png)
+- [Startup Apps](modern-startup-light.png)
+- [Sound and microphone settings](modern-sound-light.png)
+- [Power, battery, and screen locking](modern-power-dark.png)
+- [Trash and file restoration](modern-trash-light.png)
+- [Notification center](modern-notifications-light.png)
+
+[Design, supported features, and verification](../GUI-REFRESH.md).
+
+## Earlier captures
+
 Native Wayland captures from a private headless labwc session (isolated XDG
 configuration and session bus):
 

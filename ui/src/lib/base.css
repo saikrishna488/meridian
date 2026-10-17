@@ -131,3 +131,8 @@ button:disabled { opacity: .45; }
 :root .app-icon { border-radius: 26%; }
 :root .app-icon.system-artwork img { width: 86%; height: 86%; }
 :root .menu .apps-search:focus-within { border-color: var(--focus-ring); box-shadow: 0 0 0 3px #087cf026; }
+
+.visually-hidden { position:absolute!important; width:1px!important; height:1px!important; padding:0!important; margin:-1px!important; overflow:hidden!important; clip-path:inset(50%)!important; white-space:nowrap!important; border:0!important; }
+button, input, select, textarea { -webkit-tap-highlight-color:transparent; }
+button:focus-visible, [role="button"]:focus-visible { outline:2px solid var(--focus-ring); outline-offset:3px; }
+@media(prefers-reduced-motion:reduce) { *, *::before, *::after { animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important; scroll-behavior:auto!important; } }

@@ -32,6 +32,9 @@ interface ResultMap {
   "files.choose_folder": string | null;
   "files.locations": import("./generated/FileLocation").FileLocation[];
   "files.list": import("./generated/FileListing").FileListing;
+  "files.properties": import("./generated/FileProperties").FileProperties;
+  "files.trash_list": import("./generated/TrashListing").TrashListing;
+  "files.trash_restore": string;
   "files.open": null;
   "files.mkdir": null;
   "files.rename": null;
@@ -42,6 +45,10 @@ interface ResultMap {
   "menu.open": null;
   "preferences.open": null;
   "preferences.wallpaper_open": null;
+  "preferences.page_open": null;
+  "power.status": import("./generated/PowerState").PowerState;
+  "settings.idle": import("./generated/IdleSettings").IdleSettings;
+  "settings.idle_set": import("./generated/IdleSettings").IdleSettings;
   "finder.open": null;
   "notifications.get": import("./generated/NotificationState").NotificationState;
   "notifications.read": import("./generated/NotificationState").NotificationState;
@@ -89,6 +96,10 @@ interface ResultMap {
   "settings.bluetooth_scan": null;
   "settings.bluetooth_action": null;
   "settings.system_info": import("./generated/SystemInfo").SystemInfo;
+  "settings.startup": import("./generated/StartupEntry").StartupEntry[];
+  "settings.startup_set": import("./generated/StartupEntry").StartupEntry[];
+  "settings.startup_add": import("./generated/StartupEntry").StartupEntry[];
+  "settings.startup_apps": import("./generated/SearchItem").SearchItem[];
   "settings.check_updates": import("./generated/UpdateInfo").UpdateInfo;
   "settings.open_releases": null;
   "settings.users": import("./generated/UserInfo").UserInfo[];
@@ -99,6 +110,8 @@ interface ResultMap {
   "settings.drivers": import("./generated/DriverInfo").DriverInfo[];
   "settings.driver_set": null;
   "settings.get": SettingsState;
+  "settings.audio": import("./generated/AudioState").AudioState;
+  "settings.audio_action": import("./generated/AudioState").AudioState;
   "settings.set_wifi": null;
   "settings.set_bluetooth": null;
   "settings.set_brightness": null;

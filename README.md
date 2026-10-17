@@ -15,18 +15,18 @@ See [the architecture](docs/ARCHITECTURE.md) for implementation details and limi
 
 ## Screenshots
 
-The Meridian desktop, with its bottom taskbar and Dusk wallpaper:
+Meridian running on Wayland, with Settings and the bottom taskbar:
 
-![Meridian desktop with Dusk wallpaper, welcome card, and bottom taskbar](docs/previews/desktop-light.png)
+![Meridian desktop running native Settings over Dusk wallpaper with the bottom taskbar](docs/previews/modern-native-settings.png)
 
 | Applications | Settings in dark mode |
 | --- | --- |
-| [![Applications launcher with search and an app grid](docs/previews/refined-launcher-light.png)](docs/previews/refined-launcher-light.png) | [![Settings Home in dark mode with appearance, wallpaper, and device preferences](docs/previews/refined-settings-dark.png)](docs/previews/refined-settings-dark.png) |
-| **Control Center** | **Lock screen** |
-| [![Control Center with Wi-Fi, Bluetooth, brightness, volume, and power controls](docs/previews/refined-controls-light.png)](docs/previews/refined-controls-light.png) | [![Meridian lock screen with clock and password field over Dusk wallpaper](docs/previews/refined-lock-screen.png)](docs/previews/refined-lock-screen.png) |
+| [![Applications launcher with search and an app grid](docs/previews/modern-launcher-light.png)](docs/previews/modern-launcher-light.png) | [![Settings Home in dark mode with appearance, wallpaper, and device preferences](docs/previews/modern-settings-dark.png)](docs/previews/modern-settings-dark.png) |
+| **Orbit file manager** | **Sound settings** |
+| [![Orbit file manager with folder breadcrumbs, sidebar navigation, and file types](docs/previews/modern-orbit-light.png)](docs/previews/modern-orbit-light.png) | [![Sound settings with output and microphone selection, volume, and mute controls](docs/previews/modern-sound-light.png)](docs/previews/modern-sound-light.png) |
 
-These UI previews use sample data. Click an image to view it at full size, or
-see [more screenshots and capture details](docs/previews/README.md).
+The desktop capture uses an isolated native session; the gallery previews use
+sample data. Click an image to view it at full size, or see [more screenshots and capture details](docs/previews/README.md).
 
 ## Debian requirements
 
@@ -94,9 +94,12 @@ Click Trash to open the file manager's trash. Drag an installed app onto Trash, 
 
 Open **Meridian → Settings…**, or find **Settings** in Applications. Wallpaper,
 light/dark appearance, Wi-Fi, Bluetooth, and display settings are available.
-Software Update, Startup Applications, Sound preferences, and Privacy & Security
-are not complete; volume can be adjusted in Control Center. Sharing is a UI
-prototype and does not enable sharing services.
+**Startup Apps** manages applications that open at sign-in. **Sound** selects
+speakers and microphones, sets their levels, and controls mute. **Power & Lock**
+shows battery status and saves automatic lock/display-standby timing for your
+next sign-in. Meridian release checks are available in **General**; installation
+and distribution updates remain manual. Sharing is a UI prototype and does not
+enable sharing services.
 
 Installed apps use their desktop-entry artwork in consistent rounded tiles.
 Orbit, Settings, Terminal, the launcher, Control Center, and Trash use fixed
@@ -117,6 +120,31 @@ Open **Meridian → Orbit… / Terminal…**, or search Applications for **Orbit
 Orbit browses actual folders, with back/forward navigation, an enclosing-folder button, icon/list views, filtering within the current folder, hidden files, refresh, and a path field. Use **New folder** or a file’s context menu to open, rename, add to the desktop, or move to the system Trash. Rename never overwrites another item. **Applications** lists installed apps with Open, Add to Dock, Add to Desktop, and reviewed Uninstall actions.
 
 Terminal runs your actual interactive shell on a PTY using the locally bundled, MIT-licensed xterm.js renderer. It supports tabs, ANSI colors, shell history and completion, interactive programs, resizing, Ctrl+C, Ctrl+Shift+C to copy a selection, and Ctrl+Shift+V to paste. Closing a tab/window ends its shell and foreground job; detached jobs may survive. Development and installed sessions run on the Debian host.
+
+## Everyday desktop controls
+
+- **Startup Apps:** add an installed application or enable/disable a login entry.
+  Changes apply at your next sign-in and affect only your account. Meridian
+  follows XDG autostart directory precedence and desktop filters; nested
+  development sessions skip autostart.
+- **Sound:** select default output and input devices, adjust each level, and mute
+  speakers or microphones. Device discovery needs PipeWire (`pw-dump`) and
+  WirePlumber (`wpctl`). Use **Refresh devices** after connecting hardware.
+  Applications with their own device selection can keep that choice.
+- **Power & Lock:** see laptop battery charge and external power, then choose
+  the idle lock delay (1–30 minutes) and display-standby delay after locking.
+  Timing changes take effect at the next sign-in. Lock confirmation remains
+  required before display standby and sleep.
+- **Orbit:** use folder breadcrumbs, saved sort/view preferences, and **Alt+Enter**
+  for read-only file properties. **Ctrl+Shift+N** creates a folder and **Alt+Up**
+  opens the parent folder. The **Trash** sidebar and taskbar icon open Orbit's
+  Trash browser; select an item and choose **Restore** to return it to its original
+  folder. Existing destination files are preserved. Trash browsing needs GVfs;
+  the original folder must still exist.
+- **Taskbar:** click the clock to open Calendar or the battery to open Power &
+  Lock. The launcher’s **Pinned** view follows taskbar favorites.
+
+[GUI design, behavior, and verification](docs/GUI-REFRESH.md).
 
 ## Multimedia codecs
 

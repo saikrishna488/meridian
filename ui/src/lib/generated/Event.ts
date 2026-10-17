@@ -5,10 +5,11 @@ import type { FilePath } from "./FilePath";
 import type { MenuOpen } from "./MenuOpen";
 import type { NotificationState } from "./NotificationState";
 import type { PopoverState } from "./PopoverState";
+import type { PreferencesPageRequest } from "./PreferencesPageRequest";
 import type { SettingsState } from "./SettingsState";
 import type { WindowInfo } from "./WindowInfo";
 
 /**
  * Events pushed from the host to a surface.
  */
-export type Event = { "event": "notifications.changed", "data": NotificationState } | { "event": "pulse.visibility", "data": boolean } | { "event": "terminal.opened" } | { "event": "terminal.opened_at", "data": FilePath } | { "event": "terminal.closed" } | { "event": "finder.location", "data": FilePath } | { "event": "preferences.wallpaper" } | { "event": "desktop.changed", "data": DesktopState } | { "event": "dock.layout_changed", "data": Array<string> } | { "event": "apps.uninstall_requested", "data": AppId } | { "event": "menu.opened", "data": MenuOpen } | { "event": "popover.shown" } | { "event": "popover.dismiss" } | { "event": "popover.state", "data": PopoverState } | { "event": "windows.changed", "data": Array<WindowInfo> } | { "event": "search.invalidated" } | { "event": "dock.changed", "data": Array<string> } | { "event": "settings.changed", "data": SettingsState };
+export type Event = { "event": "notifications.changed", "data": NotificationState } | { "event": "pulse.visibility", "data": boolean } | { "event": "terminal.opened" } | { "event": "terminal.opened_at", "data": FilePath } | { "event": "terminal.closed" } | { "event": "finder.location", "data": FilePath } | { "event": "files.changed", "data": FilePath } | { "event": "preferences.wallpaper" } | { "event": "preferences.page", "data": PreferencesPageRequest } | { "event": "desktop.changed", "data": DesktopState } | { "event": "dock.layout_changed", "data": Array<string> } | { "event": "apps.uninstall_requested", "data": AppId } | { "event": "menu.opened", "data": MenuOpen } | { "event": "popover.shown" } | { "event": "popover.dismiss" } | { "event": "popover.state", "data": PopoverState } | { "event": "windows.changed", "data": Array<WindowInfo> } | { "event": "search.invalidated" } | { "event": "dock.changed", "data": Array<string> } | { "event": "settings.changed", "data": SettingsState };

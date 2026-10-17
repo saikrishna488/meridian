@@ -16,8 +16,8 @@ export function Clock({ compact = false }: { compact?: boolean }) {
     tick();
     return () => clearTimeout(timer);
   }, []);
-  return <header className="when" title={now.toLocaleString(undefined, { dateStyle: "full", timeStyle: "short" })}>
+  return <div className="when" title={now.toLocaleString(undefined, { dateStyle: "full", timeStyle: "short" })}>
     <time className="clock" id="clock" dateTime={now.toISOString()}>{timeFormat.format(now)}</time>
     <p className="date" id="date">{(compact ? compactDateFormat : dateFormat).format(now)}</p>
-  </header>;
+  </div>;
 }

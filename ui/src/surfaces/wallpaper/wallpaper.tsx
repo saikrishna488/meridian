@@ -8,7 +8,7 @@ import { errorMessage, mount, useMenuFocus } from "../../lib/react";
 import type { DesktopItem } from "../../lib/generated/DesktopItem";
 function Wallpaper() {
   const { desktop, setDesktop } = useDesktop();
-  const contextMenu = useRef<HTMLDivElement>(null);
+  const contextMenu = useRef<HTMLDivElement>(null), removing = useRef(false);
   const [dropping, setDropping] = useState<"app" | "file" | null>(null);
   const [context, setContext] = useState<{ x: number; y: number; item?: DesktopItem } | null>(null);
   const [selected, setSelected] = useState<string | null>(null), [notice, setNotice] = useState("");
@@ -35,14 +35,22 @@ function Wallpaper() {
     if ((e.target as HTMLElement).closest?.(".desktop-context")) return;
     if (e.key === "Escape") { setContext(null); setSelected(null); }
     if (["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key) && items.length) {
-      e.preventDefault(); const index = Math.max(0, items.findIndex(item => item.id === selected));
+      e.preventDefault(); const index = items.findIndex(item => item.id === selected);
       const rows = Math.max(1, Math.floor((document.querySelector(".desktop-items")?.clientHeight ?? 500) / 116));
       const offset = e.key === "ArrowDown" ? 1 : e.key === "ArrowUp" ? -1 : e.key === "ArrowRight" ? rows : -rows;
-      const next = e.key === "Home" ? 0 : e.key === "End" ? items.length - 1 : Math.max(0, Math.min(items.length - 1, index + offset));
+      const next = e.key === "Home" || index < 0 && e.key !== "End" ? 0 : e.key === "End" ? items.length - 1 : Math.max(0, Math.min(items.length - 1, index + offset));
       setSelected(items[next]!.id); document.querySelectorAll<HTMLButtonElement>(".desktop-item")[next]?.focus(); return;
     }
     const item = desktop?.items.find(i => i.id === selected);
-    if (e.key === "Enter" && item) void open(item);
+    if (e.key === "ContextMenu" || e.shiftKey && e.key === "F10") {
+      e.preventDefault(); const bounds = (document.activeElement as HTMLElement | null)?.getBoundingClientRect();
+      setContext({ x: item && bounds ? bounds.left : 32, y: item && bounds ? bounds.bottom : 32, item }); return;
+    }
+    if (e.key === "Delete" && item && !e.repeat && !removing.current) {
+      e.preventDefault(); removing.current = true;
+      void request({ method: "desktop.remove", params: { id: item.id } }).then(state => { setDesktop(state); setSelected(null); }).catch(report).finally(() => { removing.current = false; }); return;
+    }
+    if (e.key === "Enter" && item) { e.preventDefault(); void open(item); }
   }} onContextMenu={e => { e.preventDefault(); setContext({ x: e.clientX, y: e.clientY }); }} onDragOver={e => { if ([APP_DRAG, "text/uri-list", "Files"].some(type => e.dataTransfer.types.includes(type))) { e.preventDefault(); setDropping(e.dataTransfer.types.includes(APP_DRAG) ? "app" : "file"); e.dataTransfer.dropEffect = e.dataTransfer.types.includes(APP_DRAG) ? "copy" : "move"; } }} onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropping(null); }} onDragEnd={() => setDropping(null)} onDrop={async e => {
     e.preventDefault(); setDropping(null); const id = e.dataTransfer.getData(APP_DRAG);
     if (id) { void request({ method: "desktop.add_app", params: { id } }).then(setDesktop).catch(report); return; }

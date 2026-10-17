@@ -3,6 +3,7 @@
 //! locked-down WebViews, the typed UI bridge, and the `meridian://` scheme.
 //! See docs/ARCHITECTURE.md.
 
+mod audio_devices;
 mod bluetooth_agent;
 pub mod bridge;
 mod calendar;
@@ -14,13 +15,16 @@ pub mod lock_auth;
 mod notifications;
 pub mod paths;
 pub mod power;
+pub mod power_settings;
 mod pulse;
 pub mod scheme;
 mod settings_devices;
 pub mod shell;
+pub mod startup;
 mod store;
 pub mod surface;
 mod terminal;
+mod trash;
 mod uninstall;
 
 use gtk::gdk;
@@ -48,10 +52,10 @@ pub fn install_css() {
     let css = gtk::CssProvider::new();
     css.load_from_string(
         "window.meridian-surface { background: transparent; }
-        window.meridian-preferences { background: #ffffff; color: #202530; }
-        window.meridian-preferences headerbar { min-height: 36px; padding: 0 0 0 8px; background: #f4f5f7; color: #202530; box-shadow: inset 0 -1px #dce0e7; }
-        window.meridian-preferences.meridian-dark { background: #191b20; color: #eef0f5; }
-        window.meridian-preferences.meridian-dark headerbar { background: #191b20; color: #eef0f5; box-shadow: inset 0 -1px #383e48; }
+        window.meridian-preferences { background: #ffffff; color: #182338; }
+        window.meridian-preferences headerbar { min-height: 36px; padding: 0 0 0 8px; background: #f4f6fa; color: #182338; box-shadow: inset 0 -1px #dce0e7; }
+        window.meridian-preferences.meridian-dark { background: #171e2a; color: #edf2fb; }
+        window.meridian-preferences.meridian-dark headerbar { background: #171e2a; color: #edf2fb; box-shadow: inset 0 -1px #303d51; }
         .meridian-window-button { min-width: 40px; min-height: 32px; padding: 0; border-radius: 0; border: 0; background: transparent; color: inherit; box-shadow: none; }
         .meridian-window-button:hover { background: rgba(100,110,130,.16); }
         .meridian-window-button.close:hover { background: #c52b38; color: #ffffff; }

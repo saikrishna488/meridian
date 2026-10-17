@@ -116,18 +116,6 @@ pub async fn uninstall(app: &App, expected: &str) -> Result<(), ErrorBody> {
     Ok(())
 }
 
-pub fn open_trash() -> Result<(), ErrorBody> {
-    let argv = host_command(&["gio", "open", "trash:///"]);
-    let refs: Vec<_> = argv.iter().map(|arg| arg.as_os_str()).collect();
-    let process = gio::Subprocess::newv(&refs, gio::SubprocessFlags::NONE).map_err(|e| error(e.to_string()))?;
-    process.wait_check_async(gio::Cancellable::NONE, |result| {
-        if let Err(e) = result {
-            log::warn!("could not open Trash: {e}");
-        }
-    });
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

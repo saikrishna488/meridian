@@ -57,6 +57,10 @@ struct State {
     topbar: Option<Rc<WebSurface>>,
     preferences: Option<Rc<WebSurface>>,
     finder: Option<Rc<WebSurface>>,
+    finder_monitor: Option<gio::FileMonitor>,
+    finder_monitor_path: Option<String>,
+    finder_monitor_generation: u64,
+    finder_refresh_timer: Option<glib::SourceId>,
     terminal: Option<Rc<WebSurface>>,
     pulse: Option<Rc<WebSurface>>,
     nova: Option<Rc<WebSurface>>,
@@ -563,9 +567,32 @@ impl Shell {
                 })))
             }
             Request::FileLocations => serialize(proto::reply_ok(&crate::files::locations())),
-            Request::FileList(list) => Ok(Reply::Later(Box::pin(async move {
-                let result = crate::files::blocking(move || crate::files::list(&list.path, list.hidden)).await?;
+            Request::FileList(list) => {
+                let generation = {
+                    let mut state = self.state.borrow_mut();
+                    state.finder_monitor_generation = state.finder_monitor_generation.wrapping_add(1);
+                    state.finder_monitor_generation
+                };
+                let weak = self.weak_self.clone();
+                Ok(Reply::Later(Box::pin(async move {
+                    let result = crate::files::blocking(move || crate::files::list(&list.path, list.hidden)).await?;
+                    if let Some(shell) = weak.upgrade() {
+                        shell.watch_finder(&result.path, generation);
+                    }
+                    proto::reply_ok(&result).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+                })))
+            }
+            Request::FileProperties(file) => Ok(Reply::Later(Box::pin(async move {
+                let result = crate::files::blocking(move || crate::files::properties(&file.path)).await?;
                 proto::reply_ok(&result).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
+            Request::FileTrashList => Ok(Reply::Later(Box::pin(async move {
+                let listing = crate::files::blocking(crate::trash::list).await?;
+                proto::reply_ok(&listing).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
+            Request::FileTrashRestore(item) => Ok(Reply::Later(Box::pin(async move {
+                let path = crate::files::blocking(move || crate::trash::restore(&item.uri)).await?;
+                proto::reply_ok(&path).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
             }))),
             Request::FileOpen(file) => {
                 crate::files::open(&file.path)?;
@@ -618,8 +645,18 @@ impl Shell {
                 }
                 serialize(ok())
             }
+            Request::PreferencesPageOpen(page) => {
+                self.open_preferences();
+                if let Some(surface) = &self.state.borrow().preferences {
+                    surface.send(&Event::PreferencesPage(page));
+                }
+                serialize(ok())
+            }
             Request::TrashOpen => {
-                crate::uninstall::open_trash()?;
+                self.open_finder();
+                if let Some(surface) = &self.state.borrow().finder {
+                    surface.send(&Event::FinderLocation(proto::FilePath { path: "@trash".into() }));
+                }
                 serialize(ok())
             }
             Request::AppUninstallPrompt(app) => {
@@ -887,6 +924,42 @@ impl Shell {
                 crate::users::change(choice).await?;
                 proto::reply_ok(&()).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
             }))),
+            Request::SettingsStartupApps => {
+                let apps: Vec<_> = self
+                    .catalog
+                    .borrow()
+                    .apps()
+                    .iter()
+                    .filter(|a| a.source.is_some())
+                    .map(|a| proto::SearchItem {
+                        id: a.id.clone(),
+                        title: a.name.clone(),
+                        subtitle: a.description.clone(),
+                        icon: a.icon.clone(),
+                    })
+                    .collect();
+                serialize(proto::reply_ok(&apps))
+            }
+            Request::SettingsStartup => Ok(Reply::Later(Box::pin(async move {
+                let entries = crate::files::blocking(crate::startup::list).await?;
+                proto::reply_ok(&entries).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
+            Request::SettingsStartupSet(choice) => Ok(Reply::Later(Box::pin(async move {
+                let entries = crate::files::blocking(move || crate::startup::set(&choice.id, choice.enabled)).await?;
+                proto::reply_ok(&entries).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
+            Request::SettingsStartupAdd(choice) => {
+                let source = self
+                    .catalog
+                    .borrow()
+                    .get(&choice.id)
+                    .and_then(|app| app.source.clone())
+                    .ok_or_else(|| ErrorBody::new(ErrorCode::InvalidRequest, "Choose an installed application"))?;
+                Ok(Reply::Later(Box::pin(async move {
+                    let entries = crate::files::blocking(move || crate::startup::add(&choice.id, &source)).await?;
+                    proto::reply_ok(&entries).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+                })))
+            }
             Request::SettingsSystemInfo => serialize(proto::reply_ok(&system_info())),
             Request::SettingsCheckUpdates => Ok(Reply::Later(Box::pin(async move {
                 let update = crate::files::blocking(crate::updates::check).await?;
@@ -916,6 +989,27 @@ impl Shell {
                 crate::files::blocking(move || crate::drivers::change(choice)).await?;
                 proto::reply_ok(&()).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
             }))),
+            Request::PowerStatus => Ok(Reply::Later(Box::pin(async move {
+                let power = crate::files::blocking(crate::power_settings::status).await?;
+                proto::reply_ok(&power).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
+            Request::SettingsIdle => serialize(proto::reply_ok(&crate::power_settings::idle())),
+            Request::SettingsIdleSet(settings) => Ok(Reply::Later(Box::pin(async move {
+                let settings = crate::files::blocking(move || crate::power_settings::save(settings)).await?;
+                proto::reply_ok(&settings).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
+            Request::SettingsAudio => Ok(Reply::Later(Box::pin(async move {
+                let audio = crate::files::blocking(crate::audio_devices::list).await?;
+                proto::reply_ok(&audio).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
+            Request::SettingsAudioAction(choice) => {
+                let settings = self.settings.clone();
+                Ok(Reply::Later(Box::pin(async move {
+                    let audio = crate::files::blocking(move || crate::audio_devices::action(choice)).await?;
+                    settings.refresh();
+                    proto::reply_ok(&audio).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+                })))
+            }
             Request::SettingsGet => serialize(proto::reply_ok(&self.settings.state())),
             Request::SettingsSetWifi(v) => {
                 self.settings.set_wifi(v.enabled)?;
@@ -1112,6 +1206,57 @@ impl Shell {
         for surface in surfaces.popovers.values() {
             surface.send(&event);
         }
+    }
+
+    fn watch_finder(&self, path: &str, generation: u64) {
+        let state = self.state.borrow();
+        if state.finder_monitor_generation != generation || state.finder_monitor_path.as_deref() == Some(path) {
+            return;
+        }
+        drop(state);
+        let monitor = match gio::File::for_path(path)
+            .monitor_directory(gio::FileMonitorFlags::WATCH_MOVES, gio::Cancellable::NONE)
+        {
+            Ok(monitor) => monitor,
+            Err(e) => {
+                log::debug!("Folder monitoring unavailable: {e}");
+                return;
+            }
+        };
+        let weak = self.weak_self.clone();
+        let watched = path.to_owned();
+        monitor.connect_changed(move |_, _, _, _| {
+            let Some(shell) = weak.upgrade() else { return };
+            let mut state = shell.state.borrow_mut();
+            if state.finder_monitor_path.as_deref() != Some(&watched) {
+                return;
+            }
+            if let Some(timer) = state.finder_refresh_timer.take() {
+                timer.remove();
+            }
+            let weak = shell.weak_self.clone();
+            let path = watched.clone();
+            state.finder_refresh_timer = Some(glib::timeout_add_local_once(Duration::from_millis(150), move || {
+                if let Some(shell) = weak.upgrade() {
+                    let mut state = shell.state.borrow_mut();
+                    state.finder_refresh_timer.take();
+                    if state.finder_monitor_path.as_deref() == Some(&path)
+                        && let Some(surface) = &state.finder
+                    {
+                        surface.send(&Event::FilesChanged(proto::FilePath { path }));
+                    }
+                }
+            }));
+        });
+        let mut state = self.state.borrow_mut();
+        if let Some(timer) = state.finder_refresh_timer.take() {
+            timer.remove();
+        }
+        if let Some(old) = state.finder_monitor.take() {
+            old.cancel();
+        }
+        state.finder_monitor_path = Some(path.to_owned());
+        state.finder_monitor = Some(monitor);
     }
 
     fn open_finder(&self) {

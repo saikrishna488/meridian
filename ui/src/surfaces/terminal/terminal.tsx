@@ -71,6 +71,9 @@ function Session({ active, fontSize, cwd, appearance, onExit }: { active: boolea
         term.onResize(({ cols, rows }) => { inputQueue = inputQueue.then(async () => { if (alive && id !== null && cols >= 2 && rows >= 1) await request({ method: "terminal.resize", params: { id, cols: Math.min(500, cols), rows: Math.min(250, rows) } }); }).catch(fail); });
         // Let the shell receive Ctrl+C; copy a selection with Ctrl+Shift+C.
         term.attachCustomKeyEventHandler(event => {
+          // Let the application own tab shortcuts before xterm can send a
+          // control character to the foreground shell.
+          if (event.ctrlKey && ((event.shiftKey && ["t", "w"].includes(event.key.toLowerCase())) || ["PageUp", "PageDown"].includes(event.key))) return false;
           if (event.type === "keydown" && event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "c") {
             const text = term.getSelection(); if (text) void request({ method: "terminal.copy", params: { data: text } }).catch(fail); return false;
           }
@@ -121,7 +124,8 @@ function Session({ active, fontSize, cwd, appearance, onExit }: { active: boolea
 function Terminal() {
   const appearance = useAppearance();
   const [ready, setReady] = useState(false), [error, setError] = useState("");
-  const [tabs, setTabs] = useState<{ id: number; ended: boolean; cwd?: string }[]>([]), [active, setActive] = useState(1), [fontSize, setFontSize] = useState(13);
+  const [tabs, setTabs] = useState<{ id: number; ended: boolean; cwd?: string }[]>([]), [active, setActive] = useState(1), [fontSize, setFontSize] = useState(() => { try { const value = Number(localStorage.getItem("meridian.terminal-font-size")); return Number.isInteger(value) && value >= 11 && value <= 24 ? value : 13; } catch { return 13; } });
+  useEffect(() => { try { localStorage.setItem("meridian.terminal-font-size", String(fontSize)); } catch {} }, [fontSize]);
   const next = useRef(1);
   const tabsRef = useRef(tabs); tabsRef.current = tabs;
   useEffect(() => {

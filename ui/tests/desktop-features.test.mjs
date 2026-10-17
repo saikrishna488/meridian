@@ -363,6 +363,7 @@ test("Finder navigates files with the keyboard and traps focus in rename dialogs
   const ui = await surface(t, "finder", req => req.method === "files.locations" ? [{ name: "Home", path: "/home/test" }] : req.method === "files.list" ? { path: req.params.path, parent: "/home", entries, truncated: false } : defaults(req));
   await waitFor(() => ui.get('[aria-label="Documents"]'));
   ui.get('[aria-label="Documents"]').click();
+  await waitFor(() => ui.get('[aria-label="Documents"]').getAttribute("aria-pressed") === "true");
   ui.get('[aria-label="Documents"]').dispatchEvent(new ui.window.KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
   await waitFor(() => ui.get('[aria-label="Downloads"]').getAttribute("aria-pressed") === "true");
   ui.get('[aria-label="Downloads"]').dispatchEvent(new ui.window.KeyboardEvent("keydown", { key: "F2", bubbles: true }));
@@ -404,10 +405,14 @@ test("Terminal shortcuts create, switch and close tabs without sending shell com
   const ui = await surface(t, "terminal", req => req.method === "terminal.start" ? { id: ++id, shell: "/bin/bash" } : req.method === "terminal.read" ? { data: [], exited: false } : defaults(req));
   await waitFor(() => ui.requests.some(req => req.method === "shell.hello"));
   const key = (value, shiftKey = false) => ui.window.dispatchEvent(new ui.window.KeyboardEvent("keydown", { key: value, ctrlKey: true, shiftKey, bubbles: true, cancelable: true }));
+  await waitFor(() => !ui.get('[aria-label="New terminal session"]').disabled);
   key("T", true); await waitFor(() => ui.window.document.querySelectorAll('[role="tab"]').length === 1);
-  key("T", true); await waitFor(() => ui.window.document.querySelectorAll('[role="tab"]').length === 2);
-  key("PageUp"); await waitFor(() => ui.get('[role="tab"][aria-selected="true"]').textContent.includes("Session 1"));
-  key("W", true); await waitFor(() => ui.window.document.querySelectorAll('[role="tab"]').length === 1);
+  await waitFor(() => ui.get('.terminal-session.active .xterm-helper-textarea'));
+  const shellKey = (key, code, keyCode, shiftKey = false) => ui.get('.terminal-session.active .xterm-helper-textarea').dispatchEvent(new ui.window.KeyboardEvent("keydown", { key, code, keyCode, which: keyCode, ctrlKey: true, shiftKey, bubbles: true, cancelable: true }));
+  shellKey("T", "KeyT", 84, true); await waitFor(() => ui.window.document.querySelectorAll('[role="tab"]').length === 2);
+  await waitFor(() => ui.get('.terminal-session.active .xterm-helper-textarea'));
+  shellKey("PageUp", "PageUp", 33); await waitFor(() => ui.get('[role="tab"][aria-selected="true"]').textContent.includes("Session 1"));
+  shellKey("W", "KeyW", 87, true); await waitFor(() => ui.window.document.querySelectorAll('[role="tab"]').length === 1);
   assert.ok(!ui.requests.some(req => req.method === "terminal.write"));
 });
 
@@ -644,11 +649,11 @@ test("panel uses only its logo and opens system notifications with unread state"
 
 test("notification center receives app messages, invokes actions and dismisses", async t => {
   const item = { id: 4, app: "Mail", summary: "New message", body: "Hello", time: Date.now(), unread: true, actions: [["open", "Open"]] };
-  const ui = await surface(t, "notifications", r => r.method.startsWith("notifications.") ? { available: true, items: r.method === "notifications.read" ? [item] : [] } : defaults(r));
+  const ui = await surface(t, "notifications", r => r.method.startsWith("notifications.") ? { available: true, items: r.method === "notifications.read" ? [{ ...item, unread: false }] : [] } : defaults(r));
   await waitFor(() => ui.requests.some(r => r.method === "shell.hello"));
   ui.emit("popover.shown");
-  await waitFor(() => ui.get(".notification h2"));
-  assert.equal(ui.get(".notification h2").textContent, "New message");
+  await waitFor(() => ui.get(".notification h3"));
+  assert.equal(ui.get(".notification h3").textContent, "New message");
   ui.get(".notification-actions button").click();
   await waitFor(() => ui.requests.some(r => r.method === "notifications.action"));
   assert.deepEqual(ui.requests.find(r => r.method === "notifications.action").params, { id: 4, key: "open" });
@@ -677,4 +682,230 @@ test("Drift and Vault use dedicated builtin artwork", async t => {
   await waitFor(() => ui.get('[aria-label="Vault"] img'));
   assert.equal(ui.get('[aria-label="Vault"] img').src, "meridian://ui/desktop-icons/meridian/vault.svg");
   assert.equal(ui.get('[aria-label="Drift"] img').src, "meridian://ui/desktop-icons/meridian/browser.svg");
+});
+
+test("Startup Apps toggles a per-user entry and adds an installed app for next login", async t => {
+  let entries = [{ id: "mail.desktop", name: "Mail", description: "Email", command: "mail", enabled: false, available: true, reason: "", user: false }];
+  const ui = await surface(t, "settings", req => {
+    if (req.method === "settings.startup") return entries;
+    if (req.method === "settings.startup_set") { entries = entries.map(e => ({ ...e, enabled: req.params.enabled, user: true })); return entries; }
+    if (req.method === "settings.startup_apps") return [app];
+    if (req.method === "settings.startup_add") { entries = [...entries, { ...entries[0], id: app.id, name: app.title, enabled: true }]; return entries; }
+    return defaults(req);
+  });
+  ui.get('nav [aria-label="Startup Apps"]').click();
+  await waitFor(() => ui.get('[aria-label="Start Mail at sign-in"]'));
+  ui.get('[aria-label="Start Mail at sign-in"]').click();
+  await waitFor(() => ui.get('[aria-label="Start Mail at sign-in"]').getAttribute("aria-checked") === "true");
+  assert.deepEqual(ui.requests.find(r => r.method === "settings.startup_set").params, { id: "mail.desktop", enabled: true });
+  [...ui.window.document.querySelectorAll("button")].find(b => b.textContent.includes("Add application")).click();
+  await waitFor(() => ui.get('[aria-label="Search installed applications"]'));
+  await waitFor(() => ui.get('.startup-app-picker button'));
+  ui.get('.startup-app-picker button').click();
+  await waitFor(() => ui.get('[aria-label="Start Firefox at sign-in"]'));
+  assert.equal(ui.get('[role="dialog"]'), null);
+  assert.ok(!ui.requests.some(r => r.method === "search.activate"));
+  assert.ok(ui.get('.startup-message').textContent.includes("next time you sign in"));
+});
+
+test("Startup Apps reports errors without changing the saved switch", async t => {
+  const entries = [{ id: "mail.desktop", name: "Mail", description: "", command: "mail", enabled: true, available: true, reason: "", user: true }];
+  const ui = await surface(t, "settings", req => req.method === "settings.startup" ? entries : req.method === "settings.startup_set" ? { error: { code: "failed", message: "Startup folder is read-only" } } : defaults(req));
+  ui.get('nav [aria-label="Startup Apps"]').click();
+  await waitFor(() => ui.get('[aria-label="Start Mail at sign-in"]'));
+  ui.get('[aria-label="Start Mail at sign-in"]').click();
+  await waitFor(() => ui.get('[role="alert"]'));
+  assert.ok(ui.get('[role="alert"]').textContent.includes("read-only"));
+  assert.equal(ui.get('[aria-label="Start Mail at sign-in"]').getAttribute("aria-checked"), "true");
+  assert.equal(ui.get('[aria-label="Start Mail at sign-in"]').disabled, false);
+});
+
+test("Orbit opens read-only properties with Alt+Enter and navigates breadcrumb folders", async t => {
+  const file = { name: "notes.txt", path: "/home/test/Documents/notes.txt", directory: false, symlink: false, size: 1240, modified: 12345 };
+  const ui = await surface(t, "finder", req => req.method === "files.locations" ? [{ name: "Documents", path: "/home/test/Documents" }] : req.method === "files.list" ? { path: req.params.path, parent: "/home/test", entries: [file], truncated: false } : req.method === "files.properties" ? { name: file.name, path: file.path, kind: "Text document", size: file.size, modified: 12345, created: null, owner: "test", group: "test", permissions: "rw-r--r-- (644)", link_target: null } : defaults(req));
+  await waitFor(() => ui.get('[aria-label="notes.txt"]'));
+  const button = ui.get('[aria-label="notes.txt"]'); button.click(); button.focus();
+  await waitFor(() => button.getAttribute("aria-pressed") === "true");
+  button.dispatchEvent(new ui.window.KeyboardEvent("keydown", { key: "Enter", altKey: true, bubbles: true, cancelable: true }));
+  await waitFor(() => ui.get('.properties-dialog dd'));
+  assert.ok(ui.get('.properties-dialog').textContent.includes("Text document"));
+  assert.ok(ui.get('.properties-dialog').textContent.includes("1.2 KB"));
+  assert.ok(ui.get('.properties-dialog').textContent.includes("rw-r--r--"));
+  assert.ok(!ui.requests.some(r => r.method === "files.open"));
+  ui.get('[aria-label="Close properties"]').dispatchEvent(new ui.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+  await waitFor(() => !ui.get('.properties-dialog'));
+  assert.equal(ui.window.document.activeElement, button);
+  [...ui.window.document.querySelectorAll('.finder-breadcrumbs button')].find(b => b.textContent === "test").click();
+  await waitFor(() => ui.requests.some(r => r.method === "files.list" && r.params.path === "/home/test"));
+});
+
+test("launcher Pinned filters results and follows live taskbar changes", async t => {
+  const other = { ...app, id: "mail.desktop", title: "Mail" };
+  const ui = await surface(t, "applications", req => req.method === "search.query" ? { serial: req.params.serial, sections: [{ provider: "apps", items: [app, other] }] } : defaults(req));
+  ui.emit("popover.shown");
+  await waitFor(() => ui.get('#row-1'));
+  [...ui.window.document.querySelectorAll('.launcher-filters button')].find(b => b.textContent === "Pinned").click();
+  await waitFor(() => ui.get('#row-0')?.textContent.includes("Firefox") && !ui.get('#row-1'));
+  ui.emit("dock.changed", [other.id]);
+  await waitFor(() => ui.get('#row-0')?.textContent.includes("Mail"));
+  ui.emit("dock.changed", []);
+  await waitFor(() => ui.get('#empty'));
+  assert.ok(ui.get('#empty').textContent.includes("Your favorites go here"));
+});
+
+test("Sound selects a playback device and controls microphone mute and level", async t => {
+  let audio = { devices: [
+    { id: 5, name: "speakers", description: "Built-in speakers", kind: "output", default: true },
+    { id: 6, name: "headphones", description: "Headphones", kind: "output", default: false },
+    { id: 7, name: "mic", description: "Microphone", kind: "input", default: true },
+  ], output_volume: 42, input_volume: 75, output_muted: false, input_muted: false };
+  const ui = await surface(t, "settings", req => {
+    if (req.method === "settings.audio") return audio;
+    if (req.method === "settings.audio_action") {
+      if (req.params.action === "default") audio.devices.forEach(d => { if (d.kind === "output") d.default = d.id === req.params.id; });
+      if (req.params.action === "mute") audio.input_muted = true;
+      if (req.params.action === "volume") audio.input_volume = req.params.percent;
+      return audio;
+    }
+    return defaults(req);
+  });
+  ui.get('nav [aria-label="Sound"]').click();
+  await waitFor(() => ui.get('[aria-label="Output device"]'));
+  const output = ui.get('[aria-label="Output device"]'); output.value = "6"; output.dispatchEvent(new ui.window.Event("change", { bubbles: true }));
+  await waitFor(() => ui.get('.startup-message'));
+  assert.deepEqual(ui.requests.find(r => r.method === "settings.audio_action").params, { id: 6, name: "headphones", action: "default", percent: null });
+  ui.get('[aria-label="Mute microphone"]').click();
+  await waitFor(() => ui.get('[aria-label="Unmute microphone"]'));
+  const level = ui.get('[aria-label="Microphone level"]');
+  const setter = Object.getOwnPropertyDescriptor(ui.window.HTMLInputElement.prototype, "value").set;
+  setter.call(level, "60"); level.dispatchEvent(new ui.window.Event("input", { bubbles: true }));
+  level.dispatchEvent(new ui.window.KeyboardEvent("keyup", { key: "ArrowLeft", bubbles: true }));
+  await waitFor(() => ui.requests.some(r => r.method === "settings.audio_action" && r.params.percent === 60));
+  assert.equal(ui.requests.find(r => r.method === "settings.audio_action" && r.params.action === "volume").params.name, "mic");
+});
+
+test("Trash restores only the selected item and can show its original folder", async t => {
+  const first = { uri: "trash:///notes.txt", name: "notes.txt", original: "/home/test/Documents/notes.txt", deleted: "2026-10-17T10:00:00", size: 1200, directory: false };
+  const second = { ...first, uri: "trash:///other.txt", name: "other.txt" };
+  const ui = await surface(t, "finder", req => req.method === "files.locations" ? [{ name: "Home", path: "/home/test" }] : req.method === "files.list" ? { path: req.params.path, parent: "/home", entries: [], truncated: false } : req.method === "files.trash_list" ? { entries: [first, second], truncated: false } : req.method === "files.trash_restore" ? first.original : defaults(req));
+  await waitFor(() => ui.get('.finder-sidebar button'));
+  [...ui.window.document.querySelectorAll('.finder-sidebar button')].find(b => b.textContent === "Trash").click();
+  await waitFor(() => ui.get('.trash-item'));
+  assert.ok(ui.get('.restore-button').disabled);
+  ui.get('[aria-label="notes.txt"]').click();
+  await waitFor(() => !ui.get('.restore-button').disabled);
+  ui.get('.restore-button').click();
+  await waitFor(() => ui.get('.trash-restored'));
+  assert.deepEqual(ui.requests.find(r => r.method === "files.trash_restore").params, { uri: first.uri });
+  assert.equal(ui.get('[aria-label="notes.txt"]'), null);
+  assert.ok(ui.get('[aria-label="other.txt"]'));
+  ui.get('.trash-restored button').click();
+  await waitFor(() => ui.requests.some(r => r.method === "files.list" && r.params.path === "/home/test/Documents"));
+});
+
+test("Trash preserves the item and reports an original-location conflict", async t => {
+  const item = { uri: "trash:///notes.txt", name: "notes.txt", original: "/home/test/notes.txt", deleted: "", size: 1200, directory: false };
+  const ui = await surface(t, "finder", req => req.method === "files.locations" ? [{ name: "Home", path: "/home/test" }] : req.method === "files.list" ? { path: req.params.path, parent: "/home", entries: [], truncated: false } : req.method === "files.trash_list" ? { entries: [item], truncated: false } : req.method === "files.trash_restore" ? { error: { code: "failed", message: "An item with the same name already exists" } } : defaults(req));
+  ui.emit("finder.location", { path: "@trash" });
+  await waitFor(() => ui.get('.trash-item'));
+  ui.get('.trash-item').click(); await waitFor(() => !ui.get('.restore-button').disabled);
+  ui.get('.restore-button').click(); await waitFor(() => ui.get('.trash-error'));
+  assert.ok(ui.get('.trash-error').textContent.includes("already exists"));
+  assert.ok(ui.get('.trash-item'));
+  assert.equal(ui.get('.restore-button').disabled, false);
+});
+
+test("taskbar clock opens Meridian Calendar", async t => {
+  const ui = await surface(t, "panel", defaults);
+  ui.get('[aria-label="Open Calendar"]').click();
+  await waitFor(() => ui.requests.some(r => r.method === "search.activate"));
+  assert.deepEqual(ui.requests.find(r => r.method === "search.activate").params, { provider: "apps", item_id: "meridian-calendar.desktop" });
+});
+
+test("Power preferences save supported lock timing and explain when it applies", async t => {
+  const ui = await surface(t, "settings", req => req.method === "power.status" ? { on_ac: false, batteries: [{ name: "BAT0", percent: 72, status: "Discharging", health: 96 }] } : req.method === "settings.idle" ? { lock_after: 300, blank_after: 330 } : req.method === "settings.idle_set" ? req.params : defaults(req));
+  ui.emit("preferences.page", { page: "power" });
+  await waitFor(() => ui.get('[aria-label="Automatically lock after"]')?.disabled === false);
+  const lock = ui.get('[aria-label="Automatically lock after"]'); lock.value = "600"; lock.dispatchEvent(new ui.window.Event("change", { bubbles: true }));
+  await waitFor(() => [...ui.window.document.querySelectorAll('button')].some(b => b.textContent === "Save changes" && !b.disabled));
+  [...ui.window.document.querySelectorAll('button')].find(b => b.textContent === "Save changes").click();
+  await waitFor(() => ui.get('.startup-message'));
+  assert.deepEqual(ui.requests.find(r => r.method === "settings.idle_set").params, { lock_after: 600, blank_after: 630 });
+  assert.ok(ui.get('.startup-message').textContent.includes("next time you sign in"));
+  assert.equal(ui.get('[role="meter"]').getAttribute("aria-valuenow"), "72");
+  assert.ok(ui.get('.power-source').textContent.includes("Running on battery"));
+});
+
+test("taskbar battery opens Power preferences and absent batteries stay hidden", async t => {
+  const ui = await surface(t, "panel", req => req.method === "power.status" ? { on_ac: false, batteries: [{ name: "BAT0", percent: 12, status: "Discharging", health: null }] } : defaults(req));
+  await waitFor(() => ui.get('.taskbar-battery'));
+  assert.ok(ui.get('.taskbar-battery').classList.contains("low"));
+  ui.get('.taskbar-battery').click();
+  await waitFor(() => ui.requests.some(r => r.method === "preferences.page_open"));
+  assert.deepEqual(ui.requests.find(r => r.method === "preferences.page_open").params, { page: "power" });
+  const desktop = await surface(t, "panel", req => req.method === "power.status" ? { on_ac: true, batteries: [] } : defaults(req));
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal(desktop.get('.taskbar-battery'), null);
+});
+
+test("notification mutation replies cannot discard a newer incoming message", async t => {
+  const old = { id: 1, app: "Mail", summary: "Earlier message", body: "", time: Date.now() - 172800000, unread: false, actions: [] };
+  const latest = { ...old, id: 2, summary: "New arrival", time: Date.now() };
+  let finish;
+  const ui = await surface(t, "notifications", req => req.method === "notifications.read" ? { available: true, items: [old] } : req.method === "notifications.dismiss" ? new Promise(resolve => { finish = resolve; }) : defaults(req));
+  ui.emit("popover.shown");
+  await waitFor(() => ui.get('[aria-label="Dismiss Earlier message"]'));
+  ui.get('[aria-label="Dismiss Earlier message"]').click(); await waitFor(() => finish);
+  ui.emit("notifications.changed", { available: true, items: [latest] });
+  await waitFor(() => ui.get('[aria-label="Dismiss New arrival"]'));
+  finish({ available: true, items: [] });
+  await new Promise(resolve => setTimeout(resolve, 30));
+  assert.ok(ui.get('[aria-label="Dismiss New arrival"]'));
+  assert.ok(ui.get('.notification-group-title').textContent.includes("Today"));
+});
+
+test("Orbit refreshes external folder changes while preserving selection", async t => {
+  const file = { name: "notes.txt", path: "/home/test/notes.txt", directory: false, symlink: false, size: 10, modified: 0 };
+  let entries = [file];
+  const ui = await surface(t, "finder", req => req.method === "files.locations" ? [{ name: "Home", path: "/home/test" }] : req.method === "files.list" ? { path: req.params.path, parent: "/home", entries, truncated: false } : defaults(req));
+  await waitFor(() => ui.get('[aria-label="notes.txt"]'));
+  ui.get('[aria-label="notes.txt"]').click();
+  await waitFor(() => ui.get('[aria-label="notes.txt"]').getAttribute("aria-pressed") === "true");
+  const before = ui.requests.filter(r => r.method === "files.list").length;
+  ui.emit("files.changed", { path: "/some/other/folder" });
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal(ui.requests.filter(r => r.method === "files.list").length, before);
+  entries = [file, { ...file, name: "new.txt", path: "/home/test/new.txt" }];
+  ui.emit("files.changed", { path: "/home/test" });
+  await waitFor(() => ui.get('[aria-label="new.txt"]'));
+  assert.equal(ui.get('[aria-label="notes.txt"]').getAttribute("aria-pressed"), "true");
+});
+
+test("an explicit Trash location is preserved while initial favorites are loading", async t => {
+  let resolveLocations;
+  const ui = await surface(t, "finder", req => req.method === "files.locations" ? new Promise(resolve => { resolveLocations = resolve; }) : req.method === "files.trash_list" ? { entries: [], truncated: false } : defaults(req));
+  await waitFor(() => resolveLocations);
+  ui.emit("finder.location", { path: "@trash" });
+  await waitFor(() => ui.get('.trash-browser'));
+  resolveLocations([{ name: "Home", path: "/home/test" }]);
+  await new Promise(resolve => setTimeout(resolve, 30));
+  assert.ok(ui.get('.trash-browser'));
+  assert.ok(!ui.requests.some(r => r.method === "files.list"));
+});
+
+test("desktop keyboard opens item actions and Delete uses the desktop trash operation", async t => {
+  const item = { id: "file:/home/test/Desktop/notes.txt", name: "notes.txt", kind: "file", target: "/home/test/Desktop/notes.txt", icon: null };
+  const ui = await surface(t, "wallpaper", req => req.method === "desktop.get" ? { ...desktop, items: [item] } : req.method === "desktop.remove" ? desktop : defaults(req));
+  await waitFor(() => ui.get('[aria-label="notes.txt"]'));
+  const file = ui.get('[aria-label="notes.txt"]'); file.click(); file.focus();
+  await waitFor(() => file.getAttribute("aria-pressed") === "true");
+  file.dispatchEvent(new ui.window.KeyboardEvent("keydown", { key: "F10", shiftKey: true, bubbles: true, cancelable: true }));
+  await waitFor(() => ui.get('.desktop-context'));
+  assert.ok(ui.get('.desktop-context').textContent.includes("Move to Trash"));
+  ui.get('.desktop-context button').dispatchEvent(new ui.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+  await waitFor(() => !ui.get('.desktop-context'));
+  file.dispatchEvent(new ui.window.KeyboardEvent("keydown", { key: "Delete", bubbles: true, cancelable: true }));
+  await waitFor(() => ui.requests.some(r => r.method === "desktop.remove"));
+  assert.deepEqual(ui.requests.find(r => r.method === "desktop.remove").params, { id: item.id });
+  assert.ok(!ui.requests.some(r => ["apps.uninstall", "files.trash"].includes(r.method)));
 });

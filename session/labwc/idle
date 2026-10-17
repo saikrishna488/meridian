@@ -8,9 +8,25 @@ if ! command -v swayidle >/dev/null 2>&1 || ! command -v wlopm >/dev/null 2>&1; 
 fi
 MERIDIAN_LOCK_HELPER=$(dirname -- "$0")/lock-session
 export MERIDIAN_LOCK_HELPER
+lock_after=300
+blank_after=330
+# The native reader validates persisted JSON and prints two numeric values.
+# Validate again here before passing them as swayidle arguments.
+if timeouts=$("${MERIDIAN_SHELL:-meridian-shell}" --idle-timeouts 2>/dev/null); then
+    case "$timeouts" in
+        ''|*[!0-9\ ]*) ;;
+        *)
+            set -- $timeouts
+            if [ "$#" -eq 2 ] && [ "$1" -ge 60 ] && [ "$2" -gt "$1" ] && [ "$2" -le 7200 ]; then
+                lock_after=$1
+                blank_after=$2
+            fi
+            ;;
+    esac
+fi
 exec swayidle -w \
-    timeout 300 'sh "$MERIDIAN_LOCK_HELPER"' \
-    timeout 330 'sh "$MERIDIAN_LOCK_HELPER" && wlopm --off "*"' \
+    timeout "$lock_after" 'sh "$MERIDIAN_LOCK_HELPER"' \
+    timeout "$blank_after" 'sh "$MERIDIAN_LOCK_HELPER" && wlopm --off "*"' \
     resume 'wlopm --on "*"' \
     before-sleep 'sh "$MERIDIAN_LOCK_HELPER"' \
     after-resume 'wlopm --on "*"'

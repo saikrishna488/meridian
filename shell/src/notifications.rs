@@ -123,16 +123,23 @@ impl Notifications {
         self.close(id, 2, true);
     }
     pub fn clear(&self) {
-        let ids: Vec<_> = self.entries.borrow().iter().map(|e| e.item.id).collect();
-        for id in ids {
-            self.dismiss(id);
-        }
-    }
-    pub fn mark_read(&self) {
-        for entry in self.entries.borrow_mut().iter_mut() {
-            entry.item.unread = false;
+        let entries = std::mem::take(&mut *self.entries.borrow_mut());
+        for entry in entries {
+            if entry.active {
+                self.signal(&entry.sender, "NotificationClosed", (entry.item.id, 2u32).to_variant());
+            }
         }
         self.publish();
+    }
+    pub fn mark_read(&self) {
+        let mut changed = false;
+        for entry in self.entries.borrow_mut().iter_mut() {
+            changed |= entry.item.unread;
+            entry.item.unread = false;
+        }
+        if changed {
+            self.publish();
+        }
     }
     pub fn activate(&self, id: u32, key: &str) {
         let sender = self
@@ -257,6 +264,21 @@ mod tests {
             active: true,
             generation: 1,
         }
+    }
+    #[test]
+    fn clearing_history_publishes_one_update_and_reading_read_items_is_quiet() {
+        let count = Rc::new(Cell::new(0));
+        let published = count.clone();
+        let mut service = service();
+        service.changed = Box::new(move |_| published.set(published.get() + 1));
+        service.entries.borrow_mut().extend([entry(1), entry(2)]);
+        service.mark_read();
+        assert_eq!(count.get(), 1);
+        service.mark_read();
+        assert_eq!(count.get(), 1);
+        service.clear();
+        assert_eq!(count.get(), 2);
+        assert!(service.snapshot().items.is_empty());
     }
     #[test]
     fn history_unread_expiry_actions_and_dismissal() {

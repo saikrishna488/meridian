@@ -32,3 +32,4 @@
 .power-actions button.armed { background: var(--selection); color: var(--selection-ink); border-color: var(--focus-ring); }
 .control-center .status:not(:empty) { margin-top: 12px; padding: 0; font-size: 12px; line-height: 1.5; color: var(--danger); }
 @media (max-width: 360px) { .control-center { padding: 16px; } .control-heading button span, .control-footer kbd { display: none; } .control-grid { gap: 6px; } }
+.control-card-title .sound-settings-link { display:grid; place-items:center; width:26px; height:26px; margin:-5px -5px -5px auto; border:0; border-radius:7px; background:transparent; color:var(--ink-muted); cursor:pointer; }.control-card-title .sound-settings-link:hover { background:var(--selection); color:var(--selection-ink); }

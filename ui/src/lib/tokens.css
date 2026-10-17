@@ -67,29 +67,33 @@
 
 /* Native-app surfaces share a compact neutral palette. */
 :root {
+  --canvas: #f5f7fb;
+  --button-primary: #2563eb;
+  --button-primary-hover: #1d4ed8;
   --surface: #ffffff;
   --surface-raised: #ffffff;
-  --surface-subtle: #f3f5f8;
-  --surface-hover: #e9edf3;
-  --ink: #202733;
-  --ink-muted: #626b7a;
-  --line: #dfe4ec;
-  --selection: #e7f0ff;
-  --selection-ink: #1e57a5;
+  --surface-subtle: #f4f6fa;
+  --surface-hover: #e9eef6;
+  --ink: #182338;
+  --ink-muted: #627087;
+  --line: #e2e7f0;
+  --selection: #eaf0ff;
+  --selection-ink: #2457b8;
   --action: #2563c7;
   --action-hover: #1e51a3;
   --focus-ring: #3578d5;
   --danger: #b42332;
 }
 :root[data-theme="dark"] {
-  --surface: #1b1e25;
-  --surface-raised: #242832;
-  --surface-subtle: #171a21;
-  --surface-hover: #303642;
-  --ink: #eef0f5;
-  --ink-muted: #a6afbf;
-  --line: #383f4c;
-  --selection: #243b5c;
+  --canvas: #111620;
+  --surface: #171e2a;
+  --surface-raised: #1d2634;
+  --surface-subtle: #131a25;
+  --surface-hover: #263246;
+  --ink: #edf2fb;
+  --ink-muted: #a4b1c6;
+  --line: #303d51;
+  --selection: #243a60;
   --selection-ink: #b6d4ff;
   --action: #8eb9ff;
   --action-hover: #b0ceff;

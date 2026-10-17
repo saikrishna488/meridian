@@ -55,3 +55,7 @@ body { height: var(--dock-surface-height); padding: 0; }
 [data-theme="light"] .system-tray .when { border-left-color: var(--line); }
 [data-theme="light"] .notification-dot { box-shadow: 0 0 0 2px #f3f6fb; }
 @media (max-width: 650px) { .taskbar { padding-inline: 4px; } .system-tray .when { min-width: 0; margin-left: 2px; padding-left: 8px; } }
+.system-tray button.taskbar-calendar { width:auto; min-width:106px; padding:0 8px; }.taskbar-calendar .when { margin:0; padding-left:10px; }.taskbar-calendar .when .clock { font-size:12px; font-weight:550; }.taskbar-calendar .date { font-size:10px; }
+@media(max-width:650px) { .system-tray button.taskbar-calendar { min-width:68px; padding-inline:3px; }.taskbar-calendar .when { padding-left:7px; } }
+.system-tray button.taskbar-battery { display:flex; align-items:center; justify-content:center; gap:5px; width:auto; min-width:40px; padding:0 8px; font-size:11px; font-variant-numeric:tabular-nums; }.taskbar-battery.low { color:var(--danger); }
+@media(max-width:650px) { .taskbar-battery>span { display:none; } }

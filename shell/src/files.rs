@@ -2,7 +2,7 @@
 //! Renames never overwrite, and removal always uses the system trash.
 use gtk::prelude::*;
 use gtk::{gio, glib};
-use meridian_protocol::{ErrorBody, ErrorCode, FileEntry, FileListing, FileLocation};
+use meridian_protocol::{ErrorBody, ErrorCode, FileEntry, FileListing, FileLocation, FileProperties};
 use std::path::{Path, PathBuf};
 
 fn error(e: impl std::fmt::Display) -> ErrorBody {
@@ -107,6 +107,71 @@ pub fn list(path: &str, hidden: bool) -> Result<FileListing, ErrorBody> {
 pub fn mkdir(parent: &str, name: &str) -> Result<(), ErrorBody> {
     valid_name(name)?;
     std::fs::create_dir(absolute(parent)?.join(name)).map_err(error)
+}
+
+pub fn properties(path: &str) -> Result<FileProperties, ErrorBody> {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    let path = absolute(path)?;
+    // Inspect the link itself, including a broken link, without walking a folder.
+    let meta = std::fs::symlink_metadata(&path).map_err(error)?;
+    let file = gio::File::for_path(&path);
+    let info = file
+        .query_info(
+            "standard::content-type,owner::user,owner::group",
+            gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
+            gio::Cancellable::NONE,
+        )
+        .ok();
+    let kind = if meta.is_symlink() {
+        "Symbolic link".into()
+    } else if meta.is_dir() {
+        "Folder".into()
+    } else {
+        info.as_ref()
+            .and_then(|i| i.content_type())
+            .map(|t| gio::content_type_get_description(&t).to_string())
+            .unwrap_or_else(|| "File".into())
+    };
+    let time = |t: Result<std::time::SystemTime, std::io::Error>| {
+        t.ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs_f64())
+    };
+    let attribute = |key: &str, fallback: u32| {
+        info.as_ref()
+            .and_then(|i| i.attribute_string(key))
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| fallback.to_string())
+    };
+    let mode = meta.permissions().mode();
+    let permissions: String = [
+        (0o400, 'r'),
+        (0o200, 'w'),
+        (0o100, 'x'),
+        (0o040, 'r'),
+        (0o020, 'w'),
+        (0o010, 'x'),
+        (0o004, 'r'),
+        (0o002, 'w'),
+        (0o001, 'x'),
+    ]
+    .into_iter()
+    .map(|(bit, letter)| if mode & bit != 0 { letter } else { '-' })
+    .collect();
+    Ok(FileProperties {
+        name: path.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "/".into()),
+        path: path.to_string_lossy().into_owned(),
+        kind,
+        size: if meta.is_file() { Some(meta.len() as f64) } else { None },
+        modified: time(meta.modified()),
+        created: time(meta.created()),
+        owner: attribute("owner::user", meta.uid()),
+        group: attribute("owner::group", meta.gid()),
+        permissions: format!("{permissions} ({:03o})", mode & 0o7777),
+        link_target: if meta.is_symlink() {
+            std::fs::read_link(&path).ok().map(|s| s.to_string_lossy().into_owned())
+        } else {
+            None
+        },
+    })
 }
 pub fn rename(path: &str, name: &str) -> Result<(), ErrorBody> {
     valid_name(name)?;
@@ -252,6 +317,30 @@ pub fn bookmark(path: &str) -> Result<Vec<FileLocation>, ErrorBody> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn properties_inspect_files_folders_and_broken_links_without_following_links() {
+        use std::os::unix::fs::{PermissionsExt, symlink};
+        let root = std::env::temp_dir().join(format!("meridian-properties-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let file = root.join("notes.txt");
+        std::fs::write(&file, "hello").unwrap();
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o640)).unwrap();
+        let result = properties(file.to_str().unwrap()).unwrap();
+        assert_eq!(result.size, Some(5.));
+        assert_eq!(result.name, "notes.txt");
+        assert_eq!(result.permissions, "rw-r----- (640)");
+        assert!(result.modified.is_some());
+        assert!(properties(root.to_str().unwrap()).unwrap().size.is_none());
+        let link = root.join("shortcut");
+        symlink("missing-target", &link).unwrap();
+        let result = properties(link.to_str().unwrap()).unwrap();
+        assert_eq!(result.kind, "Symbolic link");
+        assert_eq!(result.link_target.as_deref(), Some("missing-target"));
+        assert!(properties("relative").is_err());
+        assert!(properties("/tmp/../etc/passwd").is_err());
+        assert!(properties(root.join("absent").to_str().unwrap()).is_err());
+        std::fs::remove_dir_all(root).unwrap();
+    }
     #[test]
     fn transfers_directories_and_symlinks_without_overwriting() {
         let root = std::env::temp_dir().join(format!("meridian-transfer-{}", std::process::id()));

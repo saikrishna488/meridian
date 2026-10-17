@@ -114,6 +114,130 @@ pub struct FileListing {
     pub truncated: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct FileProperties {
+    pub name: String,
+    pub path: String,
+    pub kind: String,
+    pub size: Option<f64>,
+    pub modified: Option<f64>,
+    pub created: Option<f64>,
+    pub owner: String,
+    pub group: String,
+    pub permissions: String,
+    pub link_target: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct TrashEntry {
+    pub uri: String,
+    pub name: String,
+    pub original: String,
+    pub deleted: String,
+    pub size: f64,
+    pub directory: bool,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct TrashListing {
+    pub entries: Vec<TrashEntry>,
+    pub truncated: bool,
+}
+#[derive(Debug, Clone, PartialEq, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct TrashId {
+    pub uri: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct StartupEntry {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub command: String,
+    pub enabled: bool,
+    pub available: bool,
+    pub reason: String,
+    pub user: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct StartupSet {
+    pub id: String,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct AudioDevice {
+    pub id: u32,
+    pub name: String,
+    pub description: String,
+    pub kind: String,
+    pub default: bool,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct AudioState {
+    pub devices: Vec<AudioDevice>,
+    pub output_volume: Option<u8>,
+    pub input_volume: Option<u8>,
+    pub output_muted: Option<bool>,
+    pub input_muted: Option<bool>,
+}
+#[derive(Debug, Clone, PartialEq, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct AudioAction {
+    pub id: u32,
+    pub name: String,
+    pub action: String,
+    pub percent: Option<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct BatteryInfo {
+    pub name: String,
+    pub percent: Option<u8>,
+    pub status: String,
+    pub health: Option<u8>,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct PowerState {
+    pub on_ac: Option<bool>,
+    pub batteries: Vec<BatteryInfo>,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct IdleSettings {
+    pub lock_after: u32,
+    pub blank_after: u32,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+#[ts(export)]
+pub enum PreferencesPage {
+    Home,
+    Sound,
+    Power,
+    StartupApps,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct PreferencesPageRequest {
+    pub page: PreferencesPage,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct DesktopItem {
@@ -309,6 +433,10 @@ pub enum Capability {
     Windows,
     /// Read and change system settings (Wi-Fi, Bluetooth, brightness, volume).
     Settings,
+    /// Manage applications that start at login, only from Settings.
+    Startup,
+    /// Read laptop battery and external power status.
+    PowerStatus,
     /// Privileged driver and local account management, only in Settings.
     SystemAdministration,
     /// Log in, list sessions, power off/restart from the login screen.
@@ -334,9 +462,13 @@ impl SurfaceKind {
     pub fn capabilities(self) -> &'static [Capability] {
         match self {
             SurfaceKind::Wallpaper => &[Capability::Dock, Capability::Popovers],
-            SurfaceKind::Preferences => {
-                &[Capability::Appearance, Capability::Settings, Capability::SystemAdministration]
-            }
+            SurfaceKind::Preferences => &[
+                Capability::Appearance,
+                Capability::Settings,
+                Capability::Startup,
+                Capability::PowerStatus,
+                Capability::SystemAdministration,
+            ],
             SurfaceKind::Finder => &[
                 Capability::Files,
                 Capability::Search,
@@ -351,6 +483,7 @@ impl SurfaceKind {
             SurfaceKind::Calendar => &[Capability::Calendar],
             SurfaceKind::Clock => &[],
             SurfaceKind::Panel => &[
+                Capability::PowerStatus,
                 Capability::Notifications,
                 Capability::Popovers,
                 Capability::Windows,
@@ -367,9 +500,13 @@ impl SurfaceKind {
                 Capability::Dock,
                 Capability::AppManagement,
             ],
-            SurfaceKind::Options => {
-                &[Capability::Popovers, Capability::Settings, Capability::Appearance, Capability::Session]
-            }
+            SurfaceKind::Options => &[
+                Capability::Popovers,
+                Capability::Settings,
+                Capability::PowerStatus,
+                Capability::Appearance,
+                Capability::Session,
+            ],
             SurfaceKind::Greeter => &[Capability::Login],
             SurfaceKind::Locker => &[Capability::Unlock],
         }
@@ -432,6 +569,8 @@ pub enum Request {
     PreferencesOpen,
     #[serde(rename = "preferences.wallpaper_open")]
     PreferencesWallpaperOpen,
+    #[serde(rename = "preferences.page_open")]
+    PreferencesPageOpen(PreferencesPageRequest),
     #[serde(rename = "finder.open")]
     FinderOpen,
     #[serde(rename = "pulse.open")]
@@ -466,6 +605,12 @@ pub enum Request {
     FileChooseFolder,
     #[serde(rename = "files.list")]
     FileList(FileList),
+    #[serde(rename = "files.properties")]
+    FileProperties(FilePath),
+    #[serde(rename = "files.trash_list")]
+    FileTrashList,
+    #[serde(rename = "files.trash_restore")]
+    FileTrashRestore(TrashId),
     #[serde(rename = "files.open")]
     FileOpen(FilePath),
     #[serde(rename = "files.mkdir")]
@@ -569,6 +714,24 @@ pub enum Request {
     /// Current settings state.
     #[serde(rename = "settings.get")]
     SettingsGet,
+    #[serde(rename = "power.status")]
+    PowerStatus,
+    #[serde(rename = "settings.idle")]
+    SettingsIdle,
+    #[serde(rename = "settings.idle_set")]
+    SettingsIdleSet(IdleSettings),
+    #[serde(rename = "settings.audio")]
+    SettingsAudio,
+    #[serde(rename = "settings.audio_action")]
+    SettingsAudioAction(AudioAction),
+    #[serde(rename = "settings.startup")]
+    SettingsStartup,
+    #[serde(rename = "settings.startup_set")]
+    SettingsStartupSet(StartupSet),
+    #[serde(rename = "settings.startup_add")]
+    SettingsStartupAdd(AppId),
+    #[serde(rename = "settings.startup_apps")]
+    SettingsStartupApps,
     #[serde(rename = "settings.drivers")]
     SettingsDrivers,
     #[serde(rename = "settings.devices")]
@@ -776,6 +939,7 @@ impl Request {
             Request::CalendarList | Request::CalendarSave(_) => Some(Capability::Calendar),
             Request::PulseSnapshot => Some(Capability::Monitor),
             Request::DesktopGet => None,
+            Request::PowerStatus => Some(Capability::PowerStatus),
             Request::DesktopFontSet(_)
             | Request::DesktopAppearanceSet(_)
             | Request::DesktopWallpaperSet(_)
@@ -790,6 +954,9 @@ impl Request {
             | Request::FileBookmarkSet(_)
             | Request::FileChooseFolder
             | Request::FileList(_)
+            | Request::FileProperties(_)
+            | Request::FileTrashList
+            | Request::FileTrashRestore(_)
             | Request::FileOpen(_)
             | Request::FileMkdir(_)
             | Request::FileTransfer(_)
@@ -808,6 +975,7 @@ impl Request {
             Request::TerminalOpenAt(_) => Some(Capability::Files),
             Request::PreferencesOpen
             | Request::PreferencesWallpaperOpen
+            | Request::PreferencesPageOpen(_)
             | Request::FinderOpen
             | Request::PulseOpen
             | Request::TerminalOpen => Some(Capability::Popovers),
@@ -831,10 +999,18 @@ impl Request {
             | Request::SettingsDeviceAction(_)
             | Request::SettingsDrivers
             | Request::SettingsDriverSet(_) => Some(Capability::SystemAdministration),
+            Request::SettingsStartup
+            | Request::SettingsStartupSet(_)
+            | Request::SettingsStartupAdd(_)
+            | Request::SettingsStartupApps => Some(Capability::Startup),
             Request::SettingsSystemInfo | Request::SettingsCheckUpdates | Request::SettingsOpenReleases => {
                 Some(Capability::Settings)
             }
             Request::SettingsDisplays
+            | Request::SettingsIdle
+            | Request::SettingsIdleSet(_)
+            | Request::SettingsAudio
+            | Request::SettingsAudioAction(_)
             | Request::SettingsDisplayApply(_)
             | Request::SettingsDisplayDecide(_)
             | Request::SettingsMonitorBrightness(_)
@@ -949,8 +1125,12 @@ pub enum Event {
     TerminalClosed,
     #[serde(rename = "finder.location")]
     FinderLocation(FilePath),
+    #[serde(rename = "files.changed")]
+    FilesChanged(FilePath),
     #[serde(rename = "preferences.wallpaper")]
     PreferencesWallpaper,
+    #[serde(rename = "preferences.page")]
+    PreferencesPage(PreferencesPageRequest),
     #[serde(rename = "desktop.changed")]
     DesktopChanged(DesktopState),
     #[serde(rename = "dock.layout_changed")]
@@ -1050,6 +1230,28 @@ pub fn parse_request(json: &str) -> Result<Request, ErrorBody> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn startup_management_is_only_available_in_preferences() {
+        for json in [
+            r#"{"method":"settings.startup"}"#,
+            r#"{"method":"settings.startup_apps"}"#,
+            r#"{"method":"settings.startup_set","params":{"id":"mail.desktop","enabled":true}}"#,
+            r#"{"method":"settings.startup_add","params":{"id":"mail.desktop"}}"#,
+        ] {
+            let request: Request = serde_json::from_str(json).unwrap();
+            assert_eq!(request.required_capability(), Some(Capability::Startup));
+            assert!(SurfaceKind::Preferences.has(Capability::Startup));
+            for surface in [
+                SurfaceKind::Options,
+                SurfaceKind::Panel,
+                SurfaceKind::Applications,
+                SurfaceKind::Finder,
+                SurfaceKind::Greeter,
+            ] {
+                assert!(!surface.has(Capability::Startup));
+            }
+        }
+    }
     #[test]
     fn parses_unit_request_without_params() {
         assert_eq!(parse_request(r#"{"method":"shell.hello"}"#).unwrap(), Request::Hello);

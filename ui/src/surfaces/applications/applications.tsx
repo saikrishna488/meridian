@@ -27,7 +27,10 @@ function Applications() {
   }
   const [dragging, setDragging] = useState(false);
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Result[]>([]);
+  const [allResults, setResults] = useState<Result[]>([]);
+  const [filter, setFilter] = useState<"all" | "pinned">("all"), [pins, setPins] = useState<string[]>([]);
+  const pinRevision = useRef(0);
+  const results = filter === "pinned" ? allResults.filter(result => result.provider === "apps" && pins.includes(result.item.id)) : allResults;
   const [searching, setSearching] = useState(false);
   const [selected, setSelected] = useState(-1);
   const [status, setStatus] = useState("");
@@ -51,15 +54,19 @@ function Applications() {
     } finally { if (alive.current && mine === serial.current) setSearching(false); }
   });
   const { visible, menu, dismiss } = usePopover(async () => {
-    setStatus(""); setQuery(""); setLaunching(null); setContext(null); setUninstall(null);
+    setStatus(""); setQuery(""); setLaunching(null); setContext(null); setUninstall(null); setFilter("all");
+    const mine = pinRevision.current;
+    void request({ method: "dock.list" }).then(items => { if (alive.current && pinRevision.current === mine) setPins(items ?? []); }).catch(report);
     await runQuery("");
   }, () => input.current?.focus(), report);
   const refresh = useCallbackRef(() => { void runQuery(query).catch(report); });
   useEffect(() => {
     alive.current = true;
     const off = on("search.invalidated", refresh);
-    return () => { alive.current = false; serial.current++; off(); };
+    const offPins = on("dock.changed", event => { pinRevision.current++; setPins(event.data); });
+    return () => { alive.current = false; serial.current++; off(); offPins(); };
   }, [refresh]);
+  useEffect(() => { if (selected >= results.length) setSelected(-1); }, [results.length, selected]);
   useEffect(() => {
     if (selected >= 0) list.current?.children[selected]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [selected]);
@@ -122,7 +129,7 @@ function Applications() {
         value={query} onChange={event => changeQuery(event.target.value)} />{query && <button className="clear-search" type="button" aria-label="Clear search" onClick={() => { changeQuery(""); input.current?.focus(); }}>×</button>}</label>
       <div className="launcher-views" role="group" aria-label="Application view">{(["grid", "list"] as const).map(mode => <button key={mode} type="button" aria-label={`${mode === "grid" ? "Grid" : "List"} view`} aria-pressed={view === mode} onClick={() => changeView(mode)}><Icon name={mode} width="18" height="18" /></button>)}</div>
       </div>
-      <div className="apps-section-heading"><h2>{query ? "Search Results" : "All Applications"}</h2><span>{searching ? "Searching…" : `${results.length} ${results.length === 1 ? "item" : "items"}`}</span></div>
+      <div className="apps-section-heading"><div className="launcher-filters" role="group" aria-label="Application filter"><button aria-pressed={filter === "all"} onClick={() => { setFilter("all"); setSelected(-1); }}>All apps</button><button aria-pressed={filter === "pinned"} onClick={() => { setFilter("pinned"); setSelected(-1); }}><Icon name="pin" width="13" height="13" />Pinned</button></div><h2 className="visually-hidden">{query ? "Search Results" : filter === "pinned" ? "Pinned Applications" : "All Applications"}</h2><span>{searching ? "Searching…" : `${results.length} ${results.length === 1 ? "item" : "items"}`}</span></div>
       <div ref={scroller} className="scroller" id="scroller">
         <ul ref={list} className={`list ${view === "list" ? "list-view" : "grid-view"}`} id="list" role="listbox" aria-label="Applications">
           {results.map((result, index) => {
@@ -138,7 +145,7 @@ function Applications() {
             </li>;
           })}
         </ul>
-        {!searching && !results.length && <div className="empty" id="empty"><span className="empty-symbol" aria-hidden="true">⌕</span><strong>{query ? "No results found" : "No applications available"}</strong><span>{query ? `Try a different search for “${query}”.` : "Applications will appear here when they are installed."}</span></div>}
+        {!searching && !results.length && <div className="empty" id="empty"><span className="empty-symbol" aria-hidden="true">⌕</span><strong>{query ? "No results found" : filter === "pinned" ? "Your favorites go here" : "No applications available"}</strong><span>{query ? `Try a different search for “${query}”.` : filter === "pinned" ? "Right-click an app in All apps and choose Add to Dock to pin it." : "Applications will appear here when they are installed."}</span></div>}
         {searching && !results.length && <div className="empty loading" role="status"><span className="search-spinner" /><span>Finding applications…</span></div>}
       </div>
       <footer className="launcher-footer"><span><kbd>↑ ↓</kbd> Navigate <kbd>↵</kbd> Open <kbd>esc</kbd> Close</span><span>Right-click for more options</span></footer>

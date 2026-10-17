@@ -1,0 +1,135 @@
+//! PipeWire device discovery and WirePlumber defaults, with bounded commands.
+use meridian_protocol::{AudioAction, AudioDevice, AudioState, ErrorBody, ErrorCode};
+use serde_json::Value;
+use std::time::Duration;
+fn error(message: impl std::fmt::Display) -> ErrorBody {
+    ErrorBody::new(ErrorCode::Failed, message.to_string())
+}
+fn run(args: &[&str]) -> Result<String, ErrorBody> {
+    crate::settings_devices::run_timeout(args, None, Duration::from_secs(5))
+}
+fn devices(data: &str) -> Result<Vec<AudioDevice>, ErrorBody> {
+    let objects: Vec<Value> = serde_json::from_str(data).map_err(|_| error("Could not read PipeWire audio devices"))?;
+    let default = |key: &str| -> Option<String> {
+        objects
+            .iter()
+            .filter(|o| o["type"] == "PipeWire:Interface:Metadata" && o["props"]["metadata.name"] == "default")
+            .filter_map(|o| o["metadata"].as_array())
+            .flatten()
+            .find(|m| m["subject"] == 0 && m["key"] == key)
+            .and_then(|m| {
+                m["value"].get("name").and_then(Value::as_str).map(str::to_owned).or_else(|| {
+                    m["value"]
+                        .as_str()
+                        .and_then(|s| serde_json::from_str::<Value>(s).ok())
+                        .and_then(|v| v["name"].as_str().map(str::to_owned))
+                })
+            })
+    };
+    let output = default("default.audio.sink");
+    let input = default("default.audio.source");
+    let mut result = vec![];
+    for object in objects.iter().filter(|o| o["type"] == "PipeWire:Interface:Node") {
+        let props = &object["info"]["props"];
+        let kind = match props["media.class"].as_str() {
+            Some("Audio/Sink") => "output",
+            Some("Audio/Source") => "input",
+            _ => continue,
+        };
+        let Some(id) = object["id"].as_u64().and_then(|id| u32::try_from(id).ok()) else { continue };
+        let Some(name) = props["node.name"].as_str() else { continue };
+        // Monitor ports and application streams are not physical input choices.
+        if kind == "input" && (name.ends_with(".monitor") || props["device.class"] == "monitor") {
+            continue;
+        }
+        let description = props["node.description"].as_str().or_else(|| props["node.nick"].as_str()).unwrap_or(name);
+        result.push(AudioDevice {
+            id,
+            name: name.into(),
+            description: description.into(),
+            kind: kind.into(),
+            default: (if kind == "output" { &output } else { &input }).as_deref() == Some(name),
+        });
+    }
+    result.sort_by(|a, b| a.kind.cmp(&b.kind).then(a.description.to_lowercase().cmp(&b.description.to_lowercase())));
+    Ok(result)
+}
+fn volume(text: &str) -> Option<(u8, bool)> {
+    let mut parts = text.trim().strip_prefix("Volume:")?.split_whitespace();
+    let level: f64 = parts.next()?.parse().ok()?;
+    if !level.is_finite() || level < 0. {
+        return None;
+    }
+    Some(((level * 100.).round().clamp(0., 100.) as u8, parts.any(|part| part == "[MUTED]")))
+}
+pub fn list() -> Result<AudioState, ErrorBody> {
+    let devices = devices(&run(&["pw-dump", "-N"])?)?;
+    let read = |kind: &str| {
+        devices
+            .iter()
+            .find(|d| d.kind == kind && d.default)
+            .and_then(|d| run(&["wpctl", "get-volume", &d.id.to_string()]).ok())
+            .and_then(|s| volume(&s))
+    };
+    let output = read("output");
+    let input = read("input");
+    Ok(AudioState {
+        devices,
+        output_volume: output.map(|v| v.0),
+        input_volume: input.map(|v| v.0),
+        output_muted: output.map(|v| v.1),
+        input_muted: input.map(|v| v.1),
+    })
+}
+pub fn action(choice: AudioAction) -> Result<AudioState, ErrorBody> {
+    if !["default", "mute", "unmute", "volume"].contains(&choice.action.as_str())
+        || choice.percent.is_some_and(|p| p > 100)
+        || (choice.action == "volume") != choice.percent.is_some()
+    {
+        return Err(error("Invalid audio control"));
+    }
+    // Resolve again before using a transient PipeWire id, and verify its name.
+    let current = devices(&run(&["pw-dump", "-N"])?)?;
+    if !current.iter().any(|d| d.id == choice.id && d.name == choice.name) {
+        return Err(error("This audio device disconnected. Refresh and choose another device."));
+    }
+    let id = choice.id.to_string();
+    match choice.action.as_str() {
+        "default" => {
+            run(&["wpctl", "set-default", &id])?;
+        }
+        "mute" => {
+            run(&["wpctl", "set-mute", &id, "1"])?;
+        }
+        "unmute" => {
+            run(&["wpctl", "set-mute", &id, "0"])?;
+        }
+        "volume" => {
+            run(&["wpctl", "set-volume", &id, &format!("{}%", choice.percent.unwrap())])?;
+        }
+        _ => unreachable!(),
+    }
+    list()
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn discovers_only_audio_devices_and_matches_defaults_by_name() {
+        let data = serde_json::json!([
+            {"id":50,"type":"PipeWire:Interface:Node","info":{"props":{"media.class":"Audio/Sink","node.name":"speakers","node.description":"Built-in speakers"}}},
+            {"id":51,"type":"PipeWire:Interface:Node","info":{"props":{"media.class":"Audio/Source","node.name":"mic"}}},
+            {"id":52,"type":"PipeWire:Interface:Node","info":{"props":{"media.class":"Stream/Output/Audio","node.name":"browser"}}},
+            {"id":53,"type":"PipeWire:Interface:Node","info":{"props":{"media.class":"Audio/Source","node.name":"speakers.monitor"}}},
+            {"type":"PipeWire:Interface:Metadata","props":{"metadata.name":"default"},"metadata":[{"subject":0,"key":"default.audio.sink","value":{"name":"speakers"}},{"subject":0,"key":"default.audio.source","value":"{\"name\":\"mic\"}"}]}
+        ]).to_string();
+        let result = devices(&data).unwrap();
+        assert_eq!(result.len(), 2);
+        assert!(result.iter().all(|d| d.default));
+        assert!(devices("invalid JSON").is_err());
+        assert_eq!(volume("Volume: 0.42 [MUTED]"), Some((42, true)));
+        assert_eq!(volume("Volume: 1.50"), Some((100, false)));
+        assert_eq!(volume("Volume: NaN"), None);
+        assert_eq!(volume("Volume: -1"), None);
+    }
+}

@@ -11,6 +11,7 @@ meridian-protocol.workspace = true
 meridian-services.workspace = true
 gtk.workspace = true
 gio.workspace = true
+gio-unix.workspace = true
 glib.workspace = true
 webkit6.workspace = true
 gtk4-layer-shell.workspace = true

@@ -11,6 +11,15 @@ const APP_ID: &str = "org.meridian.Shell";
 
 fn main() -> glib::ExitCode {
     meridian_shell::init_logging();
+    if std::env::args_os().nth(1).is_some_and(|arg| arg == "--idle-timeouts") {
+        let settings = meridian_shell::power_settings::idle();
+        println!("{} {}", settings.lock_after, settings.blank_after);
+        return glib::ExitCode::SUCCESS;
+    }
+    if std::env::args_os().nth(1).is_some_and(|arg| arg == "--autostart") {
+        meridian_shell::startup::launch();
+        return glib::ExitCode::SUCCESS;
+    }
     let dev = std::env::var_os("MERIDIAN_DEV").is_some_and(|v| v == "1");
 
     let app = gtk::Application::builder().application_id(APP_ID).build();

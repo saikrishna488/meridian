@@ -27,6 +27,10 @@ cat > "$fixture/bin/swayidle" <<'MOCK'
 printf '%s\n' "$@" > "$MERIDIAN_POWER_TEST/idle-args"
 printf '%s\n' "$MERIDIAN_LOCK_HELPER" > "$MERIDIAN_POWER_TEST/helper"
 MOCK
+cat > "$fixture/bin/meridian-shell" <<'MOCK'
+#!/bin/sh
+printf '%s\n' "${MERIDIAN_TEST_TIMEOUTS:-300 330}"
+MOCK
 cat > "$fixture/bin/wlopm" <<'MOCK'
 #!/bin/sh
 printf '%s\n' "$*" >> "$MERIDIAN_POWER_TEST/output-actions"
@@ -65,4 +69,12 @@ sh -c "${args[6]}"
 sh -c "${args[8]}"
 sh -c "${args[12]}"
 [ "$(tail -n 1 "$fixture/output-actions")" = '--on *' ]
+MERIDIAN_TEST_TIMEOUTS='600 720' sh "$ROOT/session/labwc/idle"
+mapfile -t args < "$fixture/idle-args"
+[ "${args[2]} ${args[5]}" = '600 720' ]
+for value in '0 0' '60 30' '300 999999' '300; touch /tmp/invalid' '300 330 500'; do
+    MERIDIAN_TEST_TIMEOUTS="$value" sh "$ROOT/session/labwc/idle"
+    mapfile -t args < "$fixture/idle-args"
+    [ "${args[2]} ${args[5]}" = '300 330' ]
+done
 echo 'Power controls: confirmed lock, failure paths, screen standby and wake passed.'

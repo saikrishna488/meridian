@@ -29,7 +29,7 @@ if git rev-parse --verify -q HEAD >/dev/null && [ -n "$(git status --porcelain -
     exit 1
 fi
 
-step "UI type-check and build"
-(cd ui && { [ -d node_modules ] || npm ci --no-fund --no-audit; } && npm run check && npm run build)
+step "UI type-check, build, and interaction tests"
+(cd ui && { [ -d node_modules ] || npm ci --no-fund --no-audit; } && npm test)
 
 echo; echo "All checks passed."

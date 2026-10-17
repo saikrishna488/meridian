@@ -15,3 +15,9 @@ done
 
 # The idle client is scoped to this compositor and exits when it disconnects.
 sh "$(dirname -- "$0")/idle" &
+
+# Launch XDG login applications once per compositor session. Nested development
+# sessions do not start another copy of the user's background applications.
+if [ "${MERIDIAN_DEV:-0}" != 1 ]; then
+    "${MERIDIAN_SHELL:-meridian-shell}" --autostart &
+fi
