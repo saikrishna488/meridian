@@ -98,26 +98,31 @@ impl SchemeHandler {
                         }
                     }
                     // The path comes from an installed desktop entry, never a UI path.
-                    if !mime_type(&path).starts_with("image/") {
+                    if !mime_type(&path).starts_with("image/") && path.extension().is_none_or(|ext| ext != "xpm") {
                         return Err(forbidden("not an image"));
                     }
-                    return read_file(&path);
+                    return read_icon(&path);
                 }
                 let theme = gtk::IconTheme::new();
                 let display = gtk::gdk::Display::default().ok_or_else(|| not_found("no display"))?;
                 let mut paths = gtk::IconTheme::for_display(&display).search_path();
                 paths.extend([
+                    glib::user_data_dir().join("icons"),
+                    glib::home_dir().join(".icons"),
+                    glib::user_data_dir().join("flatpak/exports/share/icons"),
+                    PathBuf::from("/var/lib/flatpak/exports/share/icons"),
+                    PathBuf::from("/usr/share/pixmaps"),
                     PathBuf::from("/run/host/usr/share/icons"),
                     PathBuf::from("/run/host/usr/share/pixmaps"),
                     PathBuf::from("/run/host/var/lib/flatpak/exports/share/icons"),
                 ]);
                 let paths: Vec<_> = paths.iter().map(PathBuf::as_path).collect();
                 theme.set_search_path(&paths);
-                theme.set_theme_name(Some("hicolor"));
+                theme.set_theme_name(Some(gtk::IconTheme::for_display(&display).theme_name().as_str()));
                 let paintable =
                     theme.lookup_by_gicon(&icon, 128, 2, gtk::TextDirection::None, gtk::IconLookupFlags::empty());
                 let file = paintable.file().and_then(|f| f.path()).ok_or_else(|| not_found("no app icon"))?;
-                read_file(&file)
+                read_icon(&file)
             }
             // Serve Meridian's fixed icons from the UI's own origin.
             "ui" if path.starts_with("/desktop-icons/") => read_file(&resolve_under(&self.roots.assets, &path)?),
@@ -137,7 +142,7 @@ impl SchemeHandler {
                     gtk::IconLookupFlags::empty(),
                 );
                 let file = paintable.file().and_then(|f| f.path()).ok_or_else(|| not_found("no icon"))?;
-                read_file(&file)
+                read_icon(&file)
             }
             "assets" => read_file(&resolve_under(&self.roots.assets, &path)?),
             _ => Err(not_found("unknown host")),
@@ -167,6 +172,15 @@ pub fn resolve_under(root: &Path, uri_path: &str) -> Result<PathBuf, glib::Error
         return Err(forbidden("path escapes root"));
     }
     Ok(full)
+}
+
+// WebKit cannot display legacy XPM theme artwork directly.
+fn read_icon(path: &Path) -> Result<(glib::Bytes, &'static str), glib::Error> {
+    if path.extension().and_then(|ext| ext.to_str()).is_some_and(|ext| ext.eq_ignore_ascii_case("xpm")) {
+        let pixbuf = gtk::gdk_pixbuf::Pixbuf::from_file_at_scale(path, 256, 256, true)?;
+        return Ok((glib::Bytes::from_owned(pixbuf.save_to_bufferv("png", &[])?), "image/png"));
+    }
+    read_file(path)
 }
 
 fn read_file(path: &Path) -> Result<(glib::Bytes, &'static str), glib::Error> {
@@ -206,6 +220,20 @@ mod tests {
         std::fs::create_dir_all(dir.join("home")).unwrap();
         std::fs::write(dir.join("home/index.html"), "<p>").unwrap();
         dir.canonicalize().unwrap()
+    }
+
+    #[test]
+    #[ignore = "requires image loader D-Bus access; run on a desktop session"]
+    fn legacy_xpm_icons_are_encoded_as_png() {
+        let path = tmp_root().join("legacy.xpm");
+        std::fs::write(
+            &path,
+            "/* XPM */\nstatic char *icon[] = {\n\"2 2 2 1\",\n\". c #ffffff\",\n\"+ c #0066ff\",\n\".+\",\n\"+.\"};\n",
+        )
+        .unwrap();
+        let (bytes, mime) = read_icon(&path).unwrap();
+        assert_eq!(mime, "image/png");
+        assert!(bytes.as_ref().starts_with(b"\x89PNG\r\n\x1a\n"));
     }
 
     #[test]

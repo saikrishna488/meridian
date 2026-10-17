@@ -16,6 +16,7 @@ const WALLPAPERS: [(&str, &str); 4] = [
 #[serde(default)]
 struct Config {
     appearance: String,
+    font: String,
     wallpaper: String,
     custom: Option<String>,
     revision: u64,
@@ -25,6 +26,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             appearance: "light".into(),
+            font: "Inter".into(),
             wallpaper: "meridian-dusk".into(),
             custom: None,
             revision: 0,
@@ -71,6 +73,7 @@ fn state(config: &Config) -> DesktopState {
     };
     DesktopState {
         appearance: config.appearance.clone(),
+        font: config.font.clone(),
         wallpaper: config.wallpaper.clone(),
         wallpaper_uri,
         wallpapers,
@@ -156,6 +159,9 @@ fn desktop_items(config: &Config) -> Vec<DesktopItem> {
         .iter()
         .cloned()
         .map(|mut item| {
+            if item.kind == "app" && item.target == "meridian-finder.desktop" {
+                item.name = "Orbit".into();
+            }
             if item.kind != "app" {
                 item.id = format!("shortcut:{}", item.id);
             }
@@ -288,8 +294,9 @@ pub fn set_appearance(mode: &str) -> Result<DesktopState, ErrorBody> {
     Ok(state(&config))
 }
 
-/// A free SF-like UI typeface shared by native and web windows.
+/// Shared native typography and complete GTK titlebar controls.
 pub fn apply_fonts() -> Result<(), ErrorBody> {
+    let font = get().font;
     let _guard = CONFIG_LOCK.lock().map_err(error)?;
     use gtk::gio::prelude::*;
     for version in ["gtk-3.0", "gtk-4.0"] {
@@ -300,7 +307,8 @@ pub fn apply_fonts() -> Result<(), ErrorBody> {
         if path.exists() {
             file.load_from_file(&path, glib::KeyFileFlags::KEEP_COMMENTS).map_err(error)?;
         }
-        file.set_string("Settings", "gtk-font-name", "Inter 11");
+        file.set_string("Settings", "gtk-font-name", &format!("{font} 11"));
+        file.set_string("Settings", "gtk-decoration-layout", ":minimize,maximize,close");
         std::fs::write(&path, file.to_data()).map_err(error)?;
     }
     if let Some(schema) =
@@ -308,7 +316,17 @@ pub fn apply_fonts() -> Result<(), ErrorBody> {
     {
         let settings = gtk::gio::Settings::new_full(&schema, None::<&gtk::gio::SettingsBackend>, None);
         if schema.has_key("font-name") {
-            settings.set_string("font-name", "Inter 11").map_err(error)?;
+            settings.set_string("font-name", &format!("{font} 11")).map_err(error)?;
+        }
+        gtk::gio::Settings::sync();
+    }
+    // GTK/libadwaita clients can read the desktop preference instead of settings.ini.
+    if let Some(schema) = gtk::gio::SettingsSchemaSource::default()
+        .and_then(|source| source.lookup("org.gnome.desktop.wm.preferences", true))
+    {
+        let settings = gtk::gio::Settings::new_full(&schema, None::<&gtk::gio::SettingsBackend>, None);
+        if schema.has_key("button-layout") {
+            settings.set_string("button-layout", ":minimize,maximize,close").map_err(error)?;
         }
         gtk::gio::Settings::sync();
     }
@@ -317,13 +335,29 @@ pub fn apply_fonts() -> Result<(), ErrorBody> {
     if path.exists() {
         file.load_from_file(&path, glib::KeyFileFlags::KEEP_COMMENTS).map_err(error)?;
     }
-    file.set_string("General", "font", "Inter,10,-1,5,50,0,0,0,0,0");
+    file.set_string("General", "font", &format!("{font},10,-1,5,50,0,0,0,0,0"));
     for key in ["menuFont", "toolBarFont", "taskbarFont"] {
-        file.set_string("General", key, "Inter,10,-1,5,50,0,0,0,0,0");
+        file.set_string("General", key, &format!("{font},10,-1,5,50,0,0,0,0,0"));
     }
-    file.set_string("General", "smallestReadableFont", "Inter,9,-1,5,50,0,0,0,0,0");
+    file.set_string("General", "smallestReadableFont", &format!("{font},9,-1,5,50,0,0,0,0,0"));
     std::fs::write(path, file.to_data()).map_err(error)?;
     Ok(())
+}
+
+pub fn set_font(font: &str) -> Result<DesktopState, ErrorBody> {
+    if !["Inter", "Noto Sans", "DejaVu Sans", "Liberation Sans"].contains(&font) {
+        return Err(error("Unknown font"));
+    }
+    {
+        let _guard = CONFIG_LOCK.lock().map_err(error)?;
+        let mut config = load();
+        config.font = font.into();
+        save(&config)?;
+    }
+    if let Err(error) = apply_fonts() {
+        log::warn!("Could not apply font to external applications: {}", error.message);
+    }
+    Ok(get())
 }
 
 #[cfg(test)]
@@ -355,6 +389,7 @@ mod tests {
         std::fs::write(&target, "keep me").unwrap();
         let config = Config {
             appearance: "dark".into(),
+            font: "Noto Sans".into(),
             wallpaper: "meridian-tide".into(),
             items: vec![DesktopItem {
                 id: "shortcut".into(),
@@ -368,6 +403,10 @@ mod tests {
         save_at(&directory, &config).unwrap();
         let loaded = load_at(&directory);
         assert_eq!(loaded.wallpaper, "meridian-tide");
+        assert_eq!(state(&loaded).font, "Noto Sans");
+        let old: Config = serde_json::from_str(r#"{"appearance":"dark"}"#).unwrap();
+        assert_eq!(old.font, "Inter");
+        assert!(set_font("unknown").is_err());
         assert_eq!(state(&loaded).appearance, "dark");
         assert_eq!(loaded.items.len(), 1);
         assert!(state(&loaded).wallpaper_uri.ends_with("meridian-tide.svg"));

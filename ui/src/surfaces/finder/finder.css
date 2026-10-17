@@ -83,3 +83,9 @@ html, body { background: var(--surface); color: var(--ink); }
 
 :root[data-theme] body { background: var(--surface); color: var(--ink); }
 .finder-locationbar select { font-size: 10px; }
+.file-thumbnail { display:grid; place-items:center; width:64px; height:58px; flex:none; }.file-thumbnail img { max-width:100%; max-height:100%; border-radius:4px; object-fit:contain; }.list .file-thumbnail { width:24px; height:24px; }.bookmark-row { display:flex; min-width:0; align-items:center; }.bookmark-row>button:first-child { flex:1; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }.bookmark-row>button:last-child { flex:none; padding:4px; opacity:.5; }.bookmark-row>button:last-child:hover { opacity:1; }.finder-context { max-height:calc(100vh - 16px); overflow:auto; }.finder-context hr { border:0; border-top:1px solid var(--line); margin:4px 3px; }.finder-dialog-scrim label { display:grid; gap:8px; color:var(--ink-muted); font-size:12px; }
+
+.finder-sidebar nav button { border-radius: 9px; }
+.finder-toolbar > button { border-radius: 8px; width: 32px; height: 32px; }
+.file-item { border-radius: 12px; }
+.finder-toolbar input { border-radius: 9px; }

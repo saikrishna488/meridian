@@ -98,7 +98,7 @@ test("applications ignore stale search replies and Escape clears the query befor
   await waitFor(() => ui.requests.some(request => request.method === "popover.close"));
 });
 
-test("Control Center displays availability and updates settings without session actions", async t => {
+test("Control Center displays availability and updates settings alongside power controls", async t => {
   const state = { wifi: true, bluetooth: null, brightness: 65, volume: 30 };
   const ui = await surface(t, "options", request => request.method === "settings.get" ? state : null);
   ui.emit("popover.shown");
@@ -114,9 +114,9 @@ test("Control Center displays availability and updates settings without session 
   ui.type("#volume", "42");
   await waitFor(() => ui.requests.some(request => request.method === "settings.set_volume"));
   assert.deepEqual(ui.requests.find(request => request.method === "settings.set_volume").params, { percent: 42 });
-  assert.equal(ui.get("#lock"), null);
-  assert.equal(ui.get("#sleep"), null);
-  assert.equal(ui.get("#sign-out"), null);
+  assert.ok(ui.get("#lock"));
+  assert.ok(ui.get("#sleep"));
+  assert.ok(ui.get("#sign-out"));
   assert.equal(ui.requests.some(request => request.method === "session.sign_out"), false);
 });
 
@@ -228,4 +228,175 @@ test("Meridian About reads host version and laptop details and closes with Escap
   assert.equal(ui.get(".source-link").href, "https://github.com/saikrishna488/meridian");
   ui.key("Escape");
   await waitFor(() => ui.requests.some(r => r.method === "popover.close"));
+});
+
+test("settings search finds common terms and opens window shortcuts", async t => {
+  const ui = await surface(t, "settings");
+  ui.type('[aria-label="Search settings"]', " audio ");
+  await waitFor(() => ui.get('nav button[aria-label="Sound"]'));
+  assert.equal(ui.window.document.querySelectorAll("nav button").length, 1);
+  ui.type('[aria-label="Search settings"]', "keyboard");
+  await waitFor(() => ui.get('nav button[aria-label="Home"]'));
+  ui.get('nav button[aria-label="Home"]').click();
+  assert.match(ui.get(".shortcut-card").textContent, /Minimize window/);
+  assert.match(ui.get(".shortcut-card").textContent, /Snap left \/ right/);
+});
+
+test("Device Manager groups hardware and confirms device-specific actions", async t => {
+  const devices = [
+    { id: "net:wlan0", category: "Wi-Fi adapters", name: "Wi-Fi adapter", status: "Connected", properties: [["Driver", "iwlwifi"]], actions: ["disconnect"] },
+    { id: "storage:nvme0n1", category: "Storage", name: "SSD", status: "Connected", properties: [["Driver", "nvme"]], actions: ["storage"] },
+  ];
+  const ui = await surface(t, "settings", req => req.method === "settings.devices" ? devices : req.method === "settings.device_action" ? { error: { code: "failed", message: "Permission denied" } } : null);
+  assert.ok(!ui.get('nav [aria-label="Driver Manager"]'));
+  ui.get('nav [aria-label="Device Manager"]').click();
+  await waitFor(() => ui.get(".device-properties h3")?.textContent === "Wi-Fi adapter");
+  assert.equal(ui.window.document.querySelectorAll(".device-tree details").length, 2);
+  assert.ok(ui.get(".device-properties").textContent.includes("iwlwifi"));
+  [...ui.window.document.querySelectorAll(".device-properties button")].find(b => b.textContent === "Disconnect").click();
+  await waitFor(() => ui.get('[role="dialog"]'));
+  assert.ok(!ui.requests.some(r => r.method === "settings.device_action"));
+  [...ui.get('[role="dialog"]').querySelectorAll("button")].find(b => b.textContent === "Disconnect").click();
+  await waitFor(() => ui.get('[role="alert"]')?.textContent.includes("Permission denied"));
+  assert.deepEqual(ui.requests.find(r => r.method === "settings.device_action").params, { id: "net:wlan0", action: "disconnect" });
+  [...ui.window.document.querySelectorAll(".device-tree button")].find(b => b.textContent === "SSD").click();
+  await waitFor(() => ui.get(".device-properties").textContent.includes("nvme"));
+  assert.ok([...ui.window.document.querySelectorAll(".device-properties button")].some(b => b.textContent === "Open Disks"));
+});
+
+test("users protect current account and confirm deletion while keeping home files", async t => {
+  const users = [
+    { uid: 1000, name: "owner", real_name: "Owner", administrator: true, locked: false, current: true, home: "/home/owner" },
+    { uid: 1001, name: "guest", real_name: "Guest", administrator: false, locked: false, current: false, home: "/home/guest" },
+  ];
+  const ui = await surface(t, "settings", req => req.method === "settings.users" ? users : null);
+  ui.get('nav [aria-label="Users"]').click();
+  await waitFor(() => ui.window.document.querySelectorAll(".user-management-row").length === 2);
+  const rows = [...ui.window.document.querySelectorAll(".user-management-row")];
+  assert.ok([...rows[0].querySelectorAll("button")].find(b => b.textContent === "Delete…").disabled);
+  [...rows[1].querySelectorAll("button")].find(b => b.textContent === "Delete…").click();
+  await waitFor(() => ui.get('[role="dialog"]'));
+  assert.match(ui.get('[role="dialog"]').textContent, /files are kept/);
+  assert.ok(!ui.requests.some(r => r.method === "settings.user_action"));
+  ui.get('[role="dialog"] button[type="submit"]').click();
+  await waitFor(() => ui.requests.some(r => r.method === "settings.user_action"));
+  assert.deepEqual(ui.requests.find(r => r.method === "settings.user_action").params, { uid: 1001, action: "delete", password: null });
+});
+
+test("new user form validates matching passwords and sends selected account type", async t => {
+  const ui = await surface(t, "settings", req => req.method === "settings.users" ? [] : null);
+  ui.get('nav [aria-label="Users"]').click();
+  await waitFor(() => [...ui.window.document.querySelectorAll("button")].some(b => b.textContent === "Add user…" && !b.disabled));
+  [...ui.window.document.querySelectorAll("button")].find(b => b.textContent === "Add user…").click();
+  await waitFor(() => ui.get('[aria-label="Username"]'));
+  ui.type('[aria-label="Username"]', "new_user");
+  ui.type('[aria-label="Full name"]', "New User");
+  ui.type('[aria-label="New password"]', "long-password");
+  ui.type('[aria-label="Confirm password"]', "different-password");
+  ui.get('[role="dialog"]').dispatchEvent(new ui.window.Event("submit", { bubbles: true, cancelable: true }));
+  await waitFor(() => ui.get('[role="alert"]'));
+  assert.ok(!ui.requests.some(r => r.method === "settings.user_create"));
+  ui.type('[aria-label="Confirm password"]', "long-password");
+  ui.get('[role="dialog"]').dispatchEvent(new ui.window.Event("submit", { bubbles: true, cancelable: true }));
+  await waitFor(() => ui.requests.some(r => r.method === "settings.user_create"));
+  assert.equal(ui.requests.find(r => r.method === "settings.user_create").params.administrator, false);
+});
+
+test("General shows system details and checks GitHub only on request", async t => {
+  const ui = await surface(t, "settings", req => req.method === "settings.system_info" ? { version: "0.1.0", kernel: "6.12.0", architecture: "x86_64", hostname: "desktop", os: "Debian", processor: "Test CPU", memory: "16 GiB", manufacturer: "Test", model: "Desktop" } : req.method === "settings.check_updates" ? { installed: "0.1.0", latest: "v0.2.0", available: true, message: "A newer Meridian release is available.", published: null } : null);
+  ui.get('nav [aria-label="General"]').click();
+  await waitFor(() => ui.get(".settings-content").textContent.includes("6.12.0"));
+  assert.ok(!ui.requests.some(r => r.method === "settings.check_updates"));
+  [...ui.window.document.querySelectorAll("button")].find(b => b.textContent === "Check for updates").click();
+  await waitFor(() => ui.get(".update-status").textContent.includes("v0.2.0"));
+  assert.match(ui.get(".update-status").textContent, /newer Meridian release/);
+  [...ui.window.document.querySelectorAll("button")].find(b => b.textContent === "View releases").click();
+  await waitFor(() => ui.requests.some(r => r.method === "settings.open_releases"));
+});
+
+test("Nova confirms package changes and reports failure without claiming installation", async t => {
+  const ui = await surface(t, "utilities", request => {
+    if (request.method === "shell.hello") return { surface: "nova", capabilities: [] };
+    if (request.method === "store.list") return [{id:"vlc",name:"VLC",category:"Media",description:"Video player",installed:false,available:true},{id:"missing",name:"Missing",category:"Media",description:"Unavailable",installed:false,available:false}];
+    if (request.method === "store.action") return {error:{code:"failed",message:"Authentication cancelled"}};
+    return null;
+  });
+  await waitFor(() => ui.get(".app-grid button"));
+  assert.equal(ui.window.document.querySelectorAll(".app-grid button")[1].disabled,true);
+  ui.get(".app-grid button").click();
+  await waitFor(() => ui.get('[role="dialog"]'));
+  assert.equal(ui.requests.filter(r => r.method === "store.action").length,0);
+  ui.window.document.querySelectorAll(".dialog button")[1].click();
+  await waitFor(() => ui.get('[role="alert"]')?.textContent === "Authentication cancelled");
+  assert.deepEqual(ui.requests.find(r => r.method === "store.action").params,{id:"vlc",action:"install"});
+  assert.equal(ui.get(".app-grid button").textContent,"Install");
+});
+
+test("Calendar loads saved events and persists deletion through the host", async t => {
+  const today = new Date();
+  const date = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
+  const ui = await surface(t,"utilities",request => {
+    if(request.method === "shell.hello") return {surface:"calendar",capabilities:[]};
+    if(request.method === "calendar.list") return [{id:"event-1",date,title:"Design review",time:"10:30"}];
+    return null;
+  });
+  await waitFor(() => ui.get(".event"));
+  assert.match(ui.get(".event").textContent,/Design review/);
+  ui.get('.event button').click();
+  await waitFor(() => !ui.get(".event"));
+  assert.deepEqual(ui.requests.find(r => r.method === "calendar.save").params,[]);
+});
+
+test("Clock switches between local time, stopwatch and timer", async t => {
+  const ui = await surface(t,"utilities",request => request.method === "shell.hello" ? {surface:"clock",capabilities:[]} : null);
+  await waitFor(() => ui.get(".tabs"));
+  ui.window.document.querySelectorAll(".tabs button")[1].click();
+  await waitFor(() => ui.get(".clock-face .toolbar"));
+  assert.equal(ui.get(".clock-face .toolbar button").textContent,"Start");
+  ui.get(".clock-face .toolbar button").click();
+  await waitFor(() => ui.get(".clock-face .toolbar button").textContent === "Pause");
+  ui.window.document.querySelectorAll(".tabs button")[2].click();
+  await waitFor(() => ui.get('input[type="number"]'));
+  ui.type('input[type="number"]',"0");
+  await waitFor(() => ui.get(".clock-face .toolbar button").disabled);
+});
+
+
+test("launcher list view retains descriptions and launches the keyboard selection", async t => {
+  const items = [{ ...app("terminal", "Terminal"), subtitle: "Command line" }, app("browser", "Browser")];
+  const ui = await surface(t, "applications", req => req.method === "search.query" ? searchResult(req.params.serial, items) : null);
+  ui.emit("popover.shown");
+  await waitFor(() => ui.get("#row-1"));
+  ui.get('[aria-label="List view"]').click();
+  await waitFor(() => ui.get(".list-view .app-description"));
+  assert.equal(ui.get(".app-description").textContent, "Command line");
+  assert.equal(ui.window.localStorage.getItem("meridian.launcher.view"), "list");
+  ui.get("#search").focus();
+  ui.key("ArrowDown"); ui.key("ArrowDown");
+  await waitFor(() => ui.get("#row-1").getAttribute("aria-selected") === "true");
+  ui.key("Enter");
+  await waitFor(() => ui.requests.some(req => req.method === "search.activate"));
+  assert.equal(ui.requests.find(req => req.method === "search.activate").params.item_id, "browser");
+});
+
+test("Control Center requires confirmation for destructive power actions and recovers from failures", async t => {
+  const ui = await surface(t, "options", req => req.method === "settings.get"
+    ? { wifi: true, bluetooth: true, brightness: 50, volume: 40 }
+    : req.method.startsWith("session.") ? { error: { code: "failed", message: "Power action unavailable" } } : null);
+  ui.emit("popover.shown");
+  await waitFor(() => !ui.get("#menu").classList.contains("hidden"));
+  for (const [id, method] of [["restart", "session.restart"], ["shutdown", "session.shutdown"], ["sign-out", "session.sign_out"]]) {
+    ui.get(`#${id}`).click();
+    await waitFor(() => ui.get(`#${id}`).textContent.endsWith("?"));
+    assert.equal(ui.requests.some(req => req.method === method), false);
+    ui.get(`#${id}`).click();
+    await waitFor(() => ui.requests.some(req => req.method === method));
+    await waitFor(() => !ui.get(`#${id}`).disabled);
+    assert.equal(ui.get("#status").textContent, "Power action unavailable");
+  }
+  for (const id of ["lock", "sleep"]) {
+    ui.get(`#${id}`).click();
+    await waitFor(() => ui.requests.some(req => req.method === `session.${id}`));
+    await waitFor(() => !ui.get(`#${id}`).disabled);
+  }
 });

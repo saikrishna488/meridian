@@ -5,6 +5,7 @@ import { currentAppearance, useAppearance } from "../../lib/appearance";
 import { Terminal as Emulator } from "../../vendor/xterm";
 import { FitAddon } from "../../vendor/addon-fit";
 import { Icon } from "../../components/Icon";
+import { wheelScroller } from "./scroll";
 import { terminalTheme } from "./theme";
 
 function colors() { return terminalTheme(currentAppearance()); }
@@ -15,6 +16,7 @@ function Session({ active, fontSize, cwd, appearance, onExit }: { active: boolea
   const activeRef = useRef(active); activeRef.current = active;
   const refit = useRef<(() => void) | null>(null);
   const [error, setError] = useState("");
+  const [scrolledUp, setScrolledUp] = useState(false);
   const [shell, setShell] = useState("Starting shell…");
   const exit = useRef(onExit); exit.current = onExit;
   useEffect(() => {
@@ -27,7 +29,10 @@ function Session({ active, fontSize, cwd, appearance, onExit }: { active: boolea
         const element = container.current, term = emulator.current;
         if (!alive || !activeRef.current || !element?.clientWidth || !element.clientHeight || !term) return;
         const size = fit.current?.proposeDimensions();
-        if (size && Number.isFinite(size.cols) && Number.isFinite(size.rows)) term.resize(Math.max(2, Math.min(500, size.cols)), Math.max(1, Math.min(250, size.rows)));
+        if (size && Number.isFinite(size.cols) && Number.isFinite(size.rows)) {
+          const cols = Math.max(2, Math.min(500, size.cols)), rows = Math.max(1, Math.min(250, size.rows));
+          if (cols !== term.cols || rows !== term.rows) term.resize(cols, rows);
+        }
         term.refresh(0, term.rows - 1);
         term.focus();
       });
@@ -48,6 +53,19 @@ function Session({ active, fontSize, cwd, appearance, onExit }: { active: boolea
         const term = new Emulator({ fontSize, fontFamily: '"DejaVu Sans Mono", "Cascadia Code", monospace', cursorBlink: true, cursorStyle: "bar", letterSpacing: 0, lineHeight: 1, scrollback: 5000, allowProposedApi: false, minimumContrastRatio: 4.5, theme: colors() });
         const addon = new FitAddon(); emulator.current = term; fit.current = addon;
         term.loadAddon(addon); term.open(container.current!);
+        const scroll = wheelScroller();
+        const updateScroll = () => { if (alive) setScrolledUp(term.buffer.active.type === "normal" && term.buffer.active.viewportY < term.buffer.active.baseY); };
+        term.onScroll(updateScroll);
+        // Handle normal scrollback directly rather than relying on WebKit's
+        // asynchronous native viewport scrolling. Leave application mouse modes alone.
+        term.attachCustomWheelEventHandler(event => {
+          if (event.ctrlKey || term.buffer.active.type !== "normal" || term.modes.mouseTrackingMode !== "none" || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return true;
+          const height = container.current?.querySelector<HTMLElement>(".xterm-screen")?.clientHeight ?? 0;
+          const lines = scroll(event.deltaY, event.deltaMode, height ? height / term.rows : fontSize, term.rows);
+          if (lines) term.scrollLines(lines);
+          event.preventDefault();
+          return false;
+        });
         let inputQueue = Promise.resolve();
         term.onData(data => { inputQueue = inputQueue.then(async () => { if (alive && id !== null) await request({ method: "terminal.write", params: { id, data } }); }).catch(fail); });
         term.onResize(({ cols, rows }) => { inputQueue = inputQueue.then(async () => { if (alive && id !== null && cols >= 2 && rows >= 1) await request({ method: "terminal.resize", params: { id, cols: Math.min(500, cols), rows: Math.min(250, rows) } }); }).catch(fail); });
@@ -58,6 +76,13 @@ function Session({ active, fontSize, cwd, appearance, onExit }: { active: boolea
           }
           if (event.type === "keydown" && event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "v") {
             void request({ method: "terminal.paste" }).then(text => { if (alive && text) term.paste(text); }).catch(fail); return false;
+          }
+          if (event.type === "keydown" && event.shiftKey && !event.ctrlKey && !event.altKey && ["PageUp", "PageDown", "Home", "End"].includes(event.key)) {
+            event.preventDefault();
+            if (event.key === "Home") term.scrollToTop();
+            else if (event.key === "End") term.scrollToBottom();
+            else term.scrollPages(event.key === "PageUp" ? -1 : 1);
+            return false;
           }
           return true;
         });
@@ -71,7 +96,7 @@ function Session({ active, fontSize, cwd, appearance, onExit }: { active: boolea
           try {
             const chunk = await request({ method: "terminal.read", params: { id } });
             if (!alive) return;
-            if (chunk.data.length) await new Promise<void>(resolve => term.write(new Uint8Array(chunk.data), resolve));
+            if (chunk.data.length) { await new Promise<void>(resolve => term.write(new Uint8Array(chunk.data), resolve)); updateScroll(); }
             if (chunk.exited) { term.writeln("\r\n[Session ended]"); term.options.disableStdin = true; await request({ method: "terminal.close", params: { id } }); id = null; exit.current(); return; }
             timer = setTimeout(() => void poll(), chunk.data.length ? 0 : 25);
           } catch (e) { fail(e); }
@@ -91,7 +116,7 @@ function Session({ active, fontSize, cwd, appearance, onExit }: { active: boolea
     }
     if (active) refit.current?.();
   }, [active, fontSize, appearance]);
-  return <section className={`terminal-session${active ? " active" : ""}`} role="tabpanel" aria-label="Terminal output" aria-hidden={!active}><div className="terminal-screen" ref={container} aria-label="Interactive terminal" />{error && <p className="terminal-error" role="alert">{error}</p>}<footer className="terminal-status"><span><i />{shell}</span><span>UTF-8 · Interactive shell</span></footer></section>;
+  return <section className={`terminal-session${active ? " active" : ""}`} role="tabpanel" aria-label="Terminal output" aria-hidden={!active}><div className="terminal-screen" ref={container} aria-label="Interactive terminal" />{error && <p className="terminal-error" role="alert">{error}</p>}<footer className="terminal-status"><span><i />{shell}</span><span>{scrolledUp && <button className="terminal-follow" onClick={() => { emulator.current?.scrollToBottom(); emulator.current?.focus(); }}>Jump to latest output</button>}UTF-8 · Interactive shell</span></footer></section>;
 }
 function Terminal() {
   const appearance = useAppearance();

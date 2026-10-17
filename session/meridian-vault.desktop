@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Vault
+Exec=meridian-vault
+Icon=drive-harddisk
+Categories=System;Utility;
+Terminal=false
+StartupNotify=true
+StartupWMClass=org.meridian.Vault

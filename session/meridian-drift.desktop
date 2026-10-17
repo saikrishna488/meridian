@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Drift
+Exec=meridian-drift
+Icon=web-browser
+Categories=Network;WebBrowser;
+Terminal=false
+StartupNotify=true
+StartupWMClass=org.meridian.Drift

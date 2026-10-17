@@ -122,3 +122,13 @@
 .field-label { color: #ced5e2; font-size: 10px; font-weight: 500; letter-spacing: .5px; }
 .card .submit { border-radius: 6px; background: #f5f7fb; color: #171b24; box-shadow: none; }
 .field input:focus, .field select:focus { border-color: #a9cfff; box-shadow: 0 0 0 2px #8bbaff30; }
+
+/* Authentication stays clear and familiar in both desktop appearances. */
+.card { width: min(360px, calc(100vw - 48px)); padding: 28px; border-radius: 22px; }
+.lock-identity { text-align: center; margin-bottom: 8px; }
+.lock-identity > span { display: grid; place-items: center; width: 44px; height: 44px; margin: 0 auto 14px; border: 1px solid #ffffff24; border-radius: 15px; background: #ffffff0d; color: #c2d9ff; }
+.lock-identity h1 { font-size: 18px; font-weight: 600; letter-spacing: -.4px; margin: 0 0 8px; }
+.lock-identity p { max-width: 240px; margin: 0 auto; font-size: 12px; line-height: 1.6; color: #b9c4d6; }
+.card .field input { border-radius: 10px; }
+.card .submit { border-radius: 10px; cursor: pointer; }
+@media (prefers-reduced-motion: reduce) { .card.shake { animation: none; } }

@@ -29,3 +29,10 @@ export function useAppearance(): Appearance {
   useEffect(() => subscribeAppearance(setMode), []);
   return mode;
 }
+
+export function applyFont(font: string | undefined): void {
+  const allowed = ["Inter", "Noto Sans", "DejaVu Sans", "Liberation Sans"];
+  const selected = font && allowed.includes(font) ? font : "Inter";
+  document.documentElement.style.setProperty("--font-ui", `"${selected}", sans-serif`);
+  document.documentElement.style.setProperty("--font-display", "var(--font-ui)");
+}

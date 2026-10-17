@@ -152,9 +152,156 @@ pub fn open(path: &str) -> Result<(), ErrorBody> {
     });
     Ok(())
 }
+/// Transfers never overwrite an existing target or follow directory symlinks.
+pub fn transfer(path: &str, destination: &str, moving: bool) -> Result<(), ErrorBody> {
+    let source = absolute(path)?;
+    let canonical = source.canonicalize().map_err(error)?;
+    if canonical == Path::new("/") || (moving && canonical == glib::home_dir()) {
+        return Err(error("This location cannot be moved or copied."));
+    }
+    let folder = directory_path(destination)?;
+    let meta = std::fs::symlink_metadata(&source).map_err(error)?;
+    if meta.is_dir() && folder.starts_with(&canonical) {
+        return Err(error("Choose a destination outside this folder."));
+    }
+    let target = folder.join(source.file_name().ok_or_else(|| error("Choose a file or folder"))?);
+    if std::fs::symlink_metadata(&target).is_ok() {
+        return Err(error("An item with this name already exists at the destination."));
+    }
+    if moving {
+        gio::File::for_path(&source)
+            .move_(&gio::File::for_path(target), gio::FileCopyFlags::NOFOLLOW_SYMLINKS, gio::Cancellable::NONE, None)
+            .map_err(error)
+    } else {
+        copy_tree(&source, &target)
+    }
+}
+fn copy_tree(source: &Path, target: &Path) -> Result<(), ErrorBody> {
+    let metadata = std::fs::symlink_metadata(source).map_err(error)?;
+    if metadata.is_dir() {
+        std::fs::create_dir(target).map_err(error)?;
+        for entry in std::fs::read_dir(source).map_err(error)? {
+            let entry = entry.map_err(error)?;
+            copy_tree(&entry.path(), &target.join(entry.file_name()))?;
+        }
+        Ok(())
+    } else {
+        if !metadata.is_file() && !metadata.file_type().is_symlink() {
+            return Err(error("Special files cannot be copied."));
+        }
+        gio::File::for_path(source)
+            .copy(&gio::File::for_path(target), gio::FileCopyFlags::NOFOLLOW_SYMLINKS, gio::Cancellable::NONE, None)
+            .map_err(error)
+    }
+}
+pub fn thumbnail(path: &str) -> Result<Option<String>, ErrorBody> {
+    use gtk::gdk_pixbuf::Pixbuf;
+    let path = absolute(path)?;
+    let Ok(meta) = std::fs::metadata(&path) else { return Ok(None) };
+    if !meta.is_file() || meta.len() > 20 * 1024 * 1024 {
+        return Ok(None);
+    }
+    let extension = path.extension().and_then(|s| s.to_str()).unwrap_or_default().to_ascii_lowercase();
+    if !["png", "jpg", "jpeg", "webp", "gif", "bmp"].contains(&extension.as_str()) {
+        return Ok(None);
+    }
+    let Some((_, width, height)) = Pixbuf::file_info(&path) else { return Ok(None) };
+    if width <= 0 || height <= 0 || i64::from(width) * i64::from(height) > 64_000_000 {
+        return Ok(None);
+    }
+    let Ok(image) = Pixbuf::from_file_at_scale(&path, 160, 120, true) else { return Ok(None) };
+    let bytes = image.save_to_bufferv("png", &[]).map_err(error)?;
+    Ok(Some(format!("data:image/png;base64,{}", glib::base64_encode(&bytes))))
+}
+
+static BOOKMARK_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+pub fn bookmarks() -> Vec<FileLocation> {
+    let path = glib::user_config_dir().join("meridian/orbit-bookmarks.json");
+    std::fs::read(path)
+        .ok()
+        .and_then(|b| serde_json::from_slice::<Vec<String>>(&b).ok())
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|s| Path::new(s).is_absolute())
+        .map(|path| FileLocation {
+            name: Path::new(&path).file_name().map_or_else(|| "/".into(), |s| s.to_string_lossy().into_owned()),
+            path,
+        })
+        .collect()
+}
+pub fn bookmark(path: &str) -> Result<Vec<FileLocation>, ErrorBody> {
+    let _guard = BOOKMARK_LOCK.lock().map_err(error)?;
+    let requested = absolute(path)?;
+    let mut saved = bookmarks().into_iter().map(|l| l.path).collect::<Vec<_>>();
+    if saved.iter().any(|s| Path::new(s) == requested) {
+        saved.retain(|s| Path::new(s) != requested);
+    } else {
+        let path = directory_path(path)?.to_string_lossy().into_owned();
+        if !saved.contains(&path) {
+            saved.push(path);
+        }
+    }
+    let dir = glib::user_config_dir().join("meridian");
+    std::fs::create_dir_all(&dir).map_err(error)?;
+    let temp = dir.join("orbit-bookmarks.json.tmp");
+    std::fs::write(&temp, serde_json::to_vec(&saved).map_err(error)?).map_err(error)?;
+    std::fs::rename(temp, dir.join("orbit-bookmarks.json")).map_err(error)?;
+    Ok(bookmarks())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn transfers_directories_and_symlinks_without_overwriting() {
+        let root = std::env::temp_dir().join(format!("meridian-transfer-{}", std::process::id()));
+        let source = root.join("source");
+        let target = root.join("target");
+        let moved = root.join("moved");
+        std::fs::create_dir_all(source.join("nested")).unwrap();
+        std::fs::create_dir_all(&target).unwrap();
+        std::fs::create_dir_all(&moved).unwrap();
+        std::fs::write(source.join("nested/file.txt"), "keep").unwrap();
+        std::os::unix::fs::symlink("nested/file.txt", source.join("link")).unwrap();
+        transfer(source.to_str().unwrap(), target.to_str().unwrap(), false).unwrap();
+        assert_eq!(std::fs::read_to_string(target.join("source/nested/file.txt")).unwrap(), "keep");
+        assert!(target.join("source/link").is_symlink());
+        assert!(transfer(source.to_str().unwrap(), target.to_str().unwrap(), false).is_err());
+        assert!(transfer(source.to_str().unwrap(), source.join("nested").to_str().unwrap(), false).is_err());
+        assert!(source.join("nested/file.txt").exists());
+        transfer(source.to_str().unwrap(), moved.to_str().unwrap(), true).unwrap();
+        assert!(!source.exists());
+        assert!(moved.join("source/nested/file.txt").exists());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn thumbnail_does_not_try_to_decode_non_images() {
+        let root = std::env::temp_dir().join(format!("meridian-thumbnail-validation-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("file.txt");
+        std::fs::write(&path, "text").unwrap();
+        assert!(thumbnail(path.to_str().unwrap()).unwrap().is_none());
+        assert!(thumbnail(root.to_str().unwrap()).unwrap().is_none());
+        assert!(thumbnail("relative.png").is_err());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    #[ignore = "Requires a desktop D-Bus connection for the system image loaders"]
+    fn thumbnails_decode_images_and_reject_other_files() {
+        use gtk::gdk_pixbuf::{Colorspace, Pixbuf};
+        let root = std::env::temp_dir().join(format!("meridian-thumbs-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let image = Pixbuf::new(Colorspace::Rgb, false, 8, 320, 240).unwrap();
+        image.fill(0x668ed8ff);
+        let path = root.join("image.png");
+        image.savev(&path, "png", &[]).unwrap();
+        assert!(thumbnail(path.to_str().unwrap()).unwrap().unwrap().starts_with("data:image/png;base64,"));
+        std::fs::write(root.join("file.txt"), "plain text").unwrap();
+        assert!(thumbnail(root.join("file.txt").to_str().unwrap()).unwrap().is_none());
+        std::fs::write(root.join("invalid.png"), "not an image").unwrap();
+        assert!(thumbnail(root.join("invalid.png").to_str().unwrap()).unwrap().is_none());
+        std::fs::remove_dir_all(root).unwrap();
+    }
     #[test]
     fn manages_real_files_without_overwriting_or_accepting_path_names() {
         let root = std::env::temp_dir().join(format!("meridian-files-test-{}", std::process::id()));

@@ -1,6 +1,14 @@
 export class Terminal {
   constructor(options?: Record<string, unknown>);
   cols: number; rows: number;
+  readonly buffer: { active: { type: "normal" | "alternate"; viewportY: number; baseY: number } };
+  readonly modes: { mouseTrackingMode: string };
+  scrollLines(lines: number): void;
+  scrollPages(pages: number): void;
+  scrollToTop(): void;
+  scrollToBottom(): void;
+  onScroll(callback: (position: number) => void): { dispose(): void };
+  attachCustomWheelEventHandler(callback: (event: WheelEvent) => boolean): void;
   options: { theme?: Record<string, string>; fontSize?: number; disableStdin?: boolean };
   open(element: HTMLElement): void;
   loadAddon(addon: unknown): void;

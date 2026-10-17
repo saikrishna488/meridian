@@ -102,18 +102,40 @@ impl WebSurface {
         // The locker is assigned to its monitor via `gtk4_session_lock`
         // instead (a different Wayland surface role; see ADR-0007). It must
         // stay unrealized until then, so skip layer-shell entirely.
-        if !matches!(kind, SurfaceKind::Locker | SurfaceKind::Preferences | SurfaceKind::Finder | SurfaceKind::Terminal)
-        {
+        if !matches!(
+            kind,
+            SurfaceKind::Locker
+                | SurfaceKind::Preferences
+                | SurfaceKind::Finder
+                | SurfaceKind::Terminal
+                | SurfaceKind::Nova
+                | SurfaceKind::Calendar
+                | SurfaceKind::Clock
+                | SurfaceKind::Pulse
+        ) {
             configure_layer(&window, kind, monitor);
         }
 
-        if matches!(kind, SurfaceKind::Preferences | SurfaceKind::Finder | SurfaceKind::Terminal) {
+        if matches!(
+            kind,
+            SurfaceKind::Preferences
+                | SurfaceKind::Finder
+                | SurfaceKind::Terminal
+                | SurfaceKind::Nova
+                | SurfaceKind::Calendar
+                | SurfaceKind::Clock
+                | SurfaceKind::Pulse
+        ) {
             let title = match kind {
-                SurfaceKind::Finder => "Finder",
+                SurfaceKind::Finder => "Orbit",
                 SurfaceKind::Terminal => "Terminal",
+                SurfaceKind::Nova => "Nova",
+                SurfaceKind::Calendar => "Calendar",
+                SurfaceKind::Clock => "Clock",
+                SurfaceKind::Pulse => "Pulse",
                 _ => "Settings",
             };
-            window.set_title(Some(&format!("Meridian {title}")));
+            window.set_title(Some(title));
             window.set_decorated(true);
             window.add_css_class("meridian-preferences");
             if kind == SurfaceKind::Terminal {
@@ -181,7 +203,14 @@ impl WebSurface {
             header.pack_start(&title_label);
             header.set_title_widget(Some(&gtk::Box::new(gtk::Orientation::Horizontal, 0)));
             window.set_titlebar(Some(&header));
-            if kind == SurfaceKind::Finder {
+            if matches!(
+                kind,
+                SurfaceKind::Finder
+                    | SurfaceKind::Nova
+                    | SurfaceKind::Calendar
+                    | SurfaceKind::Clock
+                    | SurfaceKind::Pulse
+            ) {
                 window.set_default_size(1100, 720);
             } else {
                 window.set_default_size(840, 600);
@@ -268,9 +297,12 @@ fn entry_dir(kind: SurfaceKind) -> &'static str {
         SurfaceKind::Panel | SurfaceKind::Topbar => "surfaces/panel",
         SurfaceKind::Applications => "surfaces/applications",
         SurfaceKind::Options => "surfaces/options",
+        SurfaceKind::Notifications => "surfaces/notifications",
         SurfaceKind::Preferences => "surfaces/settings",
         SurfaceKind::Finder => "surfaces/finder",
         SurfaceKind::Terminal => "surfaces/terminal",
+        SurfaceKind::Nova | SurfaceKind::Calendar | SurfaceKind::Clock => "surfaces/utilities",
+        SurfaceKind::Pulse => "surfaces/pulse",
         SurfaceKind::DesktopMenu => "surfaces/desktop-menu",
         SurfaceKind::Greeter => "surfaces/greeter",
         SurfaceKind::Locker => "surfaces/locker",
@@ -288,9 +320,16 @@ fn configure_layer(window: &gtk::Window, kind: SurfaceKind, monitor: Option<&gdk
         SurfaceKind::Topbar => "meridian-topbar",
         SurfaceKind::Applications => "meridian-applications",
         SurfaceKind::Options => "meridian-options",
+        SurfaceKind::Notifications => "meridian-notifications",
         SurfaceKind::DesktopMenu => "meridian-desktop-menu",
         SurfaceKind::Greeter => "meridian-greeter",
-        SurfaceKind::Preferences | SurfaceKind::Finder | SurfaceKind::Terminal => {
+        SurfaceKind::Preferences
+        | SurfaceKind::Finder
+        | SurfaceKind::Terminal
+        | SurfaceKind::Nova
+        | SurfaceKind::Calendar
+        | SurfaceKind::Clock
+        | SurfaceKind::Pulse => {
             unreachable!("preferences is a normal desktop window")
         }
         SurfaceKind::Locker => unreachable!("the locker uses gtk4_session_lock, not layer-shell"),
@@ -298,7 +337,13 @@ fn configure_layer(window: &gtk::Window, kind: SurfaceKind, monitor: Option<&gdk
     let edges: &[Edge] = match kind {
         SurfaceKind::Panel => &[Edge::Bottom, Edge::Left, Edge::Right],
         SurfaceKind::Topbar => &[Edge::Top, Edge::Left, Edge::Right],
-        SurfaceKind::Preferences | SurfaceKind::Finder | SurfaceKind::Terminal => {
+        SurfaceKind::Preferences
+        | SurfaceKind::Finder
+        | SurfaceKind::Terminal
+        | SurfaceKind::Nova
+        | SurfaceKind::Calendar
+        | SurfaceKind::Clock
+        | SurfaceKind::Pulse => {
             unreachable!("preferences is a normal desktop window")
         }
         SurfaceKind::Locker => unreachable!("the locker uses gtk4_session_lock, not layer-shell"),
@@ -332,11 +377,17 @@ fn configure_layer(window: &gtk::Window, kind: SurfaceKind, monitor: Option<&gdk
             window.set_keyboard_mode(KeyboardMode::Exclusive);
             window.set_exclusive_zone(-1);
         }
-        SurfaceKind::Preferences | SurfaceKind::Finder | SurfaceKind::Terminal => {
+        SurfaceKind::Preferences
+        | SurfaceKind::Finder
+        | SurfaceKind::Terminal
+        | SurfaceKind::Nova
+        | SurfaceKind::Calendar
+        | SurfaceKind::Clock
+        | SurfaceKind::Pulse => {
             unreachable!("preferences is a normal desktop window")
         }
         SurfaceKind::Locker => unreachable!("the locker uses gtk4_session_lock, not layer-shell"),
-        SurfaceKind::Applications | SurfaceKind::Options | SurfaceKind::DesktopMenu => {
+        SurfaceKind::Applications | SurfaceKind::Options | SurfaceKind::DesktopMenu | SurfaceKind::Notifications => {
             window.set_layer(Layer::Overlay);
             // Exclusive zone 0: placed above the dock, which stays clickable
             // while a menu is open.

@@ -21,3 +21,5 @@ serde_json.workspace = true
 log.workspace = true
 env_logger.workspace = true
 libc = "0.2"
+
+semver = "1"

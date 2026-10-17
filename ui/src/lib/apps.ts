@@ -1,1 +1,1 @@
-export function isBuiltinApp(id: string) { return id === "meridian-settings.desktop" || id === "meridian-finder.desktop" || id === "meridian-terminal.desktop"; }
+export function isBuiltinApp(id: string) { return ["meridian-nova.desktop", "meridian-calendar.desktop", "meridian-clock.desktop"].includes(id) || id === "meridian-pulse.desktop" || id === "meridian-settings.desktop" || id === "meridian-finder.desktop" || id === "meridian-terminal.desktop"; }

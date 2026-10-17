@@ -19,6 +19,8 @@ async function surface(t, name, respond) {
   window.webkit = { messageHandlers: { meridian: { async postMessage(json) { const req = JSON.parse(json); requests.push(req); const result = await respond(req); return JSON.stringify(result?.error ? { ok: false, error: result.error } : { ok: true, result }); } } } };
   window.eval(await readFile(new URL(`../dist/surfaces/${name}/${name}.js`, import.meta.url), "utf8"));
   await waitFor(() => window.document.querySelector("#root").children.length);
+  // Host events must arrive after the surface has registered its listeners.
+  if (name !== "wallpaper") await waitFor(() => requests.some(req => req.method === "shell.hello"));
   return { window, requests, get: s => window.document.querySelector(s), emit: (event, data) => window.__meridianDispatch(JSON.stringify({ event, data })) };
 }
 function defaults(req) { return req.method === "desktop.get" ? desktop : req.method === "search.query" ? { ...search, serial: req.params.serial } : req.method === "windows.list" ? [] : req.method === "dock.list" ? [app.id] : req.method === "dock.layout_get" ? [] : req.method === "shell.hello" ? { surface: "panel", capabilities: [] } : null; }
@@ -77,6 +79,8 @@ function menu(ui, selector, label) { [...ui.window.document.querySelectorAll(`${
 const folder = { name: "Projects", path: "/home/test/Projects", directory: true, symlink: false, size: 0, modified: 1 };
 const file = { name: "notes.txt", path: "/home/test/notes.txt", directory: false, symlink: false, size: 12, modified: 1 };
 function finderReply(req) {
+  if (req.method === "files.bookmarks") return [];
+  if (req.method === "files.bookmark_set") return [{ name: "Home", path: req.params.path }];
   if (req.method === "files.locations") return [{ name: "Home", path: "/home/test" }];
   if (req.method === "files.list") return { path: req.params.path, parent: "/home/test", entries: req.params.path.endsWith("Projects") ? [] : [folder, file], truncated: false };
   if (req.method === "apps.uninstall_plan") return { id: app.id, name: "Firefox", target: "flatpak:reviewed", detail: "Saved data stays." };
@@ -92,7 +96,7 @@ test("Finder browses host folders, confirms trash, and manages installed apps", 
   ui.get('[aria-label="List view"]').click(); await waitFor(() => ui.get(".file-collection.list"));
   type(ui, '[aria-label="Search this folder"]', "notes"); await waitFor(() => ui.window.document.querySelectorAll(".file-item").length === 1);
   ui.get('[aria-label="notes.txt"]').dispatchEvent(new ui.window.MouseEvent("contextmenu", { bubbles: true, cancelable: true })); await waitFor(() => ui.get('.finder-context'));
-  menu(ui, '.finder-context', "Move to Trash…"); await waitFor(() => ui.get('[role="dialog"]'));
+  menu(ui, '.finder-context', "Delete…"); await waitFor(() => ui.get('[role="dialog"]'));
   assert.ok(!ui.requests.some(r => r.method === "files.trash"));
   ui.get('[role="dialog"] button[type="submit"]').click(); await waitFor(() => ui.requests.some(r => r.method === "files.trash"));
   assert.equal(ui.requests.find(r => r.method === "files.trash").params.path, file.path);
@@ -341,7 +345,7 @@ test("desktop reflects folder changes and labels real files for Trash", async t 
 test("Settings Home leads to working settings and search opens a matching page", async t => {
   const ui = await surface(t, "settings", req => req.method === "settings.get" ? { wifi: true, bluetooth: false, brightness: 75, volume: 42 } : defaults(req));
   assert.equal(ui.get("#settings-title").textContent, "Home");
-  assert.ok(ui.get(".welcome-banner"));
+  assert.ok(!ui.get(".welcome-banner"));
   assert.ok(!ui.get(".settings-content").textContent.includes("Coming soon"));
   type(ui, '[aria-label="Search settings"]', "wallpaper");
   await waitFor(() => ui.window.document.querySelectorAll("nav button").length === 1);
@@ -386,12 +390,10 @@ test("launcher context menu supports arrow keys and Escape without launching", a
   assert.ok(!ui.requests.some(req => ["search.activate", "dock.pin"].includes(req.method)));
 });
 
-test("desktop welcome is dismissible and file drags show the move action", async t => {
+test("desktop stays uncluttered and file drags show the move action", async t => {
   const ui = await surface(t, "wallpaper", defaults);
-  await waitFor(() => ui.get('[aria-label="Welcome to Meridian"]'));
-  ui.get('[aria-label="Dismiss welcome"]').click();
-  await waitFor(() => !ui.get('[aria-label="Welcome to Meridian"]'));
-  assert.equal(ui.window.localStorage.getItem("meridian.welcome-dismissed"), "1");
+  await waitFor(() => ui.get(".desktop"));
+  assert.ok(!ui.get(".desktop-welcome"));
   drag(ui.window, ui.get(".desktop"), "dragover", { "text/uri-list": "file:///home/test/notes.txt" });
   await waitFor(() => ui.get(".desktop-drop-indicator"));
   assert.equal(ui.get(".desktop-drop-indicator").textContent, "Move to Desktop");
@@ -436,4 +438,243 @@ test("password visibility preserves the input and Caps Lock feedback is clear", 
   await waitFor(() => ui.get(".caps-lock-hint"));
   assert.equal(ui.get(".caps-lock-hint").textContent, "Caps Lock is on");
   assert.ok(!ui.requests.some(req => req.method === "locker.unlock"));
+});
+
+test("Terminal wheel scrolls history and jumps back to latest", async t => {
+  let sent = false;
+  const ui = await surface(t, "terminal", req => {
+    if (req.method === "terminal.start") return { id: 92, shell: "/bin/bash" };
+    if (req.method === "terminal.read") {
+      const data = sent ? [] : [...new TextEncoder().encode(Array.from({ length: 120 }, (_, i) => `history line ${i}\r\n`).join(""))];
+      sent = true;
+      return { data, exited: false };
+    }
+    return defaults(req);
+  });
+  await waitFor(() => ui.requests.some(r => r.method === "shell.hello"));
+  ui.emit("terminal.opened");
+  await waitFor(() => ui.get(".xterm-rows")?.textContent.includes("history line 119"));
+  ui.get(".xterm").dispatchEvent(new ui.window.WheelEvent("wheel", { deltaY: -12, deltaMode: 1, bubbles: true, cancelable: true }));
+  await waitFor(() => ui.get(".terminal-follow"));
+  await waitFor(() => !ui.get(".xterm-rows").textContent.includes("history line 119"));
+  ui.get(".terminal-follow").click();
+  await waitFor(() => !ui.get(".terminal-follow"));
+  await waitFor(() => ui.get(".xterm-rows").textContent.includes("history line 119"));
+});
+
+test("terminal wheel normalization handles pixels, lines, pages and fractional trackpad deltas", async () => {
+  const { transform } = await import("esbuild");
+  const source = await readFile(new URL("../src/surfaces/terminal/scroll.ts", import.meta.url), "utf8");
+  const { code } = await transform(source, { loader: "ts", format: "esm" });
+  const { wheelScroller } = await import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
+  const scroll = wheelScroller();
+  assert.equal(scroll(4, 0, 16, 24), 0);
+  assert.equal(scroll(4, 0, 16, 24), 0);
+  assert.equal(scroll(8, 0, 16, 24), 1);
+  assert.equal(scroll(-3, 1, 16, 24), -3);
+  assert.equal(scroll(1, 2, 16, 24), 24);
+  assert.equal(scroll(Number.NaN, 0, 16, 24), 0);
+});
+
+test("Finder opens Terminal at the background folder, selected folder, or file parent", async t => {
+  const ui = await surface(t, "finder", finderReply);
+  await waitFor(() => ui.get('[aria-label="Projects"]'));
+  for (const [selector, label, path] of [
+    [".file-collection", "Open Terminal Here", "/home/test"],
+    ['[aria-label="Projects"]', "Open in Terminal", folder.path],
+    ['[aria-label="notes.txt"]', "Open in Terminal", "/home/test"],
+  ]) {
+    const before = ui.requests.filter(r => r.method === "terminal.open_at").length;
+    ui.get(selector).dispatchEvent(new ui.window.MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    await waitFor(() => ui.get(".finder-context"));
+    menu(ui, ".finder-context", label);
+    await waitFor(() => ui.requests.filter(r => r.method === "terminal.open_at").length > before);
+    assert.deepEqual(ui.requests.filter(r => r.method === "terminal.open_at").at(-1).params, { path });
+    await waitFor(() => !ui.get(".finder-context"));
+  }
+  ui.get('[aria-label="Projects"]').dispatchEvent(new ui.window.MouseEvent("dblclick", { bubbles: true }));
+  await waitFor(() => ui.get(".folder-empty"));
+  ui.get(".folder-empty h2").dispatchEvent(new ui.window.MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+  await waitFor(() => ui.get(".finder-context"));
+  menu(ui, ".finder-context", "Open Terminal Here");
+  await waitFor(() => ui.requests.filter(r => r.method === "terminal.open_at").length === 4);
+  assert.equal(ui.requests.filter(r => r.method === "terminal.open_at").at(-1).params.path, folder.path);
+});
+
+const pulseResource = (id, kind, percent, extra = {}) => ({ id, kind, name: kind === "cpu" ? "CPU" : id, detail: `${kind} device`, percent, used: null, total: null, read_rate: null, write_rate: null, ...extra });
+const pulseData = {
+  resources: [
+    pulseResource("cpu", "cpu", 24.5),
+    pulseResource("Memory", "memory", 50, { used: 8589934592, total: 17179869184 }),
+    pulseResource("GPU", "gpu", null, { detail: "Usage unavailable from this driver" }),
+    pulseResource("nvme0n1", "storage", null, { total: 1024000000000, read_rate: 1048576, write_rate: 524288 }),
+    pulseResource("wlan0", "network", null, { read_rate: 2097152, write_rate: 1024 }),
+  ],
+  processes: [
+    { pid: 42, name: "firefox", state: "R", cpu: 12.5, memory: 209715200 },
+    { pid: 7, name: "meridian-shell", state: "S", cpu: 3.5, memory: 524288000 },
+    { pid: 101, name: "worker", state: "S", cpu: null, memory: 1048576 },
+  ],
+};
+
+test("Pulse displays device graphs, unsupported GPU readings and live appearance", async t => {
+  const ui = await surface(t, "pulse", req => req.method === "pulse.snapshot" ? pulseData : defaults(req));
+  await waitFor(() => ui.window.document.querySelectorAll(".resource-card").length === 5);
+  assert.equal(ui.window.document.querySelectorAll('.pulse-chart svg[role="img"]').length, 5);
+  assert.ok(ui.get(".resource-card").textContent.includes("24.5%"));
+  assert.ok(ui.get(".pulse-overview").textContent.includes("Usage unavailable"));
+  assert.ok(ui.get(".pulse-overview").textContent.includes("1.0 MiB/s"));
+  assert.ok(ui.get(".pulse-overview").textContent.includes("16.0 GiB total"));
+  const gpu = [...ui.window.document.querySelectorAll(".resource-card")].find(e => e.textContent.includes("GPU"));
+  assert.ok(!gpu.querySelector(".chart-line"));
+  assert.equal(ui.window.document.querySelectorAll(".chart-line.secondary").length, 2);
+  ui.emit("desktop.changed", { ...desktop, appearance: "dark" });
+  await waitFor(() => ui.window.document.documentElement.dataset.theme === "dark");
+});
+
+test("Pulse processes support sorting, searching and keyboard tab navigation", async t => {
+  const ui = await surface(t, "pulse", req => req.method === "pulse.snapshot" ? pulseData : defaults(req));
+  await waitFor(() => ui.get(".resource-card"));
+  ui.get("#tab-processes").click();
+  await waitFor(() => ui.get("tbody tr"));
+  assert.ok(ui.get("tbody tr").textContent.includes("firefox"));
+  [...ui.window.document.querySelectorAll("th button")].find(b => b.textContent.startsWith("Memory")).click();
+  await waitFor(() => ui.get("tbody tr").textContent.includes("meridian-shell"));
+  assert.equal(ui.get('th[aria-sort="descending"]').textContent, "Memory ↓");
+  type(ui, '[aria-label="Search processes"]', "101");
+  await waitFor(() => ui.window.document.querySelectorAll("tbody tr").length === 1);
+  assert.ok(ui.get("tbody tr").textContent.includes("worker"));
+  assert.ok(ui.get("tbody tr").textContent.includes("—"));
+  type(ui, '[aria-label="Search processes"]', "missing");
+  await waitFor(() => ui.get(".process-empty")?.textContent.includes("No matching"));
+  ui.get("#tab-processes").dispatchEvent(new ui.window.KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+  await waitFor(() => ui.get("#panel-overview"));
+  assert.equal(ui.window.document.activeElement.id, "tab-overview");
+});
+
+test("Pulse has no pause control and stops polling while closed", async t => {
+  const ui = await surface(t, "pulse", req => req.method === "pulse.snapshot" ? pulseData : defaults(req));
+  await waitFor(() => ui.get(".resource-card"));
+  assert.ok(!ui.get(".pause-button"));
+  assert.ok(!ui.get(".pulse-header") && !ui.get(".pulse-footer") && !ui.get(".overview-intro"));
+  const count = () => ui.requests.filter(r => r.method === "pulse.snapshot").length;
+  const before = count();
+  ui.emit("pulse.visibility", false);
+  await new Promise(r => setTimeout(r, 2100));
+  assert.equal(count(), before);
+  ui.emit("pulse.visibility", true);
+  await waitFor(() => count() === before + 1);
+});
+
+test("Pulse reports metric failures and can recover without losing its window", async t => {
+  let failed = true;
+  const ui = await surface(t, "pulse", req => req.method === "pulse.snapshot" ? failed ? { error: { code: "failed", message: "Metrics temporarily unavailable" } } : pulseData : defaults(req));
+  await waitFor(() => ui.get('[role="alert"]'));
+  assert.ok(ui.get('[role="alert"]').textContent.includes("Metrics temporarily unavailable"));
+  failed = false;
+  ui.emit("pulse.visibility", false);
+  await new Promise(r => setTimeout(r, 20));
+  ui.emit("pulse.visibility", true);
+  await waitFor(() => ui.get(".resource-card") && !ui.get('[role="alert"]'));
+});
+
+test("Meridian menu opens Pulse", async t => {
+  const ui = await surface(t, "desktop-menu", defaults);
+  await waitFor(() => ui.requests.some(r => r.method === "shell.hello"));
+  ui.emit("popover.shown"); ui.emit("menu.opened", { menu: "Meridian", x: 8 });
+  await waitFor(() => [...ui.window.document.querySelectorAll('button')].some(b => b.textContent === "Pulse…"));
+  menu(ui, ".desktop-menu", "Pulse…");
+  await waitFor(() => ui.requests.some(r => r.method === "pulse.open"));
+});
+
+test("Orbit bookmarks folders and sends reviewed file transfers", async t => {
+  const ui = await surface(t, "finder", finderReply);
+  await waitFor(() => ui.get('[aria-label="Projects"]'));
+  ui.get('[aria-label="Bookmark folder"]').click();
+  await waitFor(() => ui.get('nav[aria-label="Bookmarks"]'));
+  assert.deepEqual(ui.requests.find(r => r.method === "files.bookmark_set").params, { path: "/home/test" });
+  ui.get('[aria-label="notes.txt"]').dispatchEvent(new ui.window.MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+  await waitFor(() => ui.get(".finder-context")); menu(ui, ".finder-context", "Copy To…");
+  await waitFor(() => ui.get('[aria-label="Destination folder"]'));
+  type(ui, '[aria-label="Destination folder"]', "/home/test/Projects");
+  assert.ok(!ui.requests.some(r => r.method === "files.transfer"));
+  ui.get('form[role="dialog"] button[type="submit"]').click();
+  await waitFor(() => ui.requests.some(r => r.method === "files.transfer"));
+  assert.deepEqual(ui.requests.find(r => r.method === "files.transfer").params, { path: file.path, destination: folder.path, move_file: false });
+});
+
+test("Orbit previews images and sets a selected image as wallpaper", async t => {
+  const image = { ...file, name: "photo.png", path: "/home/test/photo.png" };
+  const ui = await surface(t, "finder", r => r.method === "files.list" ? { path: "/home/test", parent: "/home", entries: [image], truncated: false } : r.method === "files.thumbnail" ? "data:image/png;base64,test" : r.method === "files.wallpaper" ? desktop : finderReply(r));
+  await waitFor(() => ui.get(".file-thumbnail img"));
+  assert.equal(ui.requests.find(r => r.method === "files.thumbnail").params.path, image.path);
+  ui.get('[aria-label="photo.png"]').dispatchEvent(new ui.window.MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+  await waitFor(() => ui.get(".finder-context")); menu(ui, ".finder-context", "Set as Wallpaper");
+  await waitFor(() => ui.requests.some(r => r.method === "files.wallpaper"));
+  assert.deepEqual(ui.requests.find(r => r.method === "files.wallpaper").params, { path: image.path });
+});
+
+test("shared dropdown supports keyboard selection and four system fonts", async t => {
+  const ui = await surface(t, "settings", r => r.method === "desktop.font_set" ? { ...desktop, font: r.params.id } : r.method === "desktop.get" ? { ...desktop, font: "Inter" } : defaults(r));
+  ui.get('nav [aria-label="Appearance"]').click();
+  await waitFor(() => ui.get('.select-trigger[aria-label="System font"]'));
+  assert.equal(ui.get("#system-font").options.length, 4);
+  ui.get('.select-trigger[aria-label="System font"]').click();
+  await waitFor(() => ui.get('[role="listbox"]'));
+  ui.get('[role="listbox"]').dispatchEvent(new ui.window.KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+  await waitFor(() => ui.get('[role="option"][aria-selected="true"]').textContent.startsWith("Noto Sans"));
+  ui.get('[role="listbox"]').dispatchEvent(new ui.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  await waitFor(() => ui.requests.some(r => r.method === "desktop.font_set"));
+  assert.deepEqual(ui.requests.find(r => r.method === "desktop.font_set").params, { id: "Noto Sans" });
+  assert.ok(!ui.get('[role="listbox"]'));
+  ui.emit("desktop.changed", { ...desktop, font: "Noto Sans" });
+  await waitFor(() => ui.window.document.documentElement.style.getPropertyValue("--font-ui").includes("Noto Sans"));
+});
+
+test("panel uses only its logo and opens system notifications with unread state", async t => {
+  const ui = await surface(t, "panel", r => r.method === "notifications.get" ? { available: true, items: [] } : defaults(r));
+  assert.ok(ui.get(".menu-brand svg")); assert.equal(ui.get(".menu-brand").textContent, "");
+  ui.emit("notifications.changed", { available: true, items: [{ id: 1, unread: true }] });
+  await waitFor(() => ui.get('[aria-label="Notifications, 1 unread"]'));
+  ui.get("#notifications").click();
+  await waitFor(() => ui.requests.some(r => r.method === "popover.toggle" && r.params.popover === "notifications"));
+  ui.emit("notifications.changed", { available: true, items: [] });
+  await waitFor(() => !ui.get(".notification-dot"));
+});
+
+test("notification center receives app messages, invokes actions and dismisses", async t => {
+  const item = { id: 4, app: "Mail", summary: "New message", body: "Hello", time: Date.now(), unread: true, actions: [["open", "Open"]] };
+  const ui = await surface(t, "notifications", r => r.method.startsWith("notifications.") ? { available: true, items: r.method === "notifications.read" ? [item] : [] } : defaults(r));
+  await waitFor(() => ui.requests.some(r => r.method === "shell.hello"));
+  ui.emit("popover.shown");
+  await waitFor(() => ui.get(".notification h2"));
+  assert.equal(ui.get(".notification h2").textContent, "New message");
+  ui.get(".notification-actions button").click();
+  await waitFor(() => ui.requests.some(r => r.method === "notifications.action"));
+  assert.deepEqual(ui.requests.find(r => r.method === "notifications.action").params, { id: 4, key: "open" });
+  await waitFor(() => ui.get(".notification-empty"));
+  ui.emit("notifications.changed", { available: true, items: [item] });
+  await waitFor(() => ui.get('[aria-label="Dismiss New message"]'));
+  ui.get('[aria-label="Dismiss New message"]').click();
+  await waitFor(() => ui.requests.some(r => r.method === "notifications.dismiss"));
+  assert.deepEqual(ui.requests.find(r => r.method === "notifications.dismiss").params, { id: 4 });
+});
+
+
+test("missing third-party icons try the theme and retain a visible monogram", async t => {
+  const ui = await surface(t, "panel", defaults);
+  await waitFor(() => ui.get('[aria-label="Firefox"] img'));
+  ui.get('[aria-label="Firefox"] img').dispatchEvent(new ui.window.Event("error"));
+  await waitFor(() => ui.get('[aria-label="Firefox"] img')?.src === "meridian://icons/firefox");
+  ui.get('[aria-label="Firefox"] img').dispatchEvent(new ui.window.Event("error"));
+  await waitFor(() => !ui.get('[aria-label="Firefox"] img'));
+  assert.equal(ui.get('[aria-label="Firefox"] .app-icon').textContent, "F");
+});
+
+test("Drift and Vault use dedicated builtin artwork", async t => {
+  const items = [{ id: "meridian-drift.desktop", title: "Drift" }, { id: "meridian-vault.desktop", title: "Vault" }];
+  const ui = await surface(t, "panel", req => req.method === "search.query" ? { serial: req.params.serial, sections: [{ provider: "apps", items }] } : req.method === "dock.list" ? items.map(app => app.id) : defaults(req));
+  await waitFor(() => ui.get('[aria-label="Vault"] img'));
+  assert.equal(ui.get('[aria-label="Vault"] img').src, "meridian://ui/desktop-icons/meridian/vault.svg");
+  assert.equal(ui.get('[aria-label="Drift"] img').src, "meridian://ui/desktop-icons/meridian/browser.svg");
 });

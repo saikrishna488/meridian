@@ -17,16 +17,5 @@
 
 .desktop-notice { position: fixed; left: 20px; bottom: 100px; max-width: 420px; padding: 12px 16px; background: #f8f9fc; border-radius: 8px; color: #354052; font-size: 12px; box-shadow: 0 8px 30px #0004; }.desktop-notice button { margin-left: 12px; border: 0; background: transparent; color: #586476; }
 
-.desktop-welcome { position: absolute; bottom: 24px; left: 24px; width: min(340px, calc(100vw - 48px)); padding: 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-raised); color: var(--ink); box-shadow: 0 12px 36px #0003; }
-.welcome-mark { display: inline-block; color: var(--action); font-size: 26px; margin-bottom: 8px; }
-.desktop-welcome h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -.5px; }
-.desktop-welcome p { color: var(--ink-muted); font-size: 12px; line-height: 1.8; margin: 12px 0 20px; }
-.welcome-dismiss { position: absolute; top: 12px; right: 12px; border: 0; border-radius: 5px; padding: 5px; color: var(--ink-muted); background: transparent; cursor: pointer; }
-.welcome-dismiss:hover { background: var(--surface-hover); }
-.welcome-actions { display: flex; align-items: center; gap: 8px; }
-.welcome-actions button { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); color: var(--ink); font-size: 11px; cursor: pointer; }
-.welcome-actions button:first-child { background: #2563c7; border-color: #2563c7; color: #fff; }
-.desktop-welcome small { display: block; margin-top: 20px; color: var(--ink-muted); font-size: 10px; }
-@media (max-height: 470px) { .desktop-welcome { padding: 18px; } .desktop-welcome p { margin: 8px 0 12px; } .desktop-welcome small { display: none; } }
 .desktop-drop-indicator { position: absolute; inset: 12px; border: 2px dashed #9bc5ff; border-radius: 10px; background: #1d67c51a; pointer-events: none; display: flex; align-items: flex-end; justify-content: center; padding: 28px; z-index: 10; }
 .desktop-drop-indicator span { display: flex; gap: 10px; align-items: center; padding: 12px 18px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-raised); color: var(--ink); font-size: 13px; box-shadow: 0 6px 20px #0003; }

@@ -17,7 +17,7 @@ fn host_command(args: &[&str]) -> Vec<std::ffi::OsString> {
     argv
 }
 
-async fn run(args: &[&str]) -> Result<String, ErrorBody> {
+pub(crate) async fn run(args: &[&str]) -> Result<String, ErrorBody> {
     let argv = host_command(args);
     let refs: Vec<_> = argv.iter().map(|arg| arg.as_os_str()).collect();
     let process = gio::Subprocess::newv(&refs, gio::SubprocessFlags::STDOUT_PIPE | gio::SubprocessFlags::STDERR_PIPE)

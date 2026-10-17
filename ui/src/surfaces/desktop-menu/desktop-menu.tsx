@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { on, request } from "../../lib/bridge";
+import { MeridianLogo } from "../../components/MeridianLogo";
 import { ConfirmButton } from "../../components/ConfirmButton";
 import { mount, useDialogFocus, usePopover, useWindowKey } from "../../lib/react";
 import type { SystemInfo } from "../../lib/generated/SystemInfo";
@@ -52,13 +53,13 @@ function DesktopMenu() {
       role={about ? "dialog" : "menu"} aria-modal={about || undefined} aria-label={about ? "About this Meridian" : `${label} menu`}>
       {about ? <>
         <button className="close-about" autoFocus aria-label="Close About window" onClick={() => void dismiss().catch(report)}>×</button>
-        <div className="meridian-symbol" aria-hidden="true">◈</div><h1>Meridian</h1>
+        <div className="meridian-symbol"><MeridianLogo /></div><h1>Meridian</h1>
         <p className="version">Version {info?.version ?? "…"}</p>
         <p><a className="source-link" href="https://github.com/saikrishna488/meridian">Support / Visit source code</a></p>
         {info ? <dl>{[["Laptop", [info.manufacturer, info.model].filter(Boolean).join(" ") || "Unavailable"], ["Operating system", info.os], ["Processor", info.processor], ["Memory", info.memory]].map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl> : <p role="status">{error || "Loading laptop details…"}</p>}
       </> : <>
         {(label === "Meridian" || label === "Help") && <button ref={first} role="menuitem" onClick={() => void showAbout()}>About this Meridian…</button>}
-        {label === "Meridian" && <><hr /><button role="menuitem" onClick={() => void request({ method: "preferences.open" }).then(dismiss).catch(report)}>Settings…</button><button role="menuitem" onClick={() => void request({ method: "finder.open" }).then(dismiss).catch(report)}>Finder…</button><button role="menuitem" onClick={() => void request({ method: "terminal.open" }).then(dismiss).catch(report)}>Terminal…</button><hr />
+        {label === "Meridian" && <><hr /><button role="menuitem" onClick={() => void request({ method: "preferences.open" }).then(dismiss).catch(report)}>Settings…</button><button role="menuitem" onClick={() => void request({ method: "finder.open" }).then(dismiss).catch(report)}>Orbit…</button><button role="menuitem" onClick={() => void request({ method: "terminal.open" }).then(dismiss).catch(report)}>Terminal…</button><button role="menuitem" onClick={() => void request({ method: "pulse.open" }).then(dismiss).catch(report)}>Pulse…</button><hr />
           <button id="sleep" role="menuitem" disabled={busy} onClick={() => void sessionAction("session.sleep")}>Sleep</button>
           <ConfirmButton id="restart" role="menuitem" className="session-menu-button" label="Restart" report={report} action={() => sessionAction("session.restart")} />
           <ConfirmButton id="shutdown" role="menuitem" className="session-menu-button" label="Shut Down" report={report} action={() => sessionAction("session.shutdown")} />

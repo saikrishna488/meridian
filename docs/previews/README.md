@@ -16,3 +16,14 @@ Screenshots are review artifacts, not promises of hardware/service availability.
 The preview bridge only changes its in-memory fixtures. Production still uses
 the native capability-checked bridge. To open the local preview, build `ui/`
 and run `node tools/preview-ui.mjs` from the repository root.
+
+October desktop refinement, captured in WebKit inside an isolated headless labwc
+session with the deterministic preview bridge:
+
+- [Settings Home, light](refined-settings-light.png) · [dark](refined-settings-dark.png)
+- [Applications, light](refined-launcher-light.png) · [dark](refined-launcher-dark.png)
+- [Control Center and power actions, light](refined-controls-light.png) · [dark](refined-controls-dark.png)
+
+[Design changes and screen power behavior](../DESKTOP-DESIGN.md).
+- [Compact application list](refined-launcher-list.png)
+- [Lock screen](refined-lock-screen.png)

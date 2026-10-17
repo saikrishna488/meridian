@@ -20,6 +20,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/tools/codecs.sh"
 source "$ROOT/tools/debian.sh"
+source "$ROOT/tools/release-manifest.sh"
 PREFIX=/usr/local
 SHARE="$PREFIX/share/meridian"
 SESSION_FILE=/usr/share/wayland-sessions/meridian.desktop
@@ -34,6 +35,11 @@ PACKAGES=("${RUNTIME_PACKAGES[@]}")
 die() { echo "error: $*" >&2; exit 1; }
 step() { printf '\033[1m==> %s\033[0m\n' "$*"; }
 
+if [ "${1:-}" = --check-build ]; then
+    verify_release
+    echo "Release binaries and UI match this checkout."
+    exit 0
+fi
 [ "$(id -u)" = 0 ] || die "run as root: sudo $0 $*"
 require_debian
 
@@ -42,6 +48,7 @@ greeter_command() {
 }
 
 install_files() {
+    verify_release
     for f in target/release/meridian-shell target/release/meridian-greeter ui/dist/surfaces/panel/index.html \
         ui/dist/surfaces/locker/index.html ui/dist/surfaces/locker/locker.js \
         ui/dist/surfaces/finder/finder.js ui/dist/surfaces/terminal/terminal.js \
@@ -59,6 +66,10 @@ install_files() {
     step "Installing Meridian to $PREFIX"
     install -Dm755 "$ROOT/target/release/meridian-shell" "$PREFIX/bin/meridian-shell"
     install -Dm755 "$ROOT/target/release/meridian-greeter" "$PREFIX/bin/meridian-greeter"
+    for native_app in vault drift; do
+        install -Dm755 "$ROOT/target/release/meridian-$native_app" "$PREFIX/bin/meridian-$native_app"
+        install -Dm644 "$ROOT/session/meridian-$native_app.desktop" "$PREFIX/share/applications/meridian-$native_app.desktop"
+    done
     sed "s|@SHARE_DIR@|$SHARE|" "$ROOT/session/meridian-session" > "$PREFIX/bin/meridian-session"
     chmod 755 "$PREFIX/bin/meridian-session"
 
@@ -87,6 +98,7 @@ install_files() {
         restorecon -R "$PREFIX/bin/meridian-"* "$SHARE" "$SESSION_FILE" /etc/pam.d/meridian-lock
     fi
     echo "Installed. \"Meridian\" now appears in the login screen's session list."
+    echo "If Meridian is already running, sign out and back in to load the new shell and UI together."
 }
 
 write_greetd_config() {
@@ -169,6 +181,7 @@ uninstall() {
     systemctl stop "$TRIAL_UNIT" 2>/dev/null || true
     disable_login_screen
     step "Removing Meridian files"
+    rm -f "$PREFIX/bin/meridian-vault" "$PREFIX/bin/meridian-drift" "$PREFIX/share/applications/meridian-vault.desktop" "$PREFIX/share/applications/meridian-drift.desktop"
     rm -f "$PREFIX/bin/meridian-shell" "$PREFIX/bin/meridian-greeter" "$PREFIX/bin/meridian-session" "$SESSION_FILE" \
         /etc/pam.d/meridian-lock
     rm -rf "$SHARE" "$PREFIX/share/themes/Meridian"

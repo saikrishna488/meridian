@@ -1,7 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Meridian calendar">
-<!-- SPDX-License-Identifier: GPL-3.0-or-later; original Meridian artwork. -->
-<defs><linearGradient id="surface" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#dda7a0"/><stop offset="1" stop-color="#b26f75"/></linearGradient></defs>
-<path d="M28 4H68C85 4 92 11 92 28V68C92 85 85 92 68 92H28C11 92 4 85 4 68V28C4 11 11 4 28 4Z" fill="url(#surface)"/>
-<path d="M28 5H68C84 5 91 12 91 28V68C91 84 84 91 68 91H28C12 91 5 84 5 68V28C5 12 12 5 28 5Z" fill="none" stroke="#ffffff30"/>
-<rect x="26" y="25" width="44" height="48" rx="7" fill="white"/><path d="M26 37h44" stroke="#d1a19c" stroke-width="4"/><path d="M37 22v10M59 22v10" stroke="white" stroke-width="4" stroke-linecap="round"/><g fill="#b37f83"><circle cx="37" cy="48" r="3"/><circle cx="48" cy="48" r="3"/><circle cx="59" cy="48" r="3"/><circle cx="37" cy="60" r="3"/><circle cx="48" cy="60" r="3"/></g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x2="1" y2="1"><stop stop-color="#8d83ed"/><stop offset="1" stop-color="#4165c8"/></linearGradient></defs><rect width="64" height="64" rx="16" fill="url(#g)"/><rect x="14" y="17" width="36" height="34" rx="5" fill="none" stroke="white" stroke-width="3"/><path d="M14 27h36M24 12v10m16-10v10M24 35h4m8 0h4m-16 8h4m8 0h4" stroke="white" stroke-width="3"/></svg>

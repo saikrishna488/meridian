@@ -15,7 +15,7 @@ http.createServer(async (req, res) => {
     if (path === "/preview-bridge.js") path = "/tools/preview/bridge.js";
     if (path.startsWith("/app-icons/")) {
       const id = path.slice(11);
-      const names = { "meridian-terminal.desktop": "terminal", "meridian-finder.desktop": "finder", "meridian-settings.desktop": "settings", "firefox.desktop": "browser", "code.desktop": "code", "calendar.desktop": "calendar", "mail.desktop": "mail" };
+      const names = { "meridian-pulse.desktop": "pulse", "meridian-terminal.desktop": "terminal", "meridian-finder.desktop": "finder", "meridian-settings.desktop": "settings", "firefox.desktop": "browser", "code.desktop": "code", "calendar.desktop": "calendar", "mail.desktop": "mail" };
       path = `/assets/desktop-icons/meridian/${names[id] || "generic"}.svg`;
     }
     if (path.startsWith("/icons/")) path = "/assets/desktop-icons/meridian/generic.svg";

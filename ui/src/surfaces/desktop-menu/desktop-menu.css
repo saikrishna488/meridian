@@ -18,3 +18,4 @@
 
 .source-link { color: #b6c6ff; text-underline-offset: 3px; }
 .source-link:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
+.meridian-symbol .meridian-logo { width:56px; height:56px; }

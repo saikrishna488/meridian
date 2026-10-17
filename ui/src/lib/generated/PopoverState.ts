@@ -3,4 +3,4 @@
 /**
  * Which menus are open (sent to the panel to highlight its buttons).
  */
-export type PopoverState = { applications: boolean, options: boolean, };
+export type PopoverState = { applications: boolean, options: boolean, notifications: boolean, };

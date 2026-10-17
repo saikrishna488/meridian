@@ -1,0 +1,17 @@
+#!/bin/sh
+# Wait for compositor-confirmed lock, including before system suspend.
+# The action state is set only by gtk4-session-lock's ::locked signal.
+set -eu
+gapplication action org.meridian.Shell lock-session
+attempt=0
+while [ "$attempt" -lt 35 ]; do
+    state=$(gdbus call --session --timeout 1 --dest org.meridian.Shell \
+        --object-path /org/meridian/Shell --method org.gtk.Actions.Describe lock-session) || exit 1
+    case "$state" in
+        *'[<true>]'*) exit 0 ;;
+    esac
+    attempt=$((attempt + 1))
+    sleep 0.1
+done
+echo 'Meridian: screen lock was not confirmed; refusing to blank the display.' >&2
+exit 1

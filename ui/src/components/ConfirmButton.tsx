@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 
-export function ConfirmButton({ id, className, label, action, report, role }: {
-  id: string; className: string; label: string; role?: "menuitem"; action: () => Promise<void>; report: (error: unknown) => void;
+export function ConfirmButton({ id, className, label, action, report, role, disabled = false }: {
+  id: string; className: string; label: string; role?: "menuitem"; disabled?: boolean; action: () => Promise<void>; report: (error: unknown) => void;
 }) {
   const [armed, setArmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);
   async function click() {
-    if (busy) return;
+    if (busy || disabled) return;
     if (!armed) {
       setArmed(true);
       timer.current = setTimeout(() => setArmed(false), 3000);
@@ -20,5 +20,5 @@ export function ConfirmButton({ id, className, label, action, report, role }: {
     finally { setBusy(false); setArmed(false); }
   }
   return <button id={id} role={role} type="button" className={`${className}${armed ? " armed" : ""}`}
-    disabled={busy} onClick={() => void click()}>{armed ? `${label}?` : label}</button>;
+    disabled={busy || disabled} onClick={() => void click()}>{armed ? `${label}?` : label}</button>;
 }

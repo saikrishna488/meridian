@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { UninstallDialog } from "../../components/UninstallDialog";
 import { isBuiltinApp } from "../../lib/apps";
+import { Icon } from "../../components/Icon";
 import { AppIcon } from "../../components/AppIcon";
 import { APP_DRAG } from "../../components/Dock";
 import { on, request } from "../../lib/bridge";
@@ -16,6 +17,14 @@ function Applications() {
   const [context, setContext] = useState<{ id: string; x: number; y: number } | null>(null);
   useMenuFocus(contextMenu, !!context, () => setContext(null));
   useEffect(() => on("apps.uninstall_requested", e => setUninstall(e.data.id)), []);
+  const [view, setView] = useState<"grid" | "list">(() => {
+    try { return localStorage.getItem("meridian.launcher.view") === "list" ? "list" : "grid"; }
+    catch { return "grid"; }
+  });
+  function changeView(next: "grid" | "list") {
+    setView(next);
+    try { localStorage.setItem("meridian.launcher.view", next); } catch { /* Storage can be disabled by the host. */ }
+  }
   const [dragging, setDragging] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Result[]>([]);
@@ -71,7 +80,11 @@ function Applications() {
     } finally { setLaunching(null); }
   }
   useWindowKey(event => {
-    if (event.isComposing || uninstall || event.target instanceof HTMLButtonElement) return;
+    if (event.isComposing || uninstall) return;
+    if (event.target instanceof HTMLButtonElement) {
+      if (event.key === "Escape") { event.preventDefault(); if (context) setContext(null); else void dismiss().catch(report); }
+      return;
+    }
     if (context) { if (event.key === "Escape") { setContext(null); event.preventDefault(); } return; }
     if ((event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) && selected >= 0) {
       event.preventDefault(); const bounds = list.current?.children[selected]?.getBoundingClientRect();
@@ -79,7 +92,7 @@ function Applications() {
     }
     const row = list.current?.children[0] as HTMLElement | undefined;
     const grid = list.current ? getComputedStyle(list.current).gridTemplateColumns.split(" ").filter(Boolean).length : 0;
-    const columns = grid || Math.max(1, Math.floor((list.current?.clientWidth ?? 600) / 112));
+    const columns = view === "list" ? 1 : grid || Math.max(1, Math.floor((list.current?.clientWidth ?? 600) / 112));
     const page = row && row.offsetHeight ? Math.max(1, Math.floor((scroller.current?.clientHeight ?? 0) / row.offsetHeight) - 1) * columns : columns;
     switch (event.key) {
       case "ArrowDown": move(columns); break;
@@ -101,16 +114,17 @@ function Applications() {
     <div className={`scrim${dragging ? " dragging" : ""}`} id="scrim" onDragOver={event => { if (event.dataTransfer.types.includes(APP_DRAG)) event.preventDefault(); }} onDrop={event => { const id = event.dataTransfer.getData(APP_DRAG); if (!id) return; event.preventDefault(); setDragging(false); void request({ method: "desktop.add_app", params: { id } }).then(() => dismiss()).catch(report); }} onClick={() => void dismiss().catch(report)} />
     <section ref={menu} className={`menu${dragging ? " dragging" : ""}${visible ? "" : " hidden"}`} id="menu" role="dialog" aria-label="Applications"
       >
+      <header className="launcher-heading"><div><span className="launcher-eyebrow">YOUR WORKSPACE</span><h1>Applications</h1></div><button className="close-applications" aria-label="Close applications" onClick={() => void dismiss().catch(report)}><Icon name="close" width="18" height="18" /></button></header>
       <div className="apps-toolbar">
       <label className="apps-search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.75"/><path d="m13 13 4 4"/></svg><input ref={input} id="search" className="search" type="text" placeholder="Search applications" autoComplete="off"
         spellCheck={false} aria-label="Search applications" aria-controls="list" aria-autocomplete="list"
         aria-activedescendant={selected >= 0 ? `row-${selected}` : undefined}
         value={query} onChange={event => changeQuery(event.target.value)} />{query && <button className="clear-search" type="button" aria-label="Clear search" onClick={() => { changeQuery(""); input.current?.focus(); }}>×</button>}</label>
-      <button className="close-applications" aria-label="Close applications" onClick={() => void dismiss().catch(report)}>×</button>
+      <div className="launcher-views" role="group" aria-label="Application view">{(["grid", "list"] as const).map(mode => <button key={mode} type="button" aria-label={`${mode === "grid" ? "Grid" : "List"} view`} aria-pressed={view === mode} onClick={() => changeView(mode)}><Icon name={mode} width="18" height="18" /></button>)}</div>
       </div>
       <div className="apps-section-heading"><h2>{query ? "Search Results" : "All Applications"}</h2><span>{searching ? "Searching…" : `${results.length} ${results.length === 1 ? "item" : "items"}`}</span></div>
       <div ref={scroller} className="scroller" id="scroller">
-        <ul ref={list} className="list" id="list" role="listbox" aria-label="Applications">
+        <ul ref={list} className={`list ${view === "list" ? "list-view" : "grid-view"}`} id="list" role="listbox" aria-label="Applications">
           {results.map((result, index) => {
             const key = `${result.provider}:${result.item.id}`;
             return <li key={key} id={`row-${index}`} role="option" aria-selected={selected === index}
@@ -119,7 +133,7 @@ function Applications() {
               tabIndex={-1} title={`${result.item.title}${result.item.subtitle ? `\n${result.item.subtitle}` : ""}`}
               className={`row${launching === key ? " launching" : ""}`} onClick={() => { setSelected(index); void activate(index); }}>
               <AppIcon id={result.item.id} name={result.item.title} icon={result.item.icon} />
-              <span className="name">{result.item.title}</span>
+              <span className="app-label"><span className="name">{result.item.title}</span>{view === "list" && <span className="app-description">{result.item.subtitle || "Application"}</span>}</span>{view === "list" && <Icon name="forward" width="16" height="16" />}
 
             </li>;
           })}
@@ -127,6 +141,7 @@ function Applications() {
         {!searching && !results.length && <div className="empty" id="empty"><span className="empty-symbol" aria-hidden="true">⌕</span><strong>{query ? "No results found" : "No applications available"}</strong><span>{query ? `Try a different search for “${query}”.` : "Applications will appear here when they are installed."}</span></div>}
         {searching && !results.length && <div className="empty loading" role="status"><span className="search-spinner" /><span>Finding applications…</span></div>}
       </div>
+      <footer className="launcher-footer"><span><kbd>↑ ↓</kbd> Navigate <kbd>↵</kbd> Open <kbd>esc</kbd> Close</span><span>Right-click for more options</span></footer>
       <p className="status" data-kind={status.startsWith("Added") ? "success" : "error"} id="status" role="status" aria-live="polite">{status}</p>
     </section>
     {context && <div ref={contextMenu} className="app-context" role="menu" aria-label="Application actions" style={{ left: Math.max(8, Math.min(context.x, window.innerWidth - 188)), top: Math.max(8, Math.min(context.y, window.innerHeight - 170)) }}>

@@ -3,6 +3,7 @@ import { hello, request } from "../../lib/bridge";
 import { errorMessage, mount } from "../../lib/react";
 import { useDesktop } from "../../lib/desktop";
 import { PasswordField } from "../../components/PasswordField";
+import { Icon } from "../../components/Icon";
 import { Clock } from "../../components/Clock";
 
 function Locker() {
@@ -36,6 +37,7 @@ function Locker() {
     <main className="lock">
       <Clock />
       <form className={`card${shake ? " shake" : ""}`} id="form" autoComplete="off" noValidate onSubmit={event => void unlock(event)}>
+        <div className="lock-identity"><span><Icon name="lock" width="20" height="20" /></span><h1>Session locked</h1><p>Enter your password to return to your workspace.</p></div>
         <PasswordField inputRef={password} disabled={busy} autoFocus />
         <button className="submit" id="submit" type="submit" disabled={busy}>{busy ? "Unlocking…" : "Unlock"}</button>
         <p className="message" id="message" role="alert" aria-live="assertive">{message}</p>

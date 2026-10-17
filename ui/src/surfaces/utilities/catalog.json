@@ -1,0 +1,602 @@
+[
+  {
+    "id": "firefox-esr",
+    "name": "Firefox ESR",
+    "category": "Internet",
+    "description": "Browse the web"
+  },
+  {
+    "id": "chromium",
+    "name": "Chromium",
+    "category": "Internet",
+    "description": "Open source web browser"
+  },
+  {
+    "id": "thunderbird",
+    "name": "Thunderbird",
+    "category": "Internet",
+    "description": "Email and news"
+  },
+  {
+    "id": "evolution",
+    "name": "Evolution",
+    "category": "Internet",
+    "description": "Mail and personal organizer"
+  },
+  {
+    "id": "geary",
+    "name": "Geary",
+    "category": "Internet",
+    "description": "Simple email"
+  },
+  {
+    "id": "transmission-gtk",
+    "name": "Transmission",
+    "category": "Internet",
+    "description": "BitTorrent downloads"
+  },
+  {
+    "id": "qbittorrent",
+    "name": "qBittorrent",
+    "category": "Internet",
+    "description": "Advanced torrent client"
+  },
+  {
+    "id": "deluge",
+    "name": "Deluge",
+    "category": "Internet",
+    "description": "Flexible torrent downloads"
+  },
+  {
+    "id": "filezilla",
+    "name": "FileZilla",
+    "category": "Internet",
+    "description": "FTP and SFTP transfers"
+  },
+  {
+    "id": "liferea",
+    "name": "Liferea",
+    "category": "Internet",
+    "description": "Read RSS feeds"
+  },
+  {
+    "id": "pidgin",
+    "name": "Pidgin",
+    "category": "Communication",
+    "description": "Multi-network messaging"
+  },
+  {
+    "id": "hexchat",
+    "name": "HexChat",
+    "category": "Communication",
+    "description": "IRC conversations"
+  },
+  {
+    "id": "konversation",
+    "name": "Konversation",
+    "category": "Communication",
+    "description": "KDE IRC client"
+  },
+  {
+    "id": "dino-im",
+    "name": "Dino",
+    "category": "Communication",
+    "description": "Private XMPP conversations"
+  },
+  {
+    "id": "gajim",
+    "name": "Gajim",
+    "category": "Communication",
+    "description": "XMPP messaging"
+  },
+  {
+    "id": "jami",
+    "name": "Jami",
+    "category": "Communication",
+    "description": "Distributed calls and messaging"
+  },
+  {
+    "id": "linphone",
+    "name": "Linphone",
+    "category": "Communication",
+    "description": "SIP voice and video"
+  },
+  {
+    "id": "mumble",
+    "name": "Mumble",
+    "category": "Communication",
+    "description": "Low latency voice chat"
+  },
+  {
+    "id": "libreoffice-writer",
+    "name": "LibreOffice Writer",
+    "category": "Office",
+    "description": "Write documents"
+  },
+  {
+    "id": "libreoffice-calc",
+    "name": "LibreOffice Calc",
+    "category": "Office",
+    "description": "Spreadsheets and analysis"
+  },
+  {
+    "id": "libreoffice-impress",
+    "name": "LibreOffice Impress",
+    "category": "Office",
+    "description": "Create presentations"
+  },
+  {
+    "id": "libreoffice-draw",
+    "name": "LibreOffice Draw",
+    "category": "Office",
+    "description": "Diagrams and drawings"
+  },
+  {
+    "id": "abiword",
+    "name": "AbiWord",
+    "category": "Office",
+    "description": "Lightweight word processor"
+  },
+  {
+    "id": "gnumeric",
+    "name": "Gnumeric",
+    "category": "Office",
+    "description": "Fast spreadsheets"
+  },
+  {
+    "id": "okular",
+    "name": "Okular",
+    "category": "Office",
+    "description": "Read and annotate documents"
+  },
+  {
+    "id": "evince",
+    "name": "Evince",
+    "category": "Office",
+    "description": "PDF document viewer"
+  },
+  {
+    "id": "zathura",
+    "name": "Zathura",
+    "category": "Office",
+    "description": "Keyboard driven document viewer"
+  },
+  {
+    "id": "scribus",
+    "name": "Scribus",
+    "category": "Office",
+    "description": "Desktop publishing"
+  },
+  {
+    "id": "zim",
+    "name": "Zim",
+    "category": "Office",
+    "description": "Personal desktop wiki"
+  },
+  {
+    "id": "cherrytree",
+    "name": "CherryTree",
+    "category": "Office",
+    "description": "Hierarchical notes"
+  },
+  {
+    "id": "gimp",
+    "name": "GIMP",
+    "category": "Creative",
+    "description": "Edit photos and images"
+  },
+  {
+    "id": "inkscape",
+    "name": "Inkscape",
+    "category": "Creative",
+    "description": "Vector illustration"
+  },
+  {
+    "id": "krita",
+    "name": "Krita",
+    "category": "Creative",
+    "description": "Digital painting"
+  },
+  {
+    "id": "blender",
+    "name": "Blender",
+    "category": "Creative",
+    "description": "3D modeling and animation"
+  },
+  {
+    "id": "darktable",
+    "name": "Darktable",
+    "category": "Creative",
+    "description": "RAW photography workflow"
+  },
+  {
+    "id": "rawtherapee",
+    "name": "RawTherapee",
+    "category": "Creative",
+    "description": "Develop RAW photographs"
+  },
+  {
+    "id": "digikam",
+    "name": "digiKam",
+    "category": "Creative",
+    "description": "Manage photo collections"
+  },
+  {
+    "id": "shotwell",
+    "name": "Shotwell",
+    "category": "Creative",
+    "description": "Organize photos"
+  },
+  {
+    "id": "gthumb",
+    "name": "gThumb",
+    "category": "Creative",
+    "description": "Browse and edit images"
+  },
+  {
+    "id": "pinta",
+    "name": "Pinta",
+    "category": "Creative",
+    "description": "Simple painting"
+  },
+  {
+    "id": "mypaint",
+    "name": "MyPaint",
+    "category": "Creative",
+    "description": "Natural media painting"
+  },
+  {
+    "id": "freecad",
+    "name": "FreeCAD",
+    "category": "Creative",
+    "description": "Parametric 3D design"
+  },
+  {
+    "id": "librecad",
+    "name": "LibreCAD",
+    "category": "Creative",
+    "description": "2D CAD drawings"
+  },
+  {
+    "id": "fontforge",
+    "name": "FontForge",
+    "category": "Creative",
+    "description": "Create and edit fonts"
+  },
+  {
+    "id": "vlc",
+    "name": "VLC",
+    "category": "Media",
+    "description": "Play video and audio"
+  },
+  {
+    "id": "mpv",
+    "name": "mpv",
+    "category": "Media",
+    "description": "Minimal video player"
+  },
+  {
+    "id": "celluloid",
+    "name": "Celluloid",
+    "category": "Media",
+    "description": "Friendly mpv player"
+  },
+  {
+    "id": "audacity",
+    "name": "Audacity",
+    "category": "Media",
+    "description": "Record and edit audio"
+  },
+  {
+    "id": "ardour",
+    "name": "Ardour",
+    "category": "Media",
+    "description": "Professional audio workstation"
+  },
+  {
+    "id": "lmms",
+    "name": "LMMS",
+    "category": "Media",
+    "description": "Compose electronic music"
+  },
+  {
+    "id": "hydrogen",
+    "name": "Hydrogen",
+    "category": "Media",
+    "description": "Drum machine"
+  },
+  {
+    "id": "musescore3",
+    "name": "MuseScore",
+    "category": "Media",
+    "description": "Music notation"
+  },
+  {
+    "id": "kdenlive",
+    "name": "Kdenlive",
+    "category": "Media",
+    "description": "Edit videos"
+  },
+  {
+    "id": "shotcut",
+    "name": "Shotcut",
+    "category": "Media",
+    "description": "Video editor"
+  },
+  {
+    "id": "openshot-qt",
+    "name": "OpenShot",
+    "category": "Media",
+    "description": "Accessible video editing"
+  },
+  {
+    "id": "obs-studio",
+    "name": "OBS Studio",
+    "category": "Media",
+    "description": "Record and stream video"
+  },
+  {
+    "id": "handbrake",
+    "name": "HandBrake",
+    "category": "Media",
+    "description": "Transcode videos"
+  },
+  {
+    "id": "rhythmbox",
+    "name": "Rhythmbox",
+    "category": "Media",
+    "description": "Music library and playback"
+  },
+  {
+    "id": "strawberry",
+    "name": "Strawberry",
+    "category": "Media",
+    "description": "Music collection player"
+  },
+  {
+    "id": "clementine",
+    "name": "Clementine",
+    "category": "Media",
+    "description": "Listen to your music"
+  },
+  {
+    "id": "quodlibet",
+    "name": "Quod Libet",
+    "category": "Media",
+    "description": "Flexible music library"
+  },
+  {
+    "id": "sound-juicer",
+    "name": "Sound Juicer",
+    "category": "Media",
+    "description": "Extract audio CDs"
+  },
+  {
+    "id": "geany",
+    "name": "Geany",
+    "category": "Development",
+    "description": "Lightweight programming editor"
+  },
+  {
+    "id": "kate",
+    "name": "Kate",
+    "category": "Development",
+    "description": "Advanced text editor"
+  },
+  {
+    "id": "gnome-text-editor",
+    "name": "GNOME Text Editor",
+    "category": "Development",
+    "description": "Modern text editing"
+  },
+  {
+    "id": "gedit",
+    "name": "Gedit",
+    "category": "Development",
+    "description": "Simple text editor"
+  },
+  {
+    "id": "mousepad",
+    "name": "Mousepad",
+    "category": "Development",
+    "description": "Fast text editing"
+  },
+  {
+    "id": "neovim",
+    "name": "Neovim",
+    "category": "Development",
+    "description": "Extensible terminal editor"
+  },
+  {
+    "id": "emacs-gtk",
+    "name": "Emacs",
+    "category": "Development",
+    "description": "Programmable editor"
+  },
+  {
+    "id": "qtcreator",
+    "name": "Qt Creator",
+    "category": "Development",
+    "description": "C++ and Qt development"
+  },
+  {
+    "id": "gnome-builder",
+    "name": "GNOME Builder",
+    "category": "Development",
+    "description": "Build GNOME apps"
+  },
+  {
+    "id": "gitg",
+    "name": "Gitg",
+    "category": "Development",
+    "description": "Browse Git repositories"
+  },
+  {
+    "id": "git-cola",
+    "name": "Git Cola",
+    "category": "Development",
+    "description": "Graphical Git client"
+  },
+  {
+    "id": "meld",
+    "name": "Meld",
+    "category": "Development",
+    "description": "Compare files and folders"
+  },
+  {
+    "id": "dbeaver-ce",
+    "name": "DBeaver Community",
+    "category": "Development",
+    "description": "Database management"
+  },
+  {
+    "id": "sqlitebrowser",
+    "name": "SQLite Browser",
+    "category": "Development",
+    "description": "Explore SQLite databases"
+  },
+  {
+    "id": "keepassxc",
+    "name": "KeePassXC",
+    "category": "Utilities",
+    "description": "Manage passwords locally"
+  },
+  {
+    "id": "gnome-disk-utility",
+    "name": "GNOME Disks",
+    "category": "Utilities",
+    "description": "Inspect and manage disks"
+  },
+  {
+    "id": "gparted",
+    "name": "GParted",
+    "category": "Utilities",
+    "description": "Partition editor"
+  },
+  {
+    "id": "baobab",
+    "name": "Baobab",
+    "category": "Utilities",
+    "description": "Analyze disk usage"
+  },
+  {
+    "id": "file-roller",
+    "name": "File Roller",
+    "category": "Utilities",
+    "description": "Create and extract archives"
+  },
+  {
+    "id": "ark",
+    "name": "Ark",
+    "category": "Utilities",
+    "description": "Manage compressed archives"
+  },
+  {
+    "id": "synaptic",
+    "name": "Synaptic",
+    "category": "Utilities",
+    "description": "Advanced package management"
+  },
+  {
+    "id": "bleachbit",
+    "name": "BleachBit",
+    "category": "Utilities",
+    "description": "Clean unnecessary files"
+  },
+  {
+    "id": "deja-dup",
+    "name": "D\u00e9j\u00e0 Dup",
+    "category": "Utilities",
+    "description": "Back up personal files"
+  },
+  {
+    "id": "grsync",
+    "name": "Grsync",
+    "category": "Utilities",
+    "description": "Graphical rsync backups"
+  },
+  {
+    "id": "remmina",
+    "name": "Remmina",
+    "category": "Utilities",
+    "description": "Remote desktop connections"
+  },
+  {
+    "id": "virt-manager",
+    "name": "Virt Manager",
+    "category": "Utilities",
+    "description": "Manage virtual machines"
+  },
+  {
+    "id": "gnome-boxes",
+    "name": "GNOME Boxes",
+    "category": "Utilities",
+    "description": "Simple virtual machines"
+  },
+  {
+    "id": "flameshot",
+    "name": "Flameshot",
+    "category": "Utilities",
+    "description": "Annotate screenshots"
+  },
+  {
+    "id": "stellarium",
+    "name": "Stellarium",
+    "category": "Learning",
+    "description": "Explore the night sky"
+  },
+  {
+    "id": "celestia",
+    "name": "Celestia",
+    "category": "Learning",
+    "description": "Explore space in 3D"
+  },
+  {
+    "id": "marble",
+    "name": "Marble",
+    "category": "Learning",
+    "description": "Virtual globe and maps"
+  },
+  {
+    "id": "kalgebra",
+    "name": "KAlgebra",
+    "category": "Learning",
+    "description": "Explore mathematics"
+  },
+  {
+    "id": "kalzium",
+    "name": "Kalzium",
+    "category": "Learning",
+    "description": "Interactive periodic table"
+  },
+  {
+    "id": "anki",
+    "name": "Anki",
+    "category": "Learning",
+    "description": "Spaced repetition flashcards"
+  },
+  {
+    "id": "goldendict",
+    "name": "GoldenDict",
+    "category": "Learning",
+    "description": "Dictionary lookup"
+  },
+  {
+    "id": "gcompris-qt",
+    "name": "GCompris",
+    "category": "Learning",
+    "description": "Educational activities"
+  },
+  {
+    "id": "tuxpaint",
+    "name": "Tux Paint",
+    "category": "Learning",
+    "description": "Drawing for children"
+  },
+  {
+    "id": "supertuxkart",
+    "name": "SuperTuxKart",
+    "category": "Learning",
+    "description": "Kart racing"
+  }
+]

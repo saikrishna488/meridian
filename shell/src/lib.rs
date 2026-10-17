@@ -5,16 +5,20 @@
 
 mod bluetooth_agent;
 pub mod bridge;
+mod calendar;
 mod desktop;
 mod files;
 pub mod greetd;
 pub mod greeter;
 pub mod lock_auth;
+mod notifications;
 pub mod paths;
 pub mod power;
+mod pulse;
 pub mod scheme;
 mod settings_devices;
 pub mod shell;
+mod store;
 pub mod surface;
 mod terminal;
 mod uninstall;
@@ -60,4 +64,20 @@ pub fn install_css() {
 
 pub fn init_logging() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+}
+
+mod device_manager;
+mod drivers;
+
+mod users;
+
+mod updates;
+
+/// Shared chrome for the standalone Meridian applications.
+pub fn install_app_css() {
+    let css = gtk::CssProvider::new();
+    css.load_from_string(include_str!("app.css"));
+    if let Some(display) = gdk::Display::default() {
+        gtk::style_context_add_provider_for_display(&display, &css, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
+    }
 }

@@ -2,9 +2,10 @@
 
 Status: accepted with implementation changes.
 
-> Current implementation: session actions are in the Meridian menu, and the
-> Session capability belongs to DesktopMenu, not Options. Restart and Shut Down
-> are also available. The lock/PAM design below remains relevant; descriptions
+> Current implementation: session actions are in the Meridian menu and Control
+> Center. DesktopMenu and Options hold the Session capability. Restart and Shut Down
+> are also available. Sleep waits for compositor-confirmed locking. The installed
+> session uses swayidle and wlopm for automatic locking and display standby. The lock/PAM design below remains relevant; descriptions
 > of the original Options rows are historical. See [current architecture](../ARCHITECTURE.md).
 
 ## Context

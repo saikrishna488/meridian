@@ -107,7 +107,7 @@ fn read_ddc_brightness(selection: &[String]) -> Result<(u16, u16), ErrorBody> {
 fn run(args: &[&str], input: Option<&str>) -> Result<String, ErrorBody> {
     run_timeout(args, input, Duration::from_secs(40))
 }
-fn run_timeout(args: &[&str], input: Option<&str>, timeout: Duration) -> Result<String, ErrorBody> {
+pub(crate) fn run_timeout(args: &[&str], input: Option<&str>, timeout: Duration) -> Result<String, ErrorBody> {
     let mut child = Command::new(args[0])
         .args(&args[1..])
         .env("LC_ALL", "C")

@@ -1,0 +1,16 @@
+#!/bin/sh
+# Power management follows labwc's integration guidance. Never disable outputs:
+# that would rearrange windows instead of putting the monitor in standby.
+set -eu
+if ! command -v swayidle >/dev/null 2>&1 || ! command -v wlopm >/dev/null 2>&1; then
+    echo 'Meridian: automatic screen lock/power-off needs swayidle and wlopm.' >&2
+    exit 1
+fi
+MERIDIAN_LOCK_HELPER=$(dirname -- "$0")/lock-session
+export MERIDIAN_LOCK_HELPER
+exec swayidle -w \
+    timeout 300 'sh "$MERIDIAN_LOCK_HELPER"' \
+    timeout 330 'sh "$MERIDIAN_LOCK_HELPER" && wlopm --off "*"' \
+    resume 'wlopm --on "*"' \
+    before-sleep 'sh "$MERIDIAN_LOCK_HELPER"' \
+    after-resume 'wlopm --on "*"'

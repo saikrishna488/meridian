@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createRoot } from "react-dom/client";
 import { afterTransition, BridgeError, cssDuration, hello, nextFrame, on, request } from "./bridge";
-import { applyAppearance } from "./appearance";
+import { applyAppearance, applyFont } from "./appearance";
 
 export function mount(element: ReactNode): void {
   const root = document.getElementById("root");
@@ -10,11 +10,11 @@ export function mount(element: ReactNode): void {
   // context menu globally while allowing React contextmenu handlers to run.
   document.addEventListener("contextmenu", event => event.preventDefault(), true);
   let appearanceRevision = 0;
-  on("desktop.changed", event => { appearanceRevision++; applyAppearance(event.data.appearance); });
+  on("desktop.changed", event => { appearanceRevision++; applyAppearance(event.data.appearance); applyFont(event.data.font); });
   // Each app window is its own WebView. Read the persisted value so newly
   // opened windows match the rest of the desktop before waiting for updates.
   void request({ method: "desktop.get" }).then(state => {
-    if (appearanceRevision === 0 && state) applyAppearance(state.appearance);
+    if (appearanceRevision === 0 && state) { applyAppearance(state.appearance); applyFont(state.font); }
   }).catch(error => console.warn("Could not read Meridian appearance:", error));
   createRoot(root).render(element);
 }
@@ -87,7 +87,7 @@ export function useDialogFocus(ref: RefObject<HTMLElement | null>, open: boolean
     const element = ref.current;
     if (!open || !element) return;
     const previous = document.activeElement as HTMLElement | null;
-    const controls = () => Array.from(element.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), a[href], [tabindex="0"]'));
+    const controls = () => Array.from(element.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled):not([aria-hidden="true"]), a[href], [tabindex="0"]'));
     (element.querySelector<HTMLElement>('[autofocus], [data-autofocus]') ?? controls()[0])?.focus();
     const keydown = (event: KeyboardEvent) => {
       if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); dismiss(); }

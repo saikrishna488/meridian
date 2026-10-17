@@ -27,7 +27,7 @@ type ShellAction = fn(&Shell);
 /// (guards against a stuck or crashed page).
 const DISMISS_TIMEOUT: Duration = Duration::from_millis(500);
 
-const POPOVERS: [Popover; 3] = [Popover::Applications, Popover::Options, Popover::DesktopMenu];
+const POPOVERS: [Popover; 4] = [Popover::Applications, Popover::Options, Popover::DesktopMenu, Popover::Notifications];
 
 pub struct Shell {
     app: gtk::Application,
@@ -40,6 +40,8 @@ pub struct Shell {
     username: String,
     locker: gtk4_session_lock::Instance,
     terminals: RefCell<crate::terminal::Terminals>,
+    pulse: std::sync::Arc<std::sync::Mutex<crate::pulse::Sampler>>,
+    notifications: RefCell<Option<Rc<crate::notifications::Notifications>>>,
     dev: bool,
     state: RefCell<State>,
     weak_self: Weak<Shell>,
@@ -56,6 +58,10 @@ struct State {
     preferences: Option<Rc<WebSurface>>,
     finder: Option<Rc<WebSurface>>,
     terminal: Option<Rc<WebSurface>>,
+    pulse: Option<Rc<WebSurface>>,
+    nova: Option<Rc<WebSurface>>,
+    calendar: Option<Rc<WebSurface>>,
+    clock: Option<Rc<WebSurface>>,
     wallpapers: Vec<(gdk::Monitor, Rc<WebSurface>)>,
     popovers: HashMap<Popover, Rc<WebSurface>>,
     dismiss_timers: HashMap<Popover, glib::SourceId>,
@@ -67,7 +73,7 @@ impl Shell {
     pub fn start(app: &gtk::Application, roots: Roots, dev: bool) -> Rc<Shell> {
         if let Some(settings) = gtk::Settings::default() {
             settings.set_gtk_application_prefer_dark_theme(crate::desktop::get().appearance == "dark");
-            settings.set_gtk_font_name(Some("Inter 11"));
+            settings.set_gtk_font_name(Some(&format!("{} 11", crate::desktop::get().font)));
         }
         glib::spawn_future_local(async {
             if let Err(error) = crate::files::blocking(crate::desktop::apply_fonts).await {
@@ -104,12 +110,23 @@ impl Shell {
             username: glib::user_name().to_string_lossy().into_owned(),
             locker: gtk4_session_lock::Instance::new(),
             terminals: RefCell::new(crate::terminal::Terminals::default()),
+            pulse: Default::default(),
+            notifications: RefCell::new(None),
             dev,
             state: RefCell::new(State::default()),
             weak_self: weak_self.clone(),
             _app_monitor: app_monitor.clone(),
             _hold: app.hold(),
         });
+
+        let weak = Rc::downgrade(&shell);
+        *shell.notifications.borrow_mut() = Some(crate::notifications::Notifications::start(move |state| {
+            if let Some(shell) = weak.upgrade() {
+                let event = Event::NotificationsChanged(state);
+                shell.send_panel(&event);
+                shell.send_to_popover(Popover::Notifications, &event);
+            }
+        }));
 
         // The session-lock protocol (ADR-0007): a lock surface per monitor,
         // torn down once the lock screen accepts a password.
@@ -120,8 +137,15 @@ impl Shell {
             }
         });
         let weak = Rc::downgrade(&shell);
+        shell.locker.connect_locked(move |_| {
+            if let Some(shell) = weak.upgrade() {
+                shell.set_lock_action_state(true);
+            }
+        });
+        let weak = Rc::downgrade(&shell);
         shell.locker.connect_unlocked(move |_| {
             if let Some(shell) = weak.upgrade() {
+                shell.set_lock_action_state(false);
                 shell.state.borrow_mut().lock_surfaces.clear();
             }
         });
@@ -129,6 +153,7 @@ impl Shell {
         shell.locker.connect_failed(move |_| {
             log::error!("could not lock the session (unsupported compositor, or already locked elsewhere)");
             if let Some(shell) = weak.upgrade() {
+                shell.set_lock_action_state(false);
                 shell.state.borrow_mut().lock_surfaces.clear();
             }
         });
@@ -234,6 +259,9 @@ impl Shell {
                     self.terminals.borrow_mut().clear();
                 }
                 surface.mark_ready();
+                if surface.kind == SurfaceKind::Pulse {
+                    surface.send(&Event::PulseVisibility(surface.window.is_visible()));
+                }
                 surface.send(&Event::DesktopChanged(crate::desktop::get()));
                 if surface.kind == SurfaceKind::Terminal && surface.window.is_visible() {
                     surface.send(&Event::TerminalOpened);
@@ -243,6 +271,19 @@ impl Shell {
                     capabilities: surface.kind.capabilities().to_vec(),
                     dev: self.dev,
                 }))
+            }
+            Request::DesktopFontSet(choice) => {
+                let weak = self.weak_self.clone();
+                Ok(Reply::Later(Box::pin(async move {
+                    let state = crate::files::blocking(move || crate::desktop::set_font(&choice.id)).await?;
+                    if let Some(settings) = gtk::Settings::default() {
+                        settings.set_gtk_font_name(Some(&format!("{} 11", state.font)));
+                    }
+                    if let Some(shell) = weak.upgrade() {
+                        shell.desktop_changed(&state);
+                    }
+                    proto::reply_ok(&state).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+                })))
             }
             Request::DesktopAppearanceSet(choice) => {
                 let weak = self.weak_self.clone();
@@ -299,8 +340,12 @@ impl Shell {
                 } else {
                     let name = match app.id.as_str() {
                         "meridian-settings.desktop" => "Settings",
-                        "meridian-finder.desktop" => "Finder",
+                        "meridian-finder.desktop" => "Orbit",
                         "meridian-terminal.desktop" => "Meridian Terminal",
+                        "meridian-nova.desktop" => "Nova",
+                        "meridian-calendar.desktop" => "Calendar",
+                        "meridian-clock.desktop" => "Clock",
+                        "meridian-pulse.desktop" => "Pulse",
                         _ => return Err(ErrorBody::new(ErrorCode::NotFound, "Unknown application")),
                     };
                     (name.into(), None)
@@ -372,6 +417,10 @@ impl Shell {
                         "meridian-settings.desktop" => self.open_preferences(),
                         "meridian-finder.desktop" => self.open_finder(),
                         "meridian-terminal.desktop" => self.open_terminal(),
+                        "meridian-nova.desktop" => self.open_utility(SurfaceKind::Nova),
+                        "meridian-calendar.desktop" => self.open_utility(SurfaceKind::Calendar),
+                        "meridian-clock.desktop" => self.open_utility(SurfaceKind::Clock),
+                        "meridian-pulse.desktop" => self.open_pulse(),
                         id => self
                             .catalog
                             .borrow()
@@ -388,6 +437,55 @@ impl Shell {
                 self.open_popover(Popover::DesktopMenu);
                 self.send_to_popover(Popover::DesktopMenu, &Event::MenuOpened(menu));
                 serialize(ok())
+            }
+            Request::NotificationsGet
+            | Request::NotificationsRead
+            | Request::NotificationsClear
+            | Request::NotificationsDismiss(_)
+            | Request::NotificationsAction(_) => {
+                let service = self
+                    .notifications
+                    .borrow()
+                    .clone()
+                    .ok_or_else(|| ErrorBody::new(ErrorCode::Unavailable, "Notifications unavailable"))?;
+                match request {
+                    Request::NotificationsRead => service.mark_read(),
+                    Request::NotificationsClear => service.clear(),
+                    Request::NotificationsDismiss(item) => service.dismiss(item.id),
+                    Request::NotificationsAction(action) => service.activate(action.id, &action.key),
+                    _ => {}
+                }
+                serialize(proto::reply_ok(&service.snapshot()))
+            }
+            Request::CalendarList => serialize(proto::reply_ok(&crate::calendar::list()?)),
+            Request::CalendarSave(events) => {
+                crate::calendar::save(&events)?;
+                serialize(ok())
+            }
+            Request::StoreList => Ok(Reply::Later(Box::pin(async move {
+                let data = crate::files::blocking(crate::store::list).await?;
+                proto::reply_ok(&data).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
+            Request::StoreAction(choice) => Ok(Reply::Later(Box::pin(async move {
+                crate::store::action(choice).await?;
+                ok().map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
+            Request::PulseOpen => {
+                self.open_pulse();
+                serialize(ok())
+            }
+            Request::PulseSnapshot => {
+                let sampler = self.pulse.clone();
+                Ok(Reply::Later(Box::pin(async move {
+                    let snapshot = crate::files::blocking(move || {
+                        sampler
+                            .lock()
+                            .map_err(|_| ErrorBody::new(ErrorCode::Failed, "Pulse sampler unavailable"))?
+                            .sample()
+                    })
+                    .await?;
+                    proto::reply_ok(&snapshot).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+                })))
             }
             Request::TerminalOpen => {
                 self.open_terminal();
@@ -447,6 +545,23 @@ impl Shell {
                 self.open_finder();
                 serialize(ok())
             }
+            Request::FileBookmarks => serialize(proto::reply_ok(&crate::files::bookmarks())),
+            Request::FileBookmarkSet(file) => Ok(Reply::Later(Box::pin(async move {
+                let bookmarks = crate::files::blocking(move || crate::files::bookmark(&file.path)).await?;
+                proto::reply_ok(&bookmarks).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
+            Request::FileChooseFolder => {
+                let parent = surface.window.clone();
+                Ok(Reply::Later(Box::pin(async move {
+                    let dialog = gtk::FileDialog::builder().title("Choose a destination").modal(true).build();
+                    let path = match dialog.select_folder_future(Some(&parent)).await {
+                        Ok(file) => file.path().map(|p| p.to_string_lossy().into_owned()),
+                        Err(error) if error.matches(gtk::DialogError::Dismissed) => None,
+                        Err(error) => return Err(ErrorBody::new(ErrorCode::Failed, error.to_string())),
+                    };
+                    proto::reply_ok(&path).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+                })))
+            }
             Request::FileLocations => serialize(proto::reply_ok(&crate::files::locations())),
             Request::FileList(list) => Ok(Reply::Later(Box::pin(async move {
                 let result = crate::files::blocking(move || crate::files::list(&list.path, list.hidden)).await?;
@@ -464,6 +579,30 @@ impl Shell {
                 crate::files::blocking(move || crate::files::rename(&file.path, &file.name)).await?;
                 proto::reply_ok(&()).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
             }))),
+            Request::FileTransfer(choice) => Ok(Reply::Later(Box::pin(async move {
+                crate::files::blocking(move || {
+                    crate::files::transfer(&choice.path, &choice.destination, choice.move_file)
+                })
+                .await?;
+                proto::reply_ok(&()).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
+            Request::FileThumbnail(file) => Ok(Reply::Later(Box::pin(async move {
+                let thumbnail = crate::files::blocking(move || crate::files::thumbnail(&file.path)).await?;
+                proto::reply_ok(&thumbnail).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
+            Request::FileWallpaper(file) => {
+                let weak = self.weak_self.clone();
+                Ok(Reply::Later(Box::pin(async move {
+                    let state = crate::files::blocking(move || {
+                        crate::desktop::choose_wallpaper(std::path::Path::new(&file.path))
+                    })
+                    .await?;
+                    if let Some(shell) = weak.upgrade() {
+                        shell.desktop_changed(&state);
+                    }
+                    proto::reply_ok(&state).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+                })))
+            }
             Request::FileTrash(file) => Ok(Reply::Later(Box::pin(async move {
                 crate::files::blocking(move || crate::files::trash(&file.path)).await?;
                 proto::reply_ok(&()).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
@@ -559,8 +698,16 @@ impl Shell {
             Request::DockList => serialize(proto::reply_ok(&read_dock())),
             Request::DockPin(pin) => {
                 if pin.pinned
-                    && !["meridian-settings.desktop", "meridian-finder.desktop", "meridian-terminal.desktop"]
-                        .contains(&pin.id.as_str())
+                    && ![
+                        "meridian-settings.desktop",
+                        "meridian-finder.desktop",
+                        "meridian-terminal.desktop",
+                        "meridian-nova.desktop",
+                        "meridian-calendar.desktop",
+                        "meridian-clock.desktop",
+                        "meridian-pulse.desktop",
+                    ]
+                    .contains(&pin.id.as_str())
                     && !self.catalog.borrow().apps().iter().any(|app| app.id == pin.id)
                 {
                     return Err(ErrorBody::new(ErrorCode::NotFound, "no such application"));
@@ -582,8 +729,22 @@ impl Shell {
                 let mut results = self.search.query(&q.query, q.serial);
                 let query = q.query.trim().to_lowercase();
                 let builtins = [
+                    (
+                        "meridian-nova.desktop",
+                        "Nova",
+                        "Meridian nova app store software install",
+                        "system-software-install",
+                    ),
+                    ("meridian-calendar.desktop", "Calendar", "Meridian calendar events dates", "x-office-calendar"),
+                    ("meridian-clock.desktop", "Clock", "Meridian clock timer stopwatch", "preferences-system-time"),
+                    (
+                        "meridian-pulse.desktop",
+                        "Pulse",
+                        "Meridian pulse task manager system monitor processes cpu gpu memory storage network",
+                        "utilities-system-monitor",
+                    ),
                     ("meridian-settings.desktop", "Settings", "Meridian settings preferences", "preferences-system"),
-                    ("meridian-finder.desktop", "Finder", "Meridian finder files folders", "system-file-manager"),
+                    ("meridian-finder.desktop", "Orbit", "Meridian orbit finder files folders", "system-file-manager"),
                     (
                         "meridian-terminal.desktop",
                         "Meridian Terminal",
@@ -615,6 +776,20 @@ impl Shell {
                 serialize(proto::reply_ok(&results))
             }
             Request::SearchActivate(a) => {
+                for (id, kind) in [
+                    ("meridian-nova.desktop", SurfaceKind::Nova),
+                    ("meridian-calendar.desktop", SurfaceKind::Calendar),
+                    ("meridian-clock.desktop", SurfaceKind::Clock),
+                ] {
+                    if a.item_id == id {
+                        self.open_utility(kind);
+                        return serialize(ok());
+                    }
+                }
+                if a.item_id == "meridian-pulse.desktop" {
+                    self.open_pulse();
+                    return serialize(ok());
+                }
                 if a.item_id == "meridian-terminal.desktop" {
                     self.open_terminal();
                     return serialize(ok());
@@ -700,6 +875,47 @@ impl Shell {
                     proto::reply_ok(&()).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
                 })))
             }
+            Request::SettingsUsers => Ok(Reply::Later(Box::pin(async move {
+                let users = crate::users::list().await?;
+                proto::reply_ok(&users).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
+            Request::SettingsUserCreate(choice) => Ok(Reply::Later(Box::pin(async move {
+                crate::users::create(choice).await?;
+                proto::reply_ok(&()).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
+            Request::SettingsUserAction(choice) => Ok(Reply::Later(Box::pin(async move {
+                crate::users::change(choice).await?;
+                proto::reply_ok(&()).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
+            Request::SettingsSystemInfo => serialize(proto::reply_ok(&system_info())),
+            Request::SettingsCheckUpdates => Ok(Reply::Later(Box::pin(async move {
+                let update = crate::files::blocking(crate::updates::check).await?;
+                proto::reply_ok(&update).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
+            Request::SettingsOpenReleases => {
+                gio::AppInfo::launch_default_for_uri(
+                    "https://github.com/saikrishna488/meridian/releases",
+                    None::<&gio::AppLaunchContext>,
+                )
+                .map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))?;
+                serialize(ok())
+            }
+            Request::SettingsDevices => Ok(Reply::Later(Box::pin(async move {
+                let devices = crate::files::blocking(crate::device_manager::list).await?;
+                proto::reply_ok(&devices).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
+            Request::SettingsDeviceAction(choice) => Ok(Reply::Later(Box::pin(async move {
+                crate::files::blocking(move || crate::device_manager::action(choice)).await?;
+                proto::reply_ok(&()).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
+            Request::SettingsDrivers => Ok(Reply::Later(Box::pin(async move {
+                let drivers = crate::files::blocking(crate::drivers::list).await?;
+                proto::reply_ok(&drivers).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
+            Request::SettingsDriverSet(choice) => Ok(Reply::Later(Box::pin(async move {
+                crate::files::blocking(move || crate::drivers::change(choice)).await?;
+                proto::reply_ok(&()).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
             Request::SettingsGet => serialize(proto::reply_ok(&self.settings.state())),
             Request::SettingsSetWifi(v) => {
                 self.settings.set_wifi(v.enabled)?;
@@ -725,10 +941,16 @@ impl Shell {
                 crate::power::sign_out().await?;
                 proto::reply_ok(&()).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
             }))),
-            Request::SessionSleep => Ok(Reply::Later(Box::pin(async move {
-                crate::power::suspend().await?;
-                proto::reply_ok(&()).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
-            }))),
+            Request::SessionSleep => {
+                let weak = self.weak_self.clone();
+                Ok(Reply::Later(Box::pin(async move {
+                    let shell =
+                        weak.upgrade().ok_or_else(|| ErrorBody::new(ErrorCode::Unavailable, "Session ended"))?;
+                    shell.lock_session_confirmed().await?;
+                    crate::power::suspend().await?;
+                    proto::reply_ok(&()).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+                })))
+            }
             Request::SessionRestart => Ok(Reply::Later(Box::pin(async move {
                 crate::power::reboot().await?;
                 proto::reply_ok(&()).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
@@ -775,10 +997,66 @@ impl Shell {
         Ok(())
     }
 
+    // The state exported through org.gtk.Actions is also consumed by the
+    // idle helper. Only ::locked may mark the lock as confirmed.
+    fn set_lock_action_state(&self, locked: bool) {
+        if let Some(action) = self.app.lookup_action("lock-session").and_downcast::<gio::SimpleAction>() {
+            action.set_state(&locked.to_variant());
+        }
+    }
+
+    async fn lock_session_confirmed(&self) -> Result<(), ErrorBody> {
+        self.lock_session()?;
+        for _ in 0..80 {
+            if self.locker.is_locked() {
+                return Ok(());
+            }
+            glib::timeout_future(Duration::from_millis(50)).await;
+        }
+        Err(ErrorBody::new(ErrorCode::Failed, "The compositor did not confirm the screen lock; sleep was cancelled"))
+    }
+
     fn add_lock_surface(&self, instance: &gtk4_session_lock::Instance, monitor: &gdk::Monitor) {
         let surface = WebSurface::new(&self.app, &self.env, SurfaceKind::Locker, Some(monitor), self.dispatcher());
         instance.assign_window_to_monitor(&surface.window, monitor);
         self.state.borrow_mut().lock_surfaces.push((monitor.clone(), surface));
+    }
+
+    fn open_utility(&self, kind: SurfaceKind) {
+        let mut state = self.state.borrow_mut();
+        let slot = match kind {
+            SurfaceKind::Nova => &mut state.nova,
+            SurfaceKind::Calendar => &mut state.calendar,
+            _ => &mut state.clock,
+        };
+        if slot.is_none() {
+            *slot = Some(WebSurface::new(&self.app, &self.env, kind, None, self.dispatcher()));
+        }
+        slot.as_ref().unwrap().window.present();
+        drop(state);
+        for popover in POPOVERS {
+            self.hide_popover(popover);
+        }
+    }
+
+    fn open_pulse(&self) {
+        if self.state.borrow().pulse.is_none() {
+            let surface = WebSurface::new(&self.app, &self.env, SurfaceKind::Pulse, None, self.dispatcher());
+            let weak = Rc::downgrade(&surface);
+            surface.window.connect_hide(move |_| {
+                if let Some(surface) = weak.upgrade() {
+                    surface.send(&Event::PulseVisibility(false));
+                }
+            });
+            self.state.borrow_mut().pulse = Some(surface);
+        }
+        if let Some(surface) = &self.state.borrow().pulse {
+            surface.window.present();
+            surface.send(&Event::PulseVisibility(true));
+        }
+        for popover in POPOVERS {
+            self.hide_popover(popover);
+        }
     }
 
     fn open_terminal(&self) {
@@ -810,9 +1088,19 @@ impl Shell {
         for (_, surface) in &surfaces.lock_surfaces {
             surface.send(&event);
         }
-        for surface in [&surfaces.preferences, &surfaces.finder, &surfaces.terminal, &surfaces.panel, &surfaces.topbar]
-            .into_iter()
-            .flatten()
+        for surface in [
+            &surfaces.preferences,
+            &surfaces.finder,
+            &surfaces.terminal,
+            &surfaces.pulse,
+            &surfaces.nova,
+            &surfaces.calendar,
+            &surfaces.clock,
+            &surfaces.panel,
+            &surfaces.topbar,
+        ]
+        .into_iter()
+        .flatten()
         {
             if state.appearance == "dark" {
                 surface.window.add_css_class("meridian-dark");
@@ -856,11 +1144,11 @@ impl Shell {
             .iter()
             .map(|w| WindowInfo {
                 id: w.id,
-                name: if w.title == "Meridian Terminal" {
+                name: if matches!(w.title.as_str(), "Terminal" | "Meridian Terminal") {
                     "Meridian Terminal".into()
-                } else if w.title == "Meridian Finder" {
-                    "Finder".into()
-                } else if w.title == "Meridian Settings" {
+                } else if matches!(w.title.as_str(), "Orbit" | "Meridian Finder") {
+                    "Orbit".into()
+                } else if matches!(w.title.as_str(), "Settings" | "Meridian Settings") {
                     "Settings".into()
                 } else {
                     catalog
@@ -922,6 +1210,11 @@ impl Shell {
         gtk4_layer_shell::LayerShell::set_monitor(&surface.window, primary.as_ref());
         surface.window.present();
         surface.send(&Event::PopoverShown);
+        if popover == Popover::Notifications
+            && let Some(service) = self.notifications.borrow().as_ref()
+        {
+            service.mark_read();
+        }
         if popover == Popover::Options {
             self.settings.refresh();
         }
@@ -963,8 +1256,11 @@ impl Shell {
     }
 
     fn send_popover_state(&self) {
-        let state =
-            PopoverState { applications: self.is_open(Popover::Applications), options: self.is_open(Popover::Options) };
+        let state = PopoverState {
+            applications: self.is_open(Popover::Applications),
+            options: self.is_open(Popover::Options),
+            notifications: self.is_open(Popover::Notifications),
+        };
         self.send_panel(&Event::PopoverState(state));
         self.update_dock_visibility(&self.windows.as_ref().map(|service| service.windows()).unwrap_or_default());
     }
@@ -1049,13 +1345,29 @@ impl Shell {
 
     /// Fixed, argument-less actions exported on D-Bus for compositor
     /// keybindings: `gapplication action org.meridian.Shell <name>`.
+    fn take_screenshot(&self, mode: &'static str) {
+        if self.locker.is_locked() {
+            return;
+        }
+        std::thread::spawn(move || {
+            let result = std::process::Command::new("sh")
+                .args(["-c", include_str!("../../session/screenshot.sh"), "meridian-screenshot", mode])
+                .status();
+            if let Err(error) = result {
+                log::warn!("Could not start screenshot: {error}");
+            }
+        });
+    }
+
     fn install_actions(&self) {
-        let actions: [(&str, ShellAction); 6] = [
+        let actions: [(&str, ShellAction); 8] = [
             ("toggle-applications", |shell| shell.toggle_popover(Popover::Applications)),
             ("toggle-options", |shell| shell.toggle_popover(Popover::Options)),
             ("open-finder", Shell::open_finder),
             ("open-terminal", Shell::open_terminal),
             ("open-settings", Shell::open_preferences),
+            ("screenshot", |shell| shell.take_screenshot("full")),
+            ("screenshot-region", |shell| shell.take_screenshot("region")),
             ("lock-session", |shell| {
                 if let Err(e) = shell.lock_session() {
                     log::warn!("lock-session keybinding: {}", e.message);
@@ -1063,7 +1375,11 @@ impl Shell {
             }),
         ];
         for (name, handler) in actions {
-            let action = gio::SimpleAction::new(name, None);
+            let action = if name == "lock-session" {
+                gio::SimpleAction::new_stateful(name, None, &false.to_variant())
+            } else {
+                gio::SimpleAction::new(name, None)
+            };
             let weak = self.weak_self.clone();
             action.connect_activate(move |_, _| {
                 if let Some(shell) = weak.upgrade() {
@@ -1079,6 +1395,7 @@ fn popover_surface(popover: Popover) -> SurfaceKind {
     match popover {
         Popover::Applications => SurfaceKind::Applications,
         Popover::Options => SurfaceKind::Options,
+        Popover::Notifications => SurfaceKind::Notifications,
         Popover::DesktopMenu => SurfaceKind::DesktopMenu,
     }
 }
@@ -1134,6 +1451,9 @@ fn system_info() -> proto::SystemInfo {
         .map(|kb| format!("{:.1} GiB", kb / 1048576.0))
         .unwrap_or_else(|| "Unavailable".into());
     proto::SystemInfo {
+        kernel: read("/proc/sys/kernel/osrelease"),
+        architecture: std::env::consts::ARCH.into(),
+        hostname: read("/proc/sys/kernel/hostname"),
         version: env!("CARGO_PKG_VERSION").into(),
         manufacturer: read("/sys/class/dmi/id/sys_vendor"),
         model: read("/sys/class/dmi/id/product_name"),

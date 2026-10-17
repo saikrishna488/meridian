@@ -134,6 +134,7 @@ pub struct WallpaperChoice {
 #[ts(export)]
 pub struct DesktopState {
     pub appearance: String,
+    pub font: String,
     pub wallpaper: String,
     pub wallpaper_uri: String,
     pub wallpapers: Vec<WallpaperChoice>,
@@ -277,6 +278,13 @@ pub enum SurfaceKind {
     Finder,
     /// Interactive terminal, with a dedicated PTY capability.
     Terminal,
+    /// Pulse system monitor.
+    Pulse,
+    Nova,
+    Calendar,
+    Clock,
+    /// Notification center.
+    Notifications,
     /// Login screen (`meridian-greeter`, a separate program run by greetd).
     Greeter,
     /// Lock screen, shown on every output via the session-lock protocol
@@ -301,6 +309,8 @@ pub enum Capability {
     Windows,
     /// Read and change system settings (Wi-Fi, Bluetooth, brightness, volume).
     Settings,
+    /// Privileged driver and local account management, only in Settings.
+    SystemAdministration,
     /// Log in, list sessions, power off/restart from the login screen.
     Login,
     /// Lock, sign out, and suspend the running session.
@@ -313,6 +323,10 @@ pub enum Capability {
     Appearance,
     /// Manage this terminal window's interactive shells.
     Terminal,
+    /// Read-only system resource and process metrics.
+    Monitor,
+    Notifications,
+    Calendar,
 }
 
 impl SurfaceKind {
@@ -320,7 +334,9 @@ impl SurfaceKind {
     pub fn capabilities(self) -> &'static [Capability] {
         match self {
             SurfaceKind::Wallpaper => &[Capability::Dock, Capability::Popovers],
-            SurfaceKind::Preferences => &[Capability::Appearance, Capability::Settings],
+            SurfaceKind::Preferences => {
+                &[Capability::Appearance, Capability::Settings, Capability::SystemAdministration]
+            }
             SurfaceKind::Finder => &[
                 Capability::Files,
                 Capability::Search,
@@ -329,7 +345,13 @@ impl SurfaceKind {
                 Capability::Dock,
             ],
             SurfaceKind::Terminal => &[Capability::Terminal],
+            SurfaceKind::Notifications => &[Capability::Notifications, Capability::Popovers],
+            SurfaceKind::Pulse => &[Capability::Monitor],
+            SurfaceKind::Nova => &[Capability::AppManagement],
+            SurfaceKind::Calendar => &[Capability::Calendar],
+            SurfaceKind::Clock => &[],
             SurfaceKind::Panel => &[
+                Capability::Notifications,
                 Capability::Popovers,
                 Capability::Windows,
                 Capability::Search,
@@ -345,7 +367,9 @@ impl SurfaceKind {
                 Capability::Dock,
                 Capability::AppManagement,
             ],
-            SurfaceKind::Options => &[Capability::Popovers, Capability::Settings, Capability::Appearance],
+            SurfaceKind::Options => {
+                &[Capability::Popovers, Capability::Settings, Capability::Appearance, Capability::Session]
+            }
             SurfaceKind::Greeter => &[Capability::Login],
             SurfaceKind::Locker => &[Capability::Unlock],
         }
@@ -364,6 +388,7 @@ pub enum Popover {
     DesktopMenu,
     Applications,
     Options,
+    Notifications,
 }
 
 /// Identifies a search provider. Closed set: providers are native code.
@@ -386,6 +411,8 @@ pub enum Request {
     DesktopGet,
     #[serde(rename = "desktop.appearance_set")]
     DesktopAppearanceSet(WallpaperSet),
+    #[serde(rename = "desktop.font_set")]
+    DesktopFontSet(WallpaperSet),
     #[serde(rename = "desktop.wallpaper_set")]
     DesktopWallpaperSet(WallpaperSet),
     #[serde(rename = "desktop.wallpaper_choose")]
@@ -407,8 +434,36 @@ pub enum Request {
     PreferencesWallpaperOpen,
     #[serde(rename = "finder.open")]
     FinderOpen,
+    #[serde(rename = "pulse.open")]
+    PulseOpen,
+    #[serde(rename = "pulse.snapshot")]
+    PulseSnapshot,
+    #[serde(rename = "store.list")]
+    StoreList,
+    #[serde(rename = "calendar.list")]
+    CalendarList,
+    #[serde(rename = "calendar.save")]
+    CalendarSave(Vec<CalendarEvent>),
+    #[serde(rename = "store.action")]
+    StoreAction(DeviceAction),
+    #[serde(rename = "notifications.get")]
+    NotificationsGet,
+    #[serde(rename = "notifications.read")]
+    NotificationsRead,
+    #[serde(rename = "notifications.dismiss")]
+    NotificationsDismiss(NotificationId),
+    #[serde(rename = "notifications.clear")]
+    NotificationsClear,
+    #[serde(rename = "notifications.action")]
+    NotificationsAction(NotificationAction),
     #[serde(rename = "files.locations")]
     FileLocations,
+    #[serde(rename = "files.bookmarks")]
+    FileBookmarks,
+    #[serde(rename = "files.bookmark_set")]
+    FileBookmarkSet(FilePath),
+    #[serde(rename = "files.choose_folder")]
+    FileChooseFolder,
     #[serde(rename = "files.list")]
     FileList(FileList),
     #[serde(rename = "files.open")]
@@ -417,6 +472,12 @@ pub enum Request {
     FileMkdir(FileName),
     #[serde(rename = "files.rename")]
     FileRename(FileName),
+    #[serde(rename = "files.transfer")]
+    FileTransfer(FileTransfer),
+    #[serde(rename = "files.thumbnail")]
+    FileThumbnail(FilePath),
+    #[serde(rename = "files.wallpaper")]
+    FileWallpaper(FilePath),
     #[serde(rename = "files.trash")]
     FileTrash(FilePath),
     #[serde(rename = "terminal.open")]
@@ -508,6 +569,26 @@ pub enum Request {
     /// Current settings state.
     #[serde(rename = "settings.get")]
     SettingsGet,
+    #[serde(rename = "settings.drivers")]
+    SettingsDrivers,
+    #[serde(rename = "settings.devices")]
+    SettingsDevices,
+    #[serde(rename = "settings.device_action")]
+    SettingsDeviceAction(DeviceAction),
+    #[serde(rename = "settings.system_info")]
+    SettingsSystemInfo,
+    #[serde(rename = "settings.check_updates")]
+    SettingsCheckUpdates,
+    #[serde(rename = "settings.open_releases")]
+    SettingsOpenReleases,
+    #[serde(rename = "settings.users")]
+    SettingsUsers,
+    #[serde(rename = "settings.user_create")]
+    SettingsUserCreate(UserCreate),
+    #[serde(rename = "settings.user_action")]
+    SettingsUserAction(UserAction),
+    #[serde(rename = "settings.driver_set")]
+    SettingsDriverSet(DriverAction),
 
     #[serde(rename = "settings.set_wifi")]
     SettingsSetWifi(SetEnabled),
@@ -687,19 +768,33 @@ impl Request {
     pub fn required_capability(&self) -> Option<Capability> {
         match self {
             Request::Hello => None,
+            Request::NotificationsGet
+            | Request::NotificationsRead
+            | Request::NotificationsDismiss(_)
+            | Request::NotificationsClear
+            | Request::NotificationsAction(_) => Some(Capability::Notifications),
+            Request::CalendarList | Request::CalendarSave(_) => Some(Capability::Calendar),
+            Request::PulseSnapshot => Some(Capability::Monitor),
             Request::DesktopGet => None,
-            Request::DesktopAppearanceSet(_) | Request::DesktopWallpaperSet(_) | Request::DesktopWallpaperChoose => {
-                Some(Capability::Appearance)
-            }
+            Request::DesktopFontSet(_)
+            | Request::DesktopAppearanceSet(_)
+            | Request::DesktopWallpaperSet(_)
+            | Request::DesktopWallpaperChoose => Some(Capability::Appearance),
             Request::DesktopAddFile(_) => Some(Capability::Dock),
             Request::DesktopAddApp(_)
             | Request::DesktopChooseFiles
             | Request::DesktopRemove(_)
             | Request::DesktopOpen(_) => Some(Capability::Dock),
             Request::FileLocations
+            | Request::FileBookmarks
+            | Request::FileBookmarkSet(_)
+            | Request::FileChooseFolder
             | Request::FileList(_)
             | Request::FileOpen(_)
             | Request::FileMkdir(_)
+            | Request::FileTransfer(_)
+            | Request::FileThumbnail(_)
+            | Request::FileWallpaper(_)
             | Request::FileRename(_)
             | Request::FileTrash(_) => Some(Capability::Files),
             Request::TerminalStart
@@ -714,11 +809,14 @@ impl Request {
             Request::PreferencesOpen
             | Request::PreferencesWallpaperOpen
             | Request::FinderOpen
+            | Request::PulseOpen
             | Request::TerminalOpen => Some(Capability::Popovers),
             Request::TrashOpen => Some(Capability::Dock),
-            Request::AppUninstallPrompt(_) | Request::AppUninstallPlan(_) | Request::AppUninstall(_) => {
-                Some(Capability::AppManagement)
-            }
+            Request::StoreList
+            | Request::StoreAction(_)
+            | Request::AppUninstallPrompt(_)
+            | Request::AppUninstallPlan(_)
+            | Request::AppUninstall(_) => Some(Capability::AppManagement),
             Request::MenuOpen(_) | Request::SystemInfo => Some(Capability::Popovers),
             Request::DockLayoutGet | Request::DockLayoutSet(_) | Request::DockList | Request::DockPin(_) => {
                 Some(Capability::Dock)
@@ -726,6 +824,16 @@ impl Request {
             Request::SearchQuery(_) | Request::SearchActivate(_) => Some(Capability::Search),
             Request::PopoverToggle(_) | Request::PopoverClose => Some(Capability::Popovers),
             Request::WindowsList | Request::WindowsActivate(_) => Some(Capability::Windows),
+            Request::SettingsUsers
+            | Request::SettingsUserCreate(_)
+            | Request::SettingsUserAction(_)
+            | Request::SettingsDevices
+            | Request::SettingsDeviceAction(_)
+            | Request::SettingsDrivers
+            | Request::SettingsDriverSet(_) => Some(Capability::SystemAdministration),
+            Request::SettingsSystemInfo | Request::SettingsCheckUpdates | Request::SettingsOpenReleases => {
+                Some(Capability::Settings)
+            }
             Request::SettingsDisplays
             | Request::SettingsDisplayApply(_)
             | Request::SettingsDisplayDecide(_)
@@ -821,6 +929,7 @@ pub struct SettingsState {
 pub struct PopoverState {
     pub applications: bool,
     pub options: bool,
+    pub notifications: bool,
 }
 
 /// Events pushed from the host to a surface.
@@ -828,6 +937,10 @@ pub struct PopoverState {
 #[serde(tag = "event", content = "data")]
 #[ts(export)]
 pub enum Event {
+    #[serde(rename = "notifications.changed")]
+    NotificationsChanged(NotificationState),
+    #[serde(rename = "pulse.visibility")]
+    PulseVisibility(bool),
     #[serde(rename = "terminal.opened")]
     TerminalOpened,
     #[serde(rename = "terminal.opened_at")]
@@ -1047,7 +1160,7 @@ mod tests {
     }
 
     #[test]
-    fn session_actions_are_available_to_the_meridian_menu() {
+    fn session_actions_are_available_to_desktop_controls() {
         for r in [
             Request::SessionLock,
             Request::SessionSignOut,
@@ -1056,7 +1169,7 @@ mod tests {
             Request::SessionShutdown,
         ] {
             let cap = r.required_capability().unwrap();
-            assert!(!SurfaceKind::Options.has(cap));
+            assert!(SurfaceKind::Options.has(cap));
             assert!(SurfaceKind::DesktopMenu.has(cap));
             assert!(!SurfaceKind::Applications.has(cap));
             assert!(!SurfaceKind::Greeter.has(cap));
@@ -1103,6 +1216,9 @@ pub struct MenuOpen {
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[ts(export)]
 pub struct SystemInfo {
+    pub kernel: String,
+    pub architecture: String,
+    pub hostname: String,
     pub version: String,
     pub manufacturer: String,
     pub model: String,
@@ -1140,4 +1256,263 @@ pub struct UninstallPlan {
 #[ts(export)]
 pub struct DockLayout {
     pub items: Vec<String>,
+}
+
+/// Kernel modules for the currently running kernel; changes last until reboot/reload.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct DriverInfo {
+    pub name: String,
+    pub path: String,
+    pub loaded: bool,
+    pub builtin: bool,
+    pub users: u32,
+    pub devices: Vec<String>,
+}
+#[derive(Debug, Clone, PartialEq, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct DriverAction {
+    pub name: String,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct UserInfo {
+    pub uid: u32,
+    pub name: String,
+    pub real_name: String,
+    pub administrator: bool,
+    pub locked: bool,
+    pub current: bool,
+    pub home: String,
+}
+#[derive(Clone, PartialEq, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct UserCreate {
+    pub name: String,
+    pub real_name: String,
+    pub administrator: bool,
+    pub password: String,
+}
+impl std::fmt::Debug for UserCreate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("UserCreate(<redacted>)")
+    }
+}
+#[derive(Clone, PartialEq, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct UserAction {
+    pub uid: u32,
+    pub action: String,
+    pub password: Option<String>,
+}
+impl std::fmt::Debug for UserAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UserAction").field("uid", &self.uid).field("action", &self.action).finish()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct UpdateInfo {
+    pub installed: String,
+    pub latest: Option<String>,
+    pub available: bool,
+    pub message: String,
+    pub published: Option<String>,
+}
+
+#[cfg(test)]
+mod management_tests {
+    use super::*;
+    #[test]
+    fn privileged_management_is_only_available_in_settings_and_secrets_are_redacted() {
+        for request in [
+            Request::SettingsDrivers,
+            Request::SettingsUsers,
+            Request::SettingsDriverSet(DriverAction { name: "test".into(), enabled: false }),
+        ] {
+            assert_eq!(request.required_capability(), Some(Capability::SystemAdministration));
+        }
+        assert!(SurfaceKind::Preferences.capabilities().contains(&Capability::SystemAdministration));
+        for kind in [
+            SurfaceKind::Options,
+            SurfaceKind::Wallpaper,
+            SurfaceKind::Applications,
+            SurfaceKind::Finder,
+            SurfaceKind::Terminal,
+            SurfaceKind::Greeter,
+            SurfaceKind::Locker,
+        ] {
+            assert!(!kind.capabilities().contains(&Capability::SystemAdministration));
+        }
+        let create = UserCreate {
+            name: "tester".into(),
+            real_name: "Tester".into(),
+            administrator: false,
+            password: "secret-password".into(),
+        };
+        let action = UserAction { uid: 1000, action: "password".into(), password: Some("secret-password".into()) };
+        assert!(!format!("{create:?} {action:?}").contains("secret-password"));
+    }
+}
+
+/// A device sample. Rates are bytes/second; unavailable readings are null.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct ResourceSample {
+    pub id: String,
+    pub kind: String,
+    pub name: String,
+    pub detail: String,
+    pub percent: Option<f64>,
+    pub used: Option<f64>,
+    pub total: Option<f64>,
+    pub read_rate: Option<f64>,
+    pub write_rate: Option<f64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct ProcessSample {
+    pub pid: u32,
+    pub name: String,
+    pub state: String,
+    /// Share of the entire machine, 0–100 (same scale as overall CPU).
+    pub cpu: Option<f64>,
+    pub memory: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct PulseSnapshot {
+    pub resources: Vec<ResourceSample>,
+    pub processes: Vec<ProcessSample>,
+}
+
+#[cfg(test)]
+mod pulse_tests {
+    use super::*;
+    #[test]
+    fn metrics_are_read_only_and_only_available_to_pulse() {
+        assert_eq!(Request::PulseSnapshot.required_capability(), Some(Capability::Monitor));
+        assert_eq!(SurfaceKind::Pulse.capabilities(), &[Capability::Monitor]);
+        for kind in [
+            SurfaceKind::Finder,
+            SurfaceKind::Terminal,
+            SurfaceKind::Applications,
+            SurfaceKind::Preferences,
+            SurfaceKind::Greeter,
+            SurfaceKind::Locker,
+        ] {
+            assert!(!kind.has(Capability::Monitor));
+        }
+        assert_eq!(Request::PulseOpen.required_capability(), Some(Capability::Popovers));
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct ManagedDevice {
+    pub id: String,
+    pub category: String,
+    pub name: String,
+    pub status: String,
+    pub properties: Vec<(String, String)>,
+    pub actions: Vec<String>,
+}
+#[derive(Debug, Clone, PartialEq, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct DeviceAction {
+    pub id: String,
+    pub action: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct FileTransfer {
+    pub path: String,
+    pub destination: String,
+    pub move_file: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct NotificationItem {
+    pub id: u32,
+    pub app: String,
+    pub summary: String,
+    pub body: String,
+    pub time: f64,
+    pub unread: bool,
+    pub actions: Vec<(String, String)>,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct NotificationState {
+    pub available: bool,
+    pub items: Vec<NotificationItem>,
+}
+#[derive(Debug, Clone, PartialEq, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct NotificationId {
+    pub id: u32,
+}
+#[derive(Debug, Clone, PartialEq, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct NotificationAction {
+    pub id: u32,
+    pub key: String,
+}
+
+#[cfg(test)]
+mod desktop_controls_tests {
+    use super::*;
+    #[test]
+    fn file_hardware_and_notification_controls_are_scoped_to_their_surfaces() {
+        for request in [
+            Request::SettingsDevices,
+            Request::SettingsDeviceAction(DeviceAction { id: "net:wlan0".into(), action: "disconnect".into() }),
+        ] {
+            assert_eq!(request.required_capability(), Some(Capability::SystemAdministration));
+            assert!(!SurfaceKind::Finder.has(request.required_capability().unwrap()));
+        }
+        for request in [
+            Request::FileTransfer(FileTransfer {
+                path: "/tmp/a".into(),
+                destination: "/tmp/b".into(),
+                move_file: false,
+            }),
+            Request::FileThumbnail(FilePath { path: "/tmp/a".into() }),
+            Request::FileWallpaper(FilePath { path: "/tmp/a".into() }),
+            Request::FileBookmarks,
+        ] {
+            assert_eq!(request.required_capability(), Some(Capability::Files));
+            assert!(SurfaceKind::Finder.has(Capability::Files));
+        }
+        assert!(SurfaceKind::Notifications.has(Capability::Notifications));
+        assert!(!SurfaceKind::Greeter.has(Capability::Notifications));
+        assert!(!SurfaceKind::Locker.has(Capability::Notifications));
+        assert_eq!(
+            Request::DesktopFontSet(WallpaperSet { id: "Inter".into() }).required_capability(),
+            Some(Capability::Appearance)
+        );
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CalendarEvent {
+    pub id: String,
+    pub date: String,
+    pub title: String,
+    pub time: String,
 }

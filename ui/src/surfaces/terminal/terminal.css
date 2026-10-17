@@ -52,3 +52,9 @@ html, body, #root { height:100%; min-height:0; margin:0; overflow:hidden; }
 .terminal-empty button { margin-top: 6px; }
 .terminal-tabs button { min-height: 30px; }
 .terminal-tabs .new-session { display: grid; place-items: center; }
+
+/* Keep the native thumb available for dragging in WebKitGTK. */
+.terminal-screen .xterm-viewport { overscroll-behavior: contain; scrollbar-width: auto; scrollbar-color: var(--terminal-muted) var(--terminal-bg); }
+.terminal-screen .xterm-viewport::-webkit-scrollbar { width: 12px; }
+.terminal-screen .xterm-viewport::-webkit-scrollbar-thumb { background: var(--terminal-muted); border: 3px solid var(--terminal-bg); border-radius: 8px; }
+.terminal-follow { margin-right: 12px; border: 1px solid var(--terminal-border); border-radius: 4px; background: var(--terminal-chrome-strong); color: var(--terminal-ui-text); cursor: pointer; padding: 2px 6px; font: inherit; }

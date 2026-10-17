@@ -1,3 +1,4 @@
+import { Select } from "../../components/Select";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { hello, request } from "../../lib/bridge";
 import { errorMessage, mount } from "../../lib/react";
@@ -80,9 +81,9 @@ function Greeter() {
         </label>
         <PasswordField inputRef={password} disabled={busy} />
         <label className="field"><span className="field-label">Session</span>
-          <select id="session" name="session" disabled={busy} value={session} onChange={event => setSession(event.target.value)}>
+          <Select aria-label="Session" id="session" name="session" disabled={busy} value={session} onChange={event => setSession(event.target.value)}>
             {info?.sessions.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-          </select>
+          </Select>
         </label>
         <button className="submit" id="submit" type="submit" disabled={busy}>{label}</button>
         <p className={`message${messageKind === "info" ? " info" : ""}`} id="message" role="alert" aria-live="assertive">{message}</p>

@@ -905,6 +905,7 @@ dependencies = [
  "meridian-protocol",
  "meridian-services",
  "pam-client",
+ "semver",
  "serde",
  "serde_json",
  "webkit6",

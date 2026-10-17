@@ -6,6 +6,7 @@
 -->
 <labwc_config>
   <core>
+    <decoration>server</decoration>
     <gap>0</gap>
   </core>
 
@@ -17,6 +18,7 @@
     <name>Meridian</name>
     <cornerRadius>10</cornerRadius>
     <dropShadows>yes</dropShadows>
+    <maximizedDecoration>titlebar</maximizedDecoration>
     <titlebar>
       <layout>:iconify,max,close</layout>
       <showTitle>yes</showTitle>
@@ -65,6 +67,17 @@
       <action name="Execute" command="gapplication action org.meridian.Shell lock-session" />
     </keybind>
 
+    <!-- Full desktop and interactive area screenshots. Escape cancels selection. -->
+    <keybind key="Print">
+      <action name="Execute" command="gapplication action org.meridian.Shell screenshot" />
+    </keybind>
+    <keybind key="S-Print">
+      <action name="Execute" command="gapplication action org.meridian.Shell screenshot-region" />
+    </keybind>
+    <keybind key="W-S-s">
+      <action name="Execute" command="gapplication action org.meridian.Shell screenshot-region" />
+    </keybind>
+
     <!-- Fallbacks for nested development, where the host desktop usually
          grabs Super. -->
     <keybind key="C-A-h">
@@ -80,6 +93,13 @@
     <keybind key="W-q">
       <action name="Close" />
     </keybind>
+
+    <!-- Window management remains available even for custom app titlebars. -->
+    <keybind key="W-Down"><action name="Iconify" /></keybind>
+    <keybind key="W-Up"><action name="ToggleMaximize" /></keybind>
+    <keybind key="W-Left"><action name="SnapToEdge" direction="left" /></keybind>
+    <keybind key="W-Right"><action name="SnapToEdge" direction="right" /></keybind>
+    <keybind key="A-space"><action name="ShowMenu" menu="client-menu" /></keybind>
 
     <!-- Log out (ends the session, back to the login screen). -->
     <keybind key="W-S-q">
