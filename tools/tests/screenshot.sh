@@ -31,12 +31,12 @@ sh "$root/session/screenshot.sh" full
 sh "$root/session/screenshot.sh" region
 count=$(find "$scratch/Pictures with spaces" -name '*.png' | wc -l)
 [ "$count" -eq 2 ]
-rg -q '^10,20 300x200$' "$scratch/captures"
+grep -Fqx '10,20 300x200' "$scratch/captures"
 CANCEL=1 sh "$root/session/screenshot.sh" region
 [ "$(find "$scratch/Pictures with spaces" -name '*.png' | wc -l)" -eq 2 ]
 if FAIL_CAPTURE=1 sh "$root/session/screenshot.sh" full 2>/dev/null; then
     echo 'Expected capture failure' >&2; exit 1
 fi
 [ "$(find "$scratch/Pictures with spaces" -name '*.png' | wc -l)" -eq 2 ]
-rg -q 'Screenshot failed' "$scratch/notifications"
+grep -Fq 'Screenshot failed' "$scratch/notifications"
 echo 'Screenshot capture, region, cancellation, failure cleanup, and spaced paths passed.'
