@@ -44,19 +44,14 @@ pub fn install_css() {
     let css = gtk::CssProvider::new();
     css.load_from_string(
         "window.meridian-surface { background: transparent; }
-        window.meridian-preferences { background: #f5f5f7; color: #242428; }
-        window.meridian-preferences headerbar { background: #e8e9ee; color: #242428; }
-        window.meridian-terminal headerbar { background: #24272d; color: #d6d9e0; }
-        .meridian-window-button { min-width: 16px; min-height: 16px; padding: 0; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); font-family: sans-serif; font-size: 12px; font-weight: bold; color: rgba(0,0,0,.65); box-shadow: none; }
-        window.meridian-preferences.meridian-dark { background: #25272c; color: #e4e6ec; }
-        window.meridian-preferences.meridian-dark headerbar, window.meridian-finder.meridian-dark headerbar { background: #303238; color: #e4e6ec; }
-        window.meridian-terminal:not(.meridian-dark) headerbar { background: #eceef2; color: #242830; }
-        .meridian-window-button.close { background: #ef726e; }
-        .meridian-window-button.minimize { background: #e9bd59; }
-        .meridian-window-button.maximize { background: #68bd85; }
-        .meridian-window-button.close:hover { background: #f58c86; }
-        .meridian-window-button.minimize:hover { background: #f1cd78; }
-        .meridian-window-button.maximize:hover { background: #83cf9d; }",
+        window.meridian-preferences { background: #ffffff; color: #202530; }
+        window.meridian-preferences headerbar { min-height: 36px; padding: 0 0 0 8px; background: #f4f5f7; color: #202530; box-shadow: inset 0 -1px #dce0e7; }
+        window.meridian-preferences.meridian-dark { background: #191b20; color: #eef0f5; }
+        window.meridian-preferences.meridian-dark headerbar { background: #191b20; color: #eef0f5; box-shadow: inset 0 -1px #383e48; }
+        .meridian-window-button { min-width: 40px; min-height: 32px; padding: 0; border-radius: 0; border: 0; background: transparent; color: inherit; box-shadow: none; }
+        .meridian-window-button:hover { background: rgba(100,110,130,.16); }
+        .meridian-window-button.close:hover { background: #c52b38; color: #ffffff; }
+        .meridian-window-button:focus-visible { outline: 2px solid #3578d5; outline-offset: -3px; }",
     );
     if let Some(display) = gdk::Display::default() {
         gtk::style_context_add_provider_for_display(&display, &css, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);

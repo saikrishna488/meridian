@@ -13,7 +13,7 @@
   --text-display: 52px;
 
   /* Layout */
-  --dock-surface-height: 128px; /* keep in sync with PANEL_HEIGHT in shell/src/surface.rs */
+  --dock-surface-height: 56px; /* keep in sync with PANEL_HEIGHT in shell/src/surface.rs */
   --weight-regular: 420;
   --weight-medium: 520;
   --weight-semibold: 600;
@@ -64,3 +64,35 @@
 }
 
 :root[data-theme="light"] { --glass-bg: rgb(240 243 250 / .86); --glass-bg-strong: rgb(245 247 252 / .95); --glass-border: rgb(30 40 60 / .16); --tile-bg: rgb(30 40 60 / .06); --tile-bg-hover: rgb(30 40 60 / .12); }
+
+/* Native-app surfaces share a compact neutral palette. */
+:root {
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-subtle: #f4f5f7;
+  --surface-hover: #eaedf2;
+  --ink: #202530;
+  --ink-muted: #626b7a;
+  --line: #dce0e7;
+  --selection: #e7f0ff;
+  --selection-ink: #1e57a5;
+  --action: #2563c7;
+  --action-hover: #1e51a3;
+  --focus-ring: #3578d5;
+  --danger: #b42332;
+}
+:root[data-theme="dark"] {
+  --surface: #191b20;
+  --surface-raised: #22252b;
+  --surface-subtle: #14161a;
+  --surface-hover: #30343d;
+  --ink: #eef0f5;
+  --ink-muted: #a6afbf;
+  --line: #383e48;
+  --selection: #243b5c;
+  --selection-ink: #b6d4ff;
+  --action: #8eb9ff;
+  --action-hover: #b0ceff;
+  --focus-ring: #9ac2ff;
+  --danger: #ff9aab;
+}

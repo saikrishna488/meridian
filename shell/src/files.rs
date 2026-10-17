@@ -46,7 +46,7 @@ pub fn locations() -> Vec<FileLocation> {
         }
     }
     result.push(FileLocation { name: "Computer".into(), path: "/".into() });
-    if let Ok(mounts) = std::fs::read_dir(format!("/run/media/{}", glib::user_name().to_string_lossy())) {
+    if let Ok(mounts) = std::fs::read_dir(format!("/media/{}", glib::user_name().to_string_lossy())) {
         for entry in mounts.flatten().filter(|e| e.path().is_dir()) {
             result.push(FileLocation {
                 name: entry.file_name().to_string_lossy().into_owned(),

@@ -50,6 +50,7 @@ pub struct Shell {
 #[derive(Default)]
 struct State {
     primary: Option<gdk::Monitor>,
+    desktop_monitor: Option<gio::FileMonitor>,
     panel: Option<Rc<WebSurface>>,
     topbar: Option<Rc<WebSurface>>,
     preferences: Option<Rc<WebSurface>>,
@@ -193,6 +194,21 @@ impl Shell {
                 shell.reconcile_monitors();
             }
         });
+        let desktop_folder = crate::desktop::folder();
+        if let Err(error) = std::fs::create_dir_all(&desktop_folder) {
+            log::warn!("Desktop folder: {error}");
+        }
+        if let Ok(monitor) = gio::File::for_path(desktop_folder)
+            .monitor_directory(gio::FileMonitorFlags::WATCH_MOVES, gio::Cancellable::NONE)
+        {
+            let weak = Rc::downgrade(&shell);
+            monitor.connect_changed(move |_, _, _, _| {
+                if let Some(shell) = weak.upgrade() {
+                    shell.desktop_changed(&crate::desktop::get());
+                }
+            });
+            shell.state.borrow_mut().desktop_monitor = Some(monitor);
+        }
         shell.reconcile_monitors();
         shell.install_actions();
         log::info!("meridian shell started{}", if dev { " (dev mode)" } else { "" });
@@ -300,15 +316,20 @@ impl Shell {
                 serialize(proto::reply_ok(&state))
             }
             Request::DesktopAddFile(file) => {
-                let state = crate::desktop::add_file(&file.path)?;
-                self.desktop_changed(&state);
-                serialize(proto::reply_ok(&state))
+                let weak = self.weak_self.clone();
+                Ok(Reply::Later(Box::pin(async move {
+                    let state = crate::files::blocking(move || crate::desktop::add_file(&file.path)).await?;
+                    if let Some(shell) = weak.upgrade() {
+                        shell.desktop_changed(&state);
+                    }
+                    proto::reply_ok(&state).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+                })))
             }
             Request::DesktopChooseFiles => {
                 let window = surface.window.clone();
                 let weak = self.weak_self.clone();
                 Ok(Reply::Later(Box::pin(async move {
-                    let dialog = gtk::FileDialog::builder().title("Add files to desktop").build();
+                    let dialog = gtk::FileDialog::builder().title("Move files to Desktop").build();
                     let files = match dialog.open_multiple_future(Some(&window)).await {
                         Ok(files) => files,
                         Err(error) if error.matches(gtk::DialogError::Dismissed) => {
@@ -320,7 +341,8 @@ impl Shell {
                     let mut state = crate::desktop::get();
                     for index in 0..files.n_items() {
                         if let Some(file) = files.item(index).and_downcast::<gio::File>().and_then(|file| file.path()) {
-                            state = crate::desktop::add_file(&file.to_string_lossy())?;
+                            state = crate::files::blocking(move || crate::desktop::add_file(&file.to_string_lossy()))
+                                .await?;
                         }
                     }
                     if let Some(shell) = weak.upgrade() {
@@ -824,9 +846,7 @@ impl Shell {
 
     fn update_dock_visibility(&self, windows: &[Window]) {
         if let Some(panel) = &self.state.borrow().panel {
-            panel
-                .window
-                .set_visible(!self.is_open(Popover::Applications) && !windows.iter().any(|window| window.fullscreen));
+            panel.window.set_visible(!windows.iter().any(|window| window.fullscreen));
         }
     }
 
@@ -978,10 +998,6 @@ impl Shell {
                 if let Some(windows) = &self.windows {
                     self.update_dock_visibility(&windows.windows());
                 }
-                let topbar =
-                    WebSurface::new(&self.app, &self.env, SurfaceKind::Topbar, Some(monitor), self.dispatcher());
-                topbar.window.present();
-                self.state.borrow_mut().topbar = Some(topbar);
             }
         }
 
@@ -999,7 +1015,7 @@ impl Shell {
             }
             let wallpaper =
                 WebSurface::new(&self.app, &self.env, SurfaceKind::Wallpaper, Some(monitor), self.dispatcher());
-            let drop = gtk::DropTarget::new(gdk::FileList::static_type(), gdk::DragAction::COPY);
+            let drop = gtk::DropTarget::new(gdk::FileList::static_type(), gdk::DragAction::MOVE);
             drop.set_propagation_phase(gtk::PropagationPhase::Capture);
             let weak = self.weak_self.clone();
             drop.connect_drop(move |_, value, _, _| {
@@ -1034,9 +1050,12 @@ impl Shell {
     /// Fixed, argument-less actions exported on D-Bus for compositor
     /// keybindings: `gapplication action org.meridian.Shell <name>`.
     fn install_actions(&self) {
-        let actions: [(&str, ShellAction); 3] = [
+        let actions: [(&str, ShellAction); 6] = [
             ("toggle-applications", |shell| shell.toggle_popover(Popover::Applications)),
             ("toggle-options", |shell| shell.toggle_popover(Popover::Options)),
+            ("open-finder", Shell::open_finder),
+            ("open-terminal", Shell::open_terminal),
+            ("open-settings", Shell::open_preferences),
             ("lock-session", |shell| {
                 if let Err(e) = shell.lock_session() {
                     log::warn!("lock-session keybinding: {}", e.message);
@@ -1089,7 +1108,10 @@ fn dock_path() -> std::path::PathBuf {
 }
 
 fn read_dock() -> Vec<String> {
-    std::fs::read(dock_path()).ok().and_then(|data| serde_json::from_slice(&data).ok()).unwrap_or_default()
+    std::fs::read(dock_path())
+        .ok()
+        .and_then(|data| serde_json::from_slice(&data).ok())
+        .unwrap_or_else(|| vec!["meridian-terminal.desktop".into(), "meridian-finder.desktop".into()])
 }
 
 fn system_info() -> proto::SystemInfo {

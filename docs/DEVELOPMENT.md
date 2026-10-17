@@ -2,23 +2,17 @@
 
 ## Environment
 
-The build dependencies live in a Fedora **toolbox** container
-(`meridian-dev`), so nothing is installed on the host:
+Development targets Debian testing and compatible Debian derivatives. Run:
 
 ```sh
 tools/dev-env.sh
 ```
 
-It installs: Rust (cargo, rustfmt, clippy), Node.js + npm (TypeScript),
-`gtk4-devel`, `webkitgtk6.0-devel`, `gtk4-layer-shell-devel` (≥ 1.2.0, for
-the lock screen's session-lock surfaces too), `pam-devel` (lock screen
-password check), `clang-devel` (libclang: `gtk4-session-lock-sys` generates
-its bindings at build time), labwc, Xwayland, Inter fonts, foot (a terminal
-to launch), grim (screenshots), and WirePlumber (`wpctl`, used for volume).
+This installs native APT packages on the host, using sudo when needed. It does not create a container or add repositories. The current Rust bindings require Rust >= 1.92, GTK >= 4.18, WebKitGTK >= 2.52, and gtk4-layer-shell >= 1.2. Node >= 22.22.2 is required by the UI test dependencies. Older Debian stable packages may be too old: use matching backports or a release providing these versions. The setup checks the native library versions after installation.
 
-The `tools/*.sh` scripts re-run themselves inside the toolbox
-automatically. To build on the host instead, install the same packages with
-`sudo dnf install …` and set `MERIDIAN_NO_TOOLBOX=1`.
+Build packages are listed in `tools/debian.sh`: Rust/Cargo/rustfmt/clippy, Node/npm, GTK4/WebKitGTK development libraries, gtk4-layer-shell, PAM, libclang, pkg-config and build-essential. Runtime packages include labwc, Xwayland, greetd, NetworkManager, BlueZ, WirePlumber, Inter and DDC utilities. PAM uses Debian’s common-auth/common-account stack.
+
+Package references: [Debian gtk4-layer-shell](https://packages.debian.org/testing/libgtk4-layer-shell-dev), [Debian WebKitGTK](https://packages.debian.org/testing/libwebkitgtk-6.0-dev).
 
 ## Build
 
@@ -38,9 +32,7 @@ for system-app appearance behavior. The shared mount layer reads the persisted
 mode and applies it to the document root, so CSS should use `[data-theme="dark"]`
 or theme variables rather than maintaining private appearance state. React
 surfaces that need to repaint non-CSS content can subscribe with
-`subscribeAppearance()` or use the hook. Terminal emulator output intentionally
-uses a fixed black-on-white palette; its surrounding window controls remain
-theme-aware.
+`subscribeAppearance()` or use the hook. Terminal emulator output follows the selected light/dark palette with a minimum contrast ratio for ANSI and truecolor text.
 
 - `cd ui && npm run check` checks TypeScript, including JSX.
 - `cd ui && npm test` builds and tests surface interactions with a mocked host.
@@ -73,41 +65,15 @@ cannot intercept startup or keyboard shortcuts.
   gapplication action org.meridian.Shell lock-session
   grim shot.png                              # screenshot
   ```
-- **Your installed apps in the toolbox.** The container can't run the
-  host's programs. In a toolbox, `dev-session.sh` sets `MERIDIAN_HOST_APPS=1`,
-  and the shell then reads the host's desktop entries (`/run/host/usr/share`,
-  Flatpak exports, `~/.local/share/applications`) and launches them **on the
-  host** with `flatpak-spawn --host gio launch <file>`. They open inside the
-  nested session.
-- **XWayland in the toolbox.** The script gives nested labwc a private
-  `/tmp/.X11-unix` in its own mount namespace, because the host's shows up
-  as owned by `nobody` in a rootless container and labwc won't start
-  XWayland there.
 - **Options controls change your real hardware** (Wi-Fi, Bluetooth,
   backlight, volume), even in the nested session.
 - **Sleep and Sign out act on your real session, not the nested one.**
   They go through logind for the process that's actually running
-  `meridian-shell` — your host (or toolbox) login session — so clicking
+  `meridian-shell` — your host login session — so clicking
   them suspends your real machine or ends the session you're developing
   from. Lock is safe to try: it only locks screens it can reach
   (`gtk4_session_lock::is_supported()` must be true for the nested labwc,
   which it is).
-
-### Running on the host instead
-
-To skip the container entirely, install the runtime pieces once:
-
-```sh
-sudo dnf install webkitgtk6.0 gtk4-layer-shell labwc wireplumber
-```
-
-Then run the toolbox-built binary on the host. The app list then comes from
-GIO directly, with no bridge:
-
-```sh
-export XDG_CURRENT_DESKTOP=Meridian:wlroots MERIDIAN_UI_DIR=$PWD/ui/dist MERIDIAN_ASSETS_DIR=$PWD/assets
-labwc -C session/labwc -S "$PWD/target/debug/meridian-shell"
-```
 
 ## The login screen
 
@@ -159,3 +125,7 @@ enforces it (see the `rejects_unknown_fields` test).
 ## Layout
 
 See [ARCHITECTURE.md §13](ARCHITECTURE.md#13-repository-layout).
+
+## Read-only GUI preview
+
+`node tools/preview-ui.mjs` serves `ui/dist` on loopback port 4173 with sample fixtures. Build the UI first. It strips the native-only CSP and maps `meridian://` assets to local HTTP **only in the preview response**; production bundles and CSP remain unchanged. Fake bridge calls update in-memory sample state and never invoke native operations. See `docs/GUI-POLISH.md` for the visual and keyboard audit.

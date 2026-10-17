@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { on, request } from "../lib/bridge";
+import { useMenuFocus } from "../lib/react";
 import { isBuiltinApp } from "../lib/apps";
 import { AppIcon } from "./AppIcon";
 import type { WindowInfo } from "../lib/generated/WindowInfo";
@@ -10,7 +11,7 @@ const report = (error: unknown) => console.error("meridian dock:", error);
 type Item = { key: string; name: string; app?: SearchItem; special?: "applications" | "trash" };
 
 export function Dock() {
-  const dock = useRef<HTMLElement>(null);
+  const dock = useRef<HTMLElement>(null), contextMenu = useRef<HTMLDivElement>(null);
   const [windows, setWindows] = useState<WindowInfo[]>([]);
   const [apps, setApps] = useState<SearchItem[]>([]);
   const [pins, setPins] = useState<string[]>([]);
@@ -19,6 +20,7 @@ export function Dock() {
   const [dropping, setDropping] = useState<string | null>(null);
   const [context, setContext] = useState<Item | null>(null);
   const [status, setStatus] = useState("");
+  useMenuFocus(contextMenu, !!context, () => setContext(null));
   useEffect(() => {
     let alive = true, revision = 0, layoutRevision = 0, pinsRevision = 0;
     const off = [on("windows.changed", e => { revision++; setWindows(e.data); }), on("dock.changed", e => { pinsRevision++; setPins(e.data); }),
@@ -70,7 +72,9 @@ export function Dock() {
       try { await request({ method: "dock.pin", params: { id: appId, pinned: true } }); } catch (e) { fail(e); return; }
     }
     const buttons = Array.from(dock.current?.querySelectorAll<HTMLElement>("[data-dock-key]") ?? []);
-    const index = next.findIndex(id => {
+    const targetButton = target ? buttons.find(button => button.dataset.dockKey === target.key) : undefined;
+    const bounds = targetButton?.getBoundingClientRect();
+    const index = target && bounds ? next.indexOf(target.key) + (event.clientX >= bounds.left + bounds.width / 2 ? 1 : 0) : next.findIndex(id => {
       const button = buttons.find(element => element.dataset.dockKey === id);
       return button ? event.clientX < button.getBoundingClientRect().left + button.getBoundingClientRect().width / 2 : false;
     });
@@ -97,7 +101,7 @@ export function Dock() {
         const running = windows.filter(w => w.name.toLowerCase() === item.name.toLowerCase()), active = running.some(w => w.active);
         return <li key={item.key} className={dropping === item.key ? "dock-drop-target" : undefined}>
           <button id={item.special} data-dock-key={item.key} className={item.special ? "bar-button" : `window${running.length ? " running" : ""}`}
-            aria-label={item.name} aria-pressed={item.special ? undefined : active} aria-haspopup={item.special === "applications" ? "dialog" : undefined}
+            title={item.name} aria-label={item.name} aria-pressed={item.special ? undefined : active} aria-haspopup={item.special === "applications" ? "dialog" : undefined}
             aria-expanded={item.special === "applications" ? expanded : undefined} data-tooltip={item.name}
             draggable onDragStart={event => start(event, item)} onDragOver={event => over(event, item.key)} onDrop={event => void drop(event, item)}
             onContextMenu={event => { event.preventDefault(); if (item.app) setContext(item); }} onClick={() => click(item)}>
@@ -106,7 +110,7 @@ export function Dock() {
         </li>;
       })}
     </ul>
-    {context && <div className="dock-context" role="menu" aria-label={`${context.name} actions`}>
+    {context && <div ref={contextMenu} className="dock-context" role="menu" aria-label={`${context.name} actions`}>
       <strong>{context.name}</strong>
       {pins.includes(context.key) && <button role="menuitem" onClick={() => { void request({ method: "dock.pin", params: { id: context.key, pinned: false } }).catch(fail); setContext(null); }}>Remove from dock</button>}
       {context.app && !isBuiltinApp(context.app.id) && <button role="menuitem" autoFocus onClick={() => { void request({ method: "apps.uninstall_prompt", params: { id: context.app!.id } }).catch(fail); setContext(null); }}>Uninstall…</button>}

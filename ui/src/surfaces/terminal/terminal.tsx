@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { hello, on, request } from "../../lib/bridge";
-import { errorMessage, mount } from "../../lib/react";
-import { useAppearance } from "../../lib/appearance";
+import { errorMessage, mount, useWindowKey } from "../../lib/react";
+import { currentAppearance, useAppearance } from "../../lib/appearance";
 import { Terminal as Emulator } from "../../vendor/xterm";
 import { FitAddon } from "../../vendor/addon-fit";
+import { Icon } from "../../components/Icon";
 import { terminalTheme } from "./theme";
 
-function colors() { return terminalTheme("light"); }
+function colors() { return terminalTheme(currentAppearance()); }
 function Session({ active, fontSize, cwd, appearance, onExit }: { active: boolean; fontSize: number; cwd?: string; appearance: string; onExit: () => void }) {
   const container = useRef<HTMLDivElement>(null);
   const emulator = useRef<Emulator | null>(null);
@@ -84,14 +85,13 @@ function Session({ active, fontSize, cwd, appearance, onExit }: { active: boolea
   useEffect(() => {
     if (emulator.current) {
       emulator.current.options.fontSize = fontSize;
-      // Reapply the explicit readable palette and repaint the canvas after
-      // appearance changes; terminal text remains black on white by design.
+      // Repaint existing terminal cells when the desktop appearance changes.
       emulator.current.options.theme = colors();
       if (emulator.current.rows) emulator.current.refresh(0, emulator.current.rows - 1);
     }
     if (active) refit.current?.();
   }, [active, fontSize, appearance]);
-  return <section className={`terminal-session${active ? " active" : ""}`} aria-hidden={!active}><div className="terminal-screen" ref={container} aria-label="Interactive terminal" />{error && <p className="terminal-error" role="alert">{error}</p>}<footer className="terminal-status"><span><i />{shell}</span><span>UTF-8 · Interactive shell</span></footer></section>;
+  return <section className={`terminal-session${active ? " active" : ""}`} role="tabpanel" aria-label="Terminal output" aria-hidden={!active}><div className="terminal-screen" ref={container} aria-label="Interactive terminal" />{error && <p className="terminal-error" role="alert">{error}</p>}<footer className="terminal-status"><span><i />{shell}</span><span>UTF-8 · Interactive shell</span></footer></section>;
 }
 function Terminal() {
   const appearance = useAppearance();
@@ -108,8 +108,17 @@ function Terminal() {
   }, []);
   function newTab(cwd?: string) { const id = next.current++; tabsRef.current = [...tabsRef.current, { id, ended: false, cwd }]; setTabs(tabsRef.current); setActive(id); }
   function close(id: number) { setTabs(old => old.filter(t => t.id !== id)); if (active === id) setActive(tabs.find(t => t.id !== id)?.id ?? 0); }
-  return <main className="terminal-app"><header className="terminal-tabs"><div role="tablist" aria-label="Terminal sessions">{tabs.map(tab => <div className="terminal-tab" key={tab.id}><button role="tab" aria-selected={tab.id === active} onClick={() => setActive(tab.id)}><span className="session-dot" />Session {tab.id}{tab.ended ? " · ended" : ""}</button><button aria-label={`Close session ${tab.id}`} onClick={() => close(tab.id)}>×</button></div>)}</div><button className="new-session" aria-label="New terminal session" disabled={!ready || tabs.length >= 16} onClick={() => newTab()}>＋</button><div className="terminal-tools"><button aria-label="Decrease text size" disabled={fontSize <= 11} onClick={() => setFontSize(fontSize - 1)}>A−</button><button aria-label="Increase text size" disabled={fontSize >= 24} onClick={() => setFontSize(fontSize + 1)}>A+</button></div></header>
-    {error && <p role="alert">{error}</p>}{ready && tabs.map(tab => <Session key={tab.id} active={tab.id === active} fontSize={fontSize} cwd={tab.cwd} appearance={appearance} onExit={() => setTabs(old => old.map(t => t.id === tab.id ? { ...t, ended: true } : t))} />)}{!tabs.length && <div className="terminal-empty"><p>All sessions closed.</p><button onClick={() => newTab()}>Open a terminal</button></div>}
+  useWindowKey(event => {
+    if (!event.ctrlKey) return;
+    if (event.shiftKey && event.key.toLowerCase() === "t" && ready && tabs.length < 16) { event.preventDefault(); newTab(); }
+    if (event.shiftKey && event.key.toLowerCase() === "w" && active) { event.preventDefault(); close(active); }
+    if (["PageUp", "PageDown"].includes(event.key) && tabs.length) {
+      event.preventDefault(); const index = tabs.findIndex(t => t.id === active);
+      setActive(tabs[(index + (event.key === "PageDown" ? 1 : tabs.length - 1)) % tabs.length]!.id);
+    }
+  });
+  return <main className="terminal-app"><header className="terminal-tabs"><div role="tablist" aria-label="Terminal sessions">{tabs.map(tab => <div className="terminal-tab" key={tab.id}><button role="tab" aria-selected={tab.id === active} tabIndex={tab.id === active ? 0 : -1} onKeyDown={event => { if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) { event.preventDefault(); const index = tabs.findIndex(t => t.id === tab.id); const target = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length; setActive(tabs[target]!.id); event.currentTarget.closest('[role="tablist"]')?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[target]?.focus(); } }} onClick={() => setActive(tab.id)}><span className={`session-dot${tab.ended ? " ended" : ""}`} />Session {tab.id}{tab.ended ? " · ended" : ""}</button><button aria-label={`Close session ${tab.id}`} onClick={() => close(tab.id)}><Icon name="close" width="12" height="12" /></button></div>)}</div><button className="new-session" aria-label="New terminal session" disabled={!ready || tabs.length >= 16} onClick={() => newTab()} title="New terminal session (Ctrl+Shift+T)"><Icon name="plus" width="17" height="17" /></button><div className="terminal-tools"><button aria-label="Decrease text size" disabled={fontSize <= 11} onClick={() => setFontSize(fontSize - 1)}>A−</button><button aria-label="Increase text size" disabled={fontSize >= 24} onClick={() => setFontSize(fontSize + 1)}>A+</button></div></header>
+    {error && <p role="alert">{error}</p>}{ready && tabs.map(tab => <Session key={tab.id} active={tab.id === active} fontSize={fontSize} cwd={tab.cwd} appearance={appearance} onExit={() => setTabs(old => old.map(t => t.id === tab.id ? { ...t, ended: true } : t))} />)}{!tabs.length && <div className="terminal-empty"><Icon name="terminal" width="40" height="40" /><h1>Ready when you are</h1><p>Open a terminal to start a new shell session.</p><span className="terminal-shortcut">Ctrl + Shift + T</span><button onClick={() => newTab()}>Open a terminal</button></div>}
   </main>;
 }
 mount(<Terminal />);

@@ -96,6 +96,7 @@ test("Finder browses host folders, confirms trash, and manages installed apps", 
   assert.ok(!ui.requests.some(r => r.method === "files.trash"));
   ui.get('[role="dialog"] button[type="submit"]').click(); await waitFor(() => ui.requests.some(r => r.method === "files.trash"));
   assert.equal(ui.requests.find(r => r.method === "files.trash").params.path, file.path);
+  await waitFor(() => !ui.get('[role="dialog"]') && ui.get(".file-collection").getAttribute("aria-busy") === "false");
   [...ui.window.document.querySelectorAll('nav button')].find(b => b.textContent.endsWith("Applications")).click(); await waitFor(() => ui.get('[aria-label="Firefox"]'));
   ui.get('[aria-label="Firefox"]').dispatchEvent(new ui.window.MouseEvent("contextmenu", { bubbles: true, cancelable: true })); await waitFor(() => ui.get('.finder-context'));
   menu(ui, '.finder-context', "Uninstall…"); await waitFor(() => ui.get('.uninstall-actions .danger')?.disabled === false);
@@ -145,9 +146,9 @@ test("desktop right-click removes shortcuts without deleting their target files"
   const shortcut = { id: "file:/home/test/notes.txt", name: "notes.txt", kind: "file", target: "/home/test/notes.txt", icon: null };
   const ui = await surface(t, "wallpaper", req => req.method === "desktop.choose_files" ? { ...desktop, items: [shortcut] } : req.method === "desktop.remove" ? desktop : defaults(req));
   ui.get('.desktop').dispatchEvent(new ui.window.MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 80, clientY: 80 })); await waitFor(() => ui.get('.desktop-context'));
-  menu(ui, '.desktop-context', "Add files…"); await waitFor(() => ui.get('[aria-label="notes.txt"]'));
+  menu(ui, '.desktop-context', "Move files here…"); await waitFor(() => ui.get('[aria-label="notes.txt"]'));
   ui.get('[aria-label="notes.txt"]').dispatchEvent(new ui.window.MouseEvent("contextmenu", { bubbles: true, cancelable: true })); await waitFor(() => ui.get('.desktop-context'));
-  menu(ui, '.desktop-context', "Remove shortcut"); await waitFor(() => ui.requests.some(r => r.method === "desktop.remove"));
+  menu(ui, '.desktop-context', "Move to Trash"); await waitFor(() => ui.requests.some(r => r.method === "desktop.remove"));
   assert.ok(!ui.requests.some(r => ["files.trash", "files.rename"].includes(r.method)));
   await waitFor(() => !ui.get('[aria-label="notes.txt"]'));
   ui.emit("desktop.changed", { ...desktop, wallpaper_uri: "meridian://assets/wallpapers/meridian-tide.svg" }); await waitFor(() => ui.get('.wallpaper').style.backgroundImage.includes("meridian-tide"));
@@ -176,9 +177,8 @@ test("Terminal refits after fullscreen resize and keeps input focused", async t 
 test("Settings saves appearance and responds to system theme broadcasts", async t => {
   const ui = await surface(t, "settings", req => req.method === "desktop.appearance_set" ? { ...desktop, appearance: req.params.id } : defaults(req));
   [...ui.window.document.querySelectorAll("nav button")].find(b => b.textContent.endsWith("Appearance")).click();
-  await waitFor(() => ui.get("#appearance"));
-  ui.get("#appearance").value = "dark";
-  ui.get("#appearance").dispatchEvent(new ui.window.Event("change", { bubbles: true }));
+  await waitFor(() => ui.get(".appearance-choice.dark"));
+  ui.get(".appearance-choice.dark").click();
   await waitFor(() => ui.requests.some(r => r.method === "desktop.appearance_set"));
   assert.equal(ui.requests.find(r => r.method === "desktop.appearance_set").params.id, "dark");
   ui.emit("desktop.changed", { ...desktop, appearance: "dark" });
@@ -307,8 +307,133 @@ test("Bluetooth connects a paired device through its discovered BlueZ path", asy
   assert.equal(ui.get('#bluetooth').className,"meridian-toggle");
 });
 test("Sharing switches preview their state without changing system services", async t => {
-  const ui=await surface(t,"settings",defaults);[...ui.window.document.querySelectorAll("nav button")].find(b=>b.textContent.endsWith("Sharing")).click();
+  const ui=await surface(t,"settings",defaults);[...ui.window.document.querySelectorAll("nav button")].find(b=>b.getAttribute("aria-label") === "Sharing").click();
   await waitFor(()=>ui.get('[aria-label="File Sharing"]'));assert.ok(ui.get(".settings-content").textContent.includes("Prototype"));
   for(const label of ["File Sharing","Screen Sharing","Remote Login"]){ui.get(`[aria-label="${label}"]`).click();await waitFor(()=>ui.get(`[aria-label="${label}"]`).getAttribute("aria-checked")==="true");}
-  assert.ok(ui.requests.every(r=>["shell.hello","desktop.get"].includes(r.method)));
+  assert.ok(ui.requests.every(r=>["shell.hello","desktop.get","settings.get"].includes(r.method)));
+});
+
+
+test("launcher context menu pins an app without launching it", async t => {
+  const ui = await surface(t, "applications", defaults);
+  ui.emit("popover.shown");
+  await waitFor(() => ui.get("#row-0"));
+  ui.get("#row-0").dispatchEvent(new ui.window.MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 100, clientY: 100 }));
+  await waitFor(() => ui.get(".app-context"));
+  menu(ui, ".app-context", "Add to Dock");
+  await waitFor(() => ui.requests.some(r => r.method === "dock.pin"));
+  assert.deepEqual(ui.requests.find(r => r.method === "dock.pin").params, { id: app.id, pinned: true });
+  assert.ok(!ui.requests.some(r => r.method === "search.activate"));
+});
+
+test("desktop reflects folder changes and labels real files for Trash", async t => {
+  const ui = await surface(t, "wallpaper", defaults);
+  const item = { id: "file:/home/test/Desktop/new.txt", name: "new.txt", kind: "file", target: "/home/test/Desktop/new.txt", icon: null };
+  ui.emit("desktop.changed", { ...desktop, items: [item] });
+  await waitFor(() => ui.get('[aria-label="new.txt"]'));
+  ui.get('[aria-label="new.txt"]').dispatchEvent(new ui.window.MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+  await waitFor(() => ui.get(".desktop-context"));
+  assert.ok([...ui.window.document.querySelectorAll('.desktop-context button')].some(b => b.textContent === "Move to Trash"));
+  ui.emit("desktop.changed", desktop);
+  await waitFor(() => !ui.get('[aria-label="new.txt"]'));
+});
+
+test("Settings Home leads to working settings and search opens a matching page", async t => {
+  const ui = await surface(t, "settings", req => req.method === "settings.get" ? { wifi: true, bluetooth: false, brightness: 75, volume: 42 } : defaults(req));
+  assert.equal(ui.get("#settings-title").textContent, "Home");
+  assert.ok(ui.get(".welcome-banner"));
+  assert.ok(!ui.get(".settings-content").textContent.includes("Coming soon"));
+  type(ui, '[aria-label="Search settings"]', "wallpaper");
+  await waitFor(() => ui.window.document.querySelectorAll("nav button").length === 1);
+  ui.get('[aria-label="Search settings"]').dispatchEvent(new ui.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  await waitFor(() => ui.get("#settings-title").textContent === "Wallpaper");
+  ui.get('[aria-label="Clear settings search"]').click();
+  await waitFor(() => ui.get('nav [aria-label="Sound"]'));
+  ui.get('nav [aria-label="Sound"]').click();
+  await waitFor(() => ui.get('[aria-label="Volume"]'));
+  assert.equal(ui.get('[aria-label="Volume"]').value, "42");
+});
+
+test("Finder navigates files with the keyboard and traps focus in rename dialogs", async t => {
+  const entries = ["Documents", "Downloads"].map(name => ({ name, path: `/home/test/${name}`, directory: true, symlink: false, size: 0, modified: 0 }));
+  const ui = await surface(t, "finder", req => req.method === "files.locations" ? [{ name: "Home", path: "/home/test" }] : req.method === "files.list" ? { path: req.params.path, parent: "/home", entries, truncated: false } : defaults(req));
+  await waitFor(() => ui.get('[aria-label="Documents"]'));
+  ui.get('[aria-label="Documents"]').click();
+  ui.get('[aria-label="Documents"]').dispatchEvent(new ui.window.KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+  await waitFor(() => ui.get('[aria-label="Downloads"]').getAttribute("aria-pressed") === "true");
+  ui.get('[aria-label="Downloads"]').dispatchEvent(new ui.window.KeyboardEvent("keydown", { key: "F2", bubbles: true }));
+  await waitFor(() => ui.get('[role="dialog"] [aria-label="Name"]'));
+  const input = ui.get('[aria-label="Name"]'), submit = ui.get('[role="dialog"] button[type="submit"]');
+  await waitFor(() => ui.window.document.activeElement === input);
+  submit.focus(); submit.dispatchEvent(new ui.window.KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
+  assert.equal(ui.window.document.activeElement, input);
+  input.dispatchEvent(new ui.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+  await waitFor(() => !ui.get('[role="dialog"]'));
+  assert.ok(!ui.requests.some(req => req.method === "files.rename"));
+});
+
+test("launcher context menu supports arrow keys and Escape without launching", async t => {
+  const ui = await surface(t, "applications", defaults);
+  ui.emit("popover.shown"); await waitFor(() => ui.get("#row-0"));
+  ui.get("#row-0").dispatchEvent(new ui.window.MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+  await waitFor(() => ui.get(".app-context"));
+  const menu = ui.get(".app-context"), buttons = [...menu.querySelectorAll("button:not(:disabled)")];
+  await waitFor(() => ui.window.document.activeElement === buttons[0]);
+  buttons[0].dispatchEvent(new ui.window.KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true }));
+  assert.equal(ui.window.document.activeElement, buttons[1]);
+  buttons[1].dispatchEvent(new ui.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+  await waitFor(() => !ui.get(".app-context"));
+  assert.ok(!ui.requests.some(req => ["search.activate", "dock.pin"].includes(req.method)));
+});
+
+test("desktop welcome is dismissible and file drags show the move action", async t => {
+  const ui = await surface(t, "wallpaper", defaults);
+  await waitFor(() => ui.get('[aria-label="Welcome to Meridian"]'));
+  ui.get('[aria-label="Dismiss welcome"]').click();
+  await waitFor(() => !ui.get('[aria-label="Welcome to Meridian"]'));
+  assert.equal(ui.window.localStorage.getItem("meridian.welcome-dismissed"), "1");
+  drag(ui.window, ui.get(".desktop"), "dragover", { "text/uri-list": "file:///home/test/notes.txt" });
+  await waitFor(() => ui.get(".desktop-drop-indicator"));
+  assert.equal(ui.get(".desktop-drop-indicator").textContent, "Move to Desktop");
+});
+
+test("Terminal shortcuts create, switch and close tabs without sending shell commands", async t => {
+  let id = 0;
+  const ui = await surface(t, "terminal", req => req.method === "terminal.start" ? { id: ++id, shell: "/bin/bash" } : req.method === "terminal.read" ? { data: [], exited: false } : defaults(req));
+  await waitFor(() => ui.requests.some(req => req.method === "shell.hello"));
+  const key = (value, shiftKey = false) => ui.window.dispatchEvent(new ui.window.KeyboardEvent("keydown", { key: value, ctrlKey: true, shiftKey, bubbles: true, cancelable: true }));
+  key("T", true); await waitFor(() => ui.window.document.querySelectorAll('[role="tab"]').length === 1);
+  key("T", true); await waitFor(() => ui.window.document.querySelectorAll('[role="tab"]').length === 2);
+  key("PageUp"); await waitFor(() => ui.get('[role="tab"][aria-selected="true"]').textContent.includes("Session 1"));
+  key("W", true); await waitFor(() => ui.window.document.querySelectorAll('[role="tab"]').length === 1);
+  assert.ok(!ui.requests.some(req => req.method === "terminal.write"));
+});
+
+test("late desktop snapshots cannot replace a newer folder change", async t => {
+  const pending = [];
+  const ui = await surface(t, "wallpaper", req => req.method === "desktop.get" ? new Promise(resolve => pending.push(resolve)) : defaults(req));
+  await waitFor(() => pending.length >= 2);
+  const item = { id: "file:/home/test/Desktop/latest.txt", name: "latest.txt", kind: "file", target: "/home/test/Desktop/latest.txt", icon: null };
+  ui.emit("desktop.changed", { ...desktop, items: [item] });
+  await waitFor(() => ui.get('[aria-label="latest.txt"]'));
+  pending.forEach(resolve => resolve(desktop));
+  await new Promise(resolve => setTimeout(resolve, 30));
+  assert.ok(ui.get('[aria-label="latest.txt"]'));
+});
+
+test("password visibility preserves the input and Caps Lock feedback is clear", async t => {
+  const ui = await surface(t, "locker", defaults);
+  await waitFor(() => !ui.get("#password").disabled);
+  type(ui, "#password", "example-password");
+  ui.get('[aria-label="Show password"]').click();
+  await waitFor(() => ui.get("#password").type === "text");
+  assert.equal(ui.get("#password").value, "example-password");
+  ui.get('[aria-label="Hide password"]').click();
+  await waitFor(() => ui.get("#password").type === "password");
+  const event = new ui.window.KeyboardEvent("keydown", { key: "A", bubbles: true });
+  Object.defineProperty(event, "getModifierState", { value: name => name === "CapsLock" });
+  ui.get("#password").dispatchEvent(event);
+  await waitFor(() => ui.get(".caps-lock-hint"));
+  assert.equal(ui.get(".caps-lock-hint").textContent, "Caps Lock is on");
+  assert.ok(!ui.requests.some(req => req.method === "locker.unlock"));
 });

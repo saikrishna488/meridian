@@ -1,12 +1,14 @@
-import { useEffect, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { on, request } from "./bridge";
 import type { DesktopState } from "./generated/DesktopState";
 export function useDesktop() {
   const [desktop, setDesktop] = useState<DesktopState | null>(null);
-  useEffect(() => {
-    const off = on("desktop.changed", event => setDesktop(event.data));
-    void request({ method: "desktop.get" }).then(setDesktop).catch(console.error);
-    return off;
+  useLayoutEffect(() => {
+    let alive = true, revision = 0;
+    const off = on("desktop.changed", event => { revision++; setDesktop(event.data); });
+    const initial = revision;
+    void request({ method: "desktop.get" }).then(value => { if (alive && initial === revision) setDesktop(value); }).catch(console.error);
+    return () => { alive = false; off(); };
   }, []);
   return { desktop, setDesktop };
 }

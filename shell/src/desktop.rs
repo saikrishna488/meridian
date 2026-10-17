@@ -1,5 +1,4 @@
-//! Persistent wallpaper choices and shortcuts. Removing a shortcut never
-//! touches its target. Custom wallpaper copies remain available if moved.
+//! Wallpaper preferences, application shortcuts, and the real XDG Desktop folder.
 use gtk::glib;
 use meridian_protocol::{DesktopItem, DesktopState, ErrorBody, ErrorCode, WallpaperChoice};
 use serde::{Deserialize, Serialize};
@@ -75,7 +74,7 @@ fn state(config: &Config) -> DesktopState {
         wallpaper: config.wallpaper.clone(),
         wallpaper_uri,
         wallpapers,
-        items: config.items.clone(),
+        items: desktop_items(config),
     }
 }
 pub fn get() -> DesktopState {
@@ -135,21 +134,91 @@ pub fn add(item: DesktopItem) -> Result<DesktopState, ErrorBody> {
     save(&config)?;
     Ok(state(&config))
 }
-pub fn add_file(path: &str) -> Result<DesktopState, ErrorBody> {
-    let path = Path::new(path).canonicalize().map_err(error)?;
-    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "/".into());
-    let target = path.to_str().ok_or_else(|| error("Unsupported filename"))?.to_owned();
-    add(DesktopItem {
+pub fn folder() -> PathBuf {
+    glib::user_special_dir(glib::UserDirectory::Desktop)
+        .filter(|path| path != &glib::home_dir())
+        .unwrap_or_else(|| glib::home_dir().join("Desktop"))
+}
+fn file_item(path: &Path) -> Option<DesktopItem> {
+    let target = path.to_str()?.to_owned();
+    Some(DesktopItem {
         id: format!("file:{target}"),
-        name,
+        name: path.file_name()?.to_str()?.to_owned(),
         kind: if path.is_dir() { "folder" } else { "file" }.into(),
         target,
         icon: None,
     })
 }
+fn desktop_items(config: &Config) -> Vec<DesktopItem> {
+    // Retain old shortcuts without duplicating files already present on Desktop.
+    let mut items: Vec<_> = config
+        .items
+        .iter()
+        .cloned()
+        .map(|mut item| {
+            if item.kind != "app" {
+                item.id = format!("shortcut:{}", item.id);
+            }
+            item
+        })
+        .collect();
+    if let Ok(entries) = std::fs::read_dir(folder()) {
+        for entry in entries.flatten() {
+            if entry.file_name().to_string_lossy().starts_with('.') {
+                continue;
+            }
+            if let Some(item) = file_item(&entry.path()) {
+                items.retain(|old| old.target != item.target);
+                items.push(item);
+            }
+        }
+    }
+    items
+}
+fn move_to_folder(source: &Path, destination: &Path) -> Result<(), ErrorBody> {
+    use gtk::gio::prelude::*;
+    if !source.is_absolute() {
+        return Err(error("Choose an absolute file path"));
+    }
+    let name = source.file_name().ok_or_else(|| error("Cannot move this location"))?;
+    let parent = source.parent().ok_or_else(|| error("Cannot move this location"))?.canonicalize().map_err(error)?;
+    std::fs::create_dir_all(destination).map_err(error)?;
+    let destination = destination.canonicalize().map_err(error)?;
+    if parent == destination {
+        return Ok(());
+    }
+    let canonical = source.canonicalize().map_err(error)?;
+    if destination.starts_with(&canonical) || canonical == glib::home_dir() {
+        return Err(error("Cannot move this folder into the Desktop folder"));
+    }
+    gtk::gio::File::for_path(source)
+        .move_(
+            &gtk::gio::File::for_path(destination.join(name)),
+            gtk::gio::FileCopyFlags::NOFOLLOW_SYMLINKS,
+            gtk::gio::Cancellable::NONE,
+            None,
+        )
+        .map_err(error)
+}
+pub fn add_file(path: &str) -> Result<DesktopState, ErrorBody> {
+    move_to_folder(Path::new(path), &folder())?;
+    Ok(get())
+}
 pub fn remove(id: &str) -> Result<DesktopState, ErrorBody> {
     let _guard = CONFIG_LOCK.lock().map_err(error)?;
-    remove_at(&dir(), id)
+    let mut config = load();
+    let stored_id = id.strip_prefix("shortcut:").unwrap_or(id);
+    if id.starts_with("file:") {
+        let entry = item(id)?;
+        crate::files::trash(&entry.target)?;
+        config.items.retain(|item| item.target != entry.target);
+        save(&config)?;
+        return Ok(state(&config));
+    }
+    if !config.items.iter().any(|item| item.id == stored_id) {
+        return Err(error("This desktop shortcut no longer exists."));
+    }
+    remove_at(&dir(), stored_id)
 }
 fn remove_at(directory: &Path, id: &str) -> Result<DesktopState, ErrorBody> {
     let mut config = load_at(directory);
@@ -158,7 +227,7 @@ fn remove_at(directory: &Path, id: &str) -> Result<DesktopState, ErrorBody> {
     Ok(state(&config))
 }
 pub fn item(id: &str) -> Result<DesktopItem, ErrorBody> {
-    load().items.into_iter().find(|i| i.id == id).ok_or_else(|| error("This desktop shortcut no longer exists."))
+    desktop_items(&load()).into_iter().find(|i| i.id == id).ok_or_else(|| error("This desktop item no longer exists."))
 }
 fn error(e: impl std::fmt::Display) -> ErrorBody {
     ErrorBody::new(ErrorCode::Failed, e.to_string())
@@ -261,6 +330,24 @@ pub fn apply_fonts() -> Result<(), ErrorBody> {
 mod tests {
     use super::*;
     #[test]
+    fn desktop_moves_files_without_overwriting() {
+        let root = std::env::temp_dir().join(format!("meridian-desktop-move-{}", std::process::id()));
+        let desktop = root.join("Desktop");
+        std::fs::create_dir_all(&root).unwrap();
+        let source = root.join("notes.txt");
+        std::fs::write(&source, "first").unwrap();
+        move_to_folder(&source, &desktop).unwrap();
+        assert!(!source.exists());
+        assert_eq!(std::fs::read_to_string(desktop.join("notes.txt")).unwrap(), "first");
+        std::fs::write(&source, "second").unwrap();
+        assert!(move_to_folder(&source, &desktop).is_err());
+        assert_eq!(std::fs::read_to_string(&source).unwrap(), "second");
+        assert_eq!(std::fs::read_to_string(desktop.join("notes.txt")).unwrap(), "first");
+        assert!(move_to_folder(&root, &desktop).is_err());
+        move_to_folder(&desktop.join("notes.txt"), &desktop).unwrap();
+        std::fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
     fn wallpaper_and_shortcuts_persist_and_removing_shortcut_keeps_target() {
         let directory = std::env::temp_dir().join(format!("meridian-desktop-test-{}", std::process::id()));
         std::fs::create_dir_all(&directory).unwrap();
@@ -284,7 +371,7 @@ mod tests {
         assert_eq!(state(&loaded).appearance, "dark");
         assert_eq!(loaded.items.len(), 1);
         assert!(state(&loaded).wallpaper_uri.ends_with("meridian-tide.svg"));
-        assert!(remove_at(&directory, "shortcut").unwrap().items.is_empty());
+        assert!(!remove_at(&directory, "shortcut").unwrap().items.iter().any(|item| item.id == "shortcut"));
         assert!(load_at(&directory).items.is_empty());
         assert_eq!(std::fs::read_to_string(target).unwrap(), "keep me");
         std::fs::remove_dir_all(directory).unwrap();

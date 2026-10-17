@@ -26,7 +26,7 @@ and communicate with labwc directly, or through XWayland for X11 applications.
   the desktop dock.
 - **Applications:** searchable installed applications, icons, launch and
   window activation actions, pinning, shortcuts, and reviewed removal.
-- **Desktop:** bundled/custom wallpapers and application/file/folder shortcuts.
+- **Desktop:** bundled/custom wallpapers, application shortcuts, and live XDG Desktop folder contents.
   Removing a shortcut preserves its target.
 - **Control Center:** connectivity, appearance, brightness, and volume controls.
 - **Settings:** working wallpaper, light/dark appearance, Wi-Fi, Bluetooth,
@@ -66,19 +66,16 @@ potentially blocking work is also dispatched to worker threads.
 | Surface kind | Role | Placement |
 |---|---|---|
 | Wallpaper | Background and shortcuts | Background layer, every output |
-| Topbar | Menu bar | Top layer, reserves 32 logical pixels |
-| Panel | Dock (the internal name is still Panel) | Bottom-anchored top layer, reserves 70 logical pixels |
+| Panel | Taskbar: Meridian menu, pinned/running apps, Control Center and clock | Bottom-anchored full-width top layer, reserves 56 logical pixels |
 | Applications / Options / DesktopMenu | Launcher and menus | Overlay layer |
 | Preferences / Finder / Terminal | Built-in application windows | Ordinary GTK windows |
 | Locker | Password prompt | Session-lock surface per monitor |
 | Greeter | Login screen in a separate executable | Overlay in the greeter session |
 
-Topbar and Panel share the `surfaces/panel` frontend entry point. The dock
-surface is 128 logical pixels tall to allow hover effects, but reserves only
-70 pixels for its visible dock and bottom gap.
+Panel uses the `surfaces/panel` frontend entry point. Its surface and exclusive zone are both 56 logical pixels tall. The legacy Topbar protocol kind remains for compatibility, but no topbar surface is created. Menus open above the taskbar.
 
 The host watches monitor changes. Each output gets a wallpaper; the first
-monitor reported by GDK receives the topbar and dock and is used for menus.
+monitor reported by GDK receives the taskbar and is used for menus.
 This is an implementation choice, not a user-configurable primary-output policy.
 
 ## 5. UI and rendering
@@ -134,7 +131,7 @@ and `lock-session` expose keyboard-triggered actions over the session bus.
 
 `services/src/apps.rs` builds a catalog from XDG desktop entries using GIO,
 and monitors application changes. Installed sessions launch through GIO;
-toolbox development can resolve host entries and launch through
+Optional container development can resolve host entries and launch through
 `flatpak-spawn --host gio launch`.
 
 Search runs in Rust through the apps provider. The fuzzy scorer considers
@@ -160,7 +157,7 @@ activate that window.
 | Suspend/sign out/restart/shutdown | systemd-logind |
 | Lock authentication | PAM via `meridian-lock` |
 | Login | Separate `meridian-greeter` communicating with greetd |
-| App removal | Resolved Flatpak ref or RPM package; RPM removal uses `pkexec dnf` |
+| App removal | Resolved Flatpak ref or Debian package; dpkg-query identifies ownership and `pkexec apt-get remove` removes packages |
 
 Monitor changes revert after 15 seconds unless kept. Accepted layouts are saved
 for later sessions. External monitor brightness currently directs users to the
@@ -178,8 +175,7 @@ the system Trash. File operations are subject to the user's OS permissions.
 `shell/src/terminal.rs` creates PTYs and starts the user's interactive shell.
 The frontend renders output with bundled xterm.js. Input, bounded output reads,
 resize, and close travel through the typed bridge. Closing a tab ends its shell
-and foreground job; detached jobs can survive. In toolbox development the shell
-runs inside the toolbox, with the shared home directory.
+and foreground job; detached jobs can survive. Development sessions run on the Debian host.
 
 Preferences use the user's configuration directory, normally
 `~/.config/meridian/`: `desktop.json` stores appearance, wallpaper, and
@@ -212,7 +208,7 @@ completed a security audit.
 
 ## 11. Development and verification
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for toolbox setup and nested sessions.
+See [DEVELOPMENT.md](DEVELOPMENT.md) for Debian setup and nested sessions.
 `tools/check.sh` checks Rust formatting, clippy, Rust tests, generated protocol
 types, and the UI type-check/build. Run `cd ui && npm test` separately for UI
 interaction tests with a mocked host. Those tests do not replace live validation
@@ -248,3 +244,5 @@ They are not prerequisites for describing the features already implemented.
 | `session/` | Session entry, launcher, labwc configuration, PAM configuration |
 | `tools/` | Build, development, install, codec, and check scripts |
 | `docs/adr/` | Historical design decisions and implementation updates |
+
+Desktop file drops use GIO moves without overwrite and preserve source files on name collisions. A GIO directory monitor publishes `desktop.changed` when the Desktop folder changes outside Meridian. Real files use system Trash; legacy shortcuts retain removal-only behavior.

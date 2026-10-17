@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { on, request } from "../../lib/bridge";
 import { ConfirmButton } from "../../components/ConfirmButton";
-import { mount, usePopover, useWindowKey } from "../../lib/react";
+import { mount, useDialogFocus, usePopover, useWindowKey } from "../../lib/react";
 import type { SystemInfo } from "../../lib/generated/SystemInfo";
 import type { WindowInfo } from "../../lib/generated/WindowInfo";
 
@@ -30,6 +30,7 @@ function DesktopMenu() {
       buttons[e.key === "Home" ? 0 : e.key === "End" ? buttons.length - 1 : (index + (e.key === "ArrowUp" ? -1 : 1) + buttons.length) % buttons.length]?.focus();
     }
   });
+  useDialogFocus(menu, visible && about, () => { void dismiss().catch(report); });
   async function showAbout() {
     setAbout(true); setInfo(null);
     try { setInfo(await request({ method: "system.info" })); } catch (e) { report(e); }

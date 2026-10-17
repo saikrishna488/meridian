@@ -33,13 +33,6 @@ export RUST_LOG="${RUST_LOG:-info}"
 export MERIDIAN_UI_DIR="$ROOT/ui/dist"
 export MERIDIAN_ASSETS_DIR="$ROOT/assets"
 
-# In a toolbox, show and launch the *host's* applications: the shell reads
-# the host's desktop entries through /run/host and launches them on the host
-# via flatpak-spawn (see services/src/apps.rs, HostBridge).
-if [ -e /run/.toolboxenv ]; then
-    export MERIDIAN_HOST_APPS=1
-fi
-
 # GApplication is unique on the session bus. A previous nested shell (or
 # an installed Meridian session) must not absorb this shell's activation.
 # Include labwc so its gapplication keyboard bindings share the same bus.

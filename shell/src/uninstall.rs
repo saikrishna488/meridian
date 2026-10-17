@@ -38,7 +38,7 @@ async fn run(args: &[&str]) -> Result<String, ErrorBody> {
 fn valid_package(value: &str) -> bool {
     !value.is_empty()
         && !value.starts_with('-')
-        && value.bytes().all(|c| c.is_ascii_alphanumeric() || b"._+-".contains(&c))
+        && value.bytes().all(|c| c.is_ascii_alphanumeric() || b"._+:-".contains(&c))
 }
 
 pub async fn plan(app: &App) -> Result<UninstallPlan, ErrorBody> {
@@ -69,12 +69,17 @@ pub async fn plan(app: &App) -> Result<UninstallPlan, ErrorBody> {
             .map(|p| std::path::Path::new("/").join(p))
             .unwrap_or_else(|_| source.clone());
         let path = path.to_str().ok_or_else(|| error("Invalid desktop file path"))?;
-        let package = run(&["rpm", "-qf", "--qf", "%{NAME}", path]).await?.trim().to_owned();
+        let owner = run(&["dpkg-query", "--search", path]).await?;
+        let package = owner
+            .trim()
+            .rsplit_once(": ")
+            .map(|(package, _)| package.to_owned())
+            .ok_or_else(|| error("Could not identify the Debian package"))?;
         if !valid_package(&package) {
-            return Err(error("Could not identify a unique RPM package"));
+            return Err(error("Could not identify a unique Debian package"));
         }
         (
-            format!("rpm:{package}"),
+            format!("deb:{package}"),
             format!(
                 "Removes the {package} package and any packages that depend on it. Authentication may be required."
             ),
@@ -103,9 +108,8 @@ pub async fn uninstall(app: &App, expected: &str) -> Result<(), ErrorBody> {
     if let Some(target) = expected.strip_prefix("flatpak:") {
         let (scope, reference) = target.split_once(':').ok_or_else(|| error("Invalid uninstall target"))?;
         run(&["flatpak", "uninstall", scope, "--noninteractive", "--app", reference]).await?;
-    } else if let Some(package) = expected.strip_prefix("rpm:") {
-        run(&["pkexec", "dnf", "remove", "--assumeyes", "--setopt=clean_requirements_on_remove=False", package])
-            .await?;
+    } else if let Some(package) = expected.strip_prefix("deb:") {
+        run(&["pkexec", "apt-get", "remove", "--yes", "--", package]).await?;
     } else {
         return Err(error("Unsupported uninstall target"));
     }
@@ -131,6 +135,7 @@ mod tests {
     fn package_names_cannot_supply_options_or_shell_code() {
         assert!(valid_package("org.mozilla.firefox"));
         assert!(valid_package("firefox-144.0+1"));
+        assert!(valid_package("firefox:amd64"));
         for value in ["", "--all", "a;b", "$(id)", "a b", "a\nb", "a/b"] {
             assert!(!valid_package(value));
         }

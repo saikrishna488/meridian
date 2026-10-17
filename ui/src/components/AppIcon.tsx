@@ -5,7 +5,7 @@ export function AppIcon({ name, icon, id }: { name: string; icon?: string | null
   const [failedSystem, setFailedSystem] = useState(false);
   useEffect(() => { setFailedSystem(false); }, [fixed, icon, id]);
   const hue = Array.from(name).reduce((n, c) => (n * 31 + c.charCodeAt(0)) % 360, 0);
-  const src = fixed ?? (!failedSystem && (id || icon) ? id ? `meridian://app-icons/${encodeURIComponent(id)}` : `meridian://icons/${encodeURIComponent(icon!)}` : null);
+  const src = !failedSystem ? fixed ?? ((id || icon) ? id ? `meridian://app-icons/${encodeURIComponent(id)}` : `meridian://icons/${encodeURIComponent(icon!)}` : null) : null;
   const generic = !!src?.endsWith("/generic.svg");
   return <span className={`dock-icon app-icon${src ? " has-image" : ""}${src && !fixed ? " system-artwork" : ""}${generic ? " generic-image" : ""}`} aria-hidden="true" style={{ "--app-hue": hue } as CSSProperties}>
     {generic && <span className="generic-monogram">{name.trim()[0]?.toLocaleUpperCase() || "?"}</span>}

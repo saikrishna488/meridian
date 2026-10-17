@@ -1,28 +1,16 @@
 #!/usr/bin/env bash
-# Create the `meridian-dev` toolbox container with everything needed to build
-# and run Meridian. Nothing is installed on the host.
+# Install the native Debian development environment.
 set -euo pipefail
-source "$(dirname "$0")/lib.sh"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT/tools/debian.sh"
 source "$ROOT/tools/codecs.sh"
-
-PACKAGES=(
-    rust cargo rustfmt clippy          # Rust toolchain
-    nodejs npm                         # TypeScript build for ui/
-    gtk4-devel webkitgtk6.0-devel      # WebView host (ADR-0001)
-    gtk4-layer-shell-devel             # layer-shell + session-lock surfaces (ADR-0007)
-    pam-devel                          # lock screen password check (ADR-0007)
-    clang-devel                        # libclang: gtk4-session-lock-sys generates bindings at build time
-    labwc xorg-x11-server-Xwayland     # session compositor (ADR-0002) + X11 apps
-    rsms-inter-fonts                   # UI typeface
-    foot grim                          # a launchable terminal; screenshots for dev
-    NetworkManager                  # nmcli Wi-Fi operations through the host system bus
-    ddcutil                           # DDC/CI brightness for compatible external monitors
-    gsettings-desktop-schemas
-    wireplumber                        # wpctl: volume control (Options menu)
-)
-
-if ! toolbox list --containers | grep -q " $TOOLBOX "; then
-    toolbox create -y "$TOOLBOX"
-fi
-toolbox run -c "$TOOLBOX" sudo dnf install -y --setopt=install_weak_deps=False "${PACKAGES[@]}" "${MEDIA_PACKAGES[@]}" ffmpeg-free
-echo "Toolbox '$TOOLBOX' ready. Next: tools/dev-session.sh"
+require_debian
+runner=()
+[ "$(id -u)" = 0 ] || runner=(sudo)
+"${runner[@]}" apt-get update
+"${runner[@]}" apt-get install -y --no-install-recommends "${BUILD_PACKAGES[@]}" "${RUNTIME_PACKAGES[@]}" "${MEDIA_PACKAGES[@]}" foot grim
+pkg-config --atleast-version=4.18 gtk4 && pkg-config --atleast-version=2.52 webkitgtk-6.0 && pkg-config --atleast-version=1.2 gtk4-layer-shell-0 || {
+    echo 'This checkout needs GTK >= 4.18, WebKitGTK >= 2.52 and gtk4-layer-shell >= 1.2. Use a Debian release with these packages (currently testing), or compatible backports.' >&2
+    exit 1
+}
+echo 'Development packages installed. Rust >= 1.92 and Node >= 22.22.2 are required. Next: tools/dev-session.sh'

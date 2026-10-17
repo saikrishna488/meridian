@@ -1,4 +1,4 @@
-//! meridian-shell: the Meridian desktop shell (top bar, menus, wallpaper).
+//! meridian-shell: the Meridian desktop shell (taskbar, menus, wallpaper).
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;

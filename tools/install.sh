@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Install Meridian on this machine (Fedora). Run from the repository, as root:
+# Install Meridian on this machine (Debian). Run from the repository, as root:
 #
 #   sudo tools/install.sh                   install, and add "Meridian" to the
 #                                           current login screen's session list
-#   sudo tools/install.sh --full-codecs     also enable RPM Fusion Free codecs
+#   sudo tools/install.sh --full-codecs     install the distribution multimedia codecs
 #   sudo tools/install.sh --try-login-screen
 #                                           start Meridian's login screen on VT 7
 #                                           alongside the current one, to test it
@@ -19,25 +19,23 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/tools/codecs.sh"
+source "$ROOT/tools/debian.sh"
 PREFIX=/usr/local
 SHARE="$PREFIX/share/meridian"
 SESSION_FILE=/usr/share/wayland-sessions/meridian.desktop
 GREETD_CONFIG=/etc/greetd/config.toml
 GREETD_BACKUP=/etc/greetd/config.toml.before-meridian
 TRIAL_UNIT=meridian-login-trial
-# The login manager Meridian's greeter replaces (Fedora KDE 44 default).
+# Save the actual display manager so switching to greetd can be reversed.
 PREVIOUS_DM_FILE=/etc/greetd/.meridian-previous-dm
 
-PACKAGES=(
-    webkitgtk6.0 gtk4-layer-shell labwc xorg-x11-server-Xwayland
-    wireplumber rsms-inter-fonts gsettings-desktop-schemas NetworkManager NetworkManager-wifi bluez ddcutil
-    greetd greetd-selinux
-)
+PACKAGES=("${RUNTIME_PACKAGES[@]}")
 
 die() { echo "error: $*" >&2; exit 1; }
 step() { printf '\033[1m==> %s\033[0m\n' "$*"; }
 
 [ "$(id -u)" = 0 ] || die "run as root: sudo $0 $*"
+require_debian
 
 greeter_command() {
     echo "labwc -C $SHARE/greeter/labwc -S $PREFIX/bin/meridian-greeter"
@@ -52,10 +50,11 @@ install_files() {
     done
 
     step "Installing runtime packages"
-    dnf install -y --setopt=install_weak_deps=False "${PACKAGES[@]}"
+    apt-get update
+    apt-get install -y --no-install-recommends "${PACKAGES[@]}"
     step "Installing multimedia codecs"
     media_packages_for_host
-    dnf install -y --setopt=install_weak_deps=False "${MEDIA_SELECTED[@]}"
+    apt-get install -y --no-install-recommends "${MEDIA_SELECTED[@]}"
 
     step "Installing Meridian to $PREFIX"
     install -Dm755 "$ROOT/target/release/meridian-shell" "$PREFIX/bin/meridian-shell"
@@ -100,7 +99,7 @@ switch = $switch
 
 [default_session]
 command = "$(greeter_command)"
-user = "greetd"
+user = "_greetd"
 EOF
 }
 
@@ -146,14 +145,15 @@ enable_login_screen() {
 Done. Meridian's login screen will appear after the next reboot.
 To go back:   sudo $0 --disable-login-screen
 If it ever fails to appear: press Ctrl+Alt+F3, log in as text, then run
-              sudo systemctl disable greetd && sudo systemctl enable ${previous:-plasmalogin} && sudo reboot
+              sudo systemctl disable greetd && sudo systemctl enable ${previous:-gdm3} && sudo reboot
 EOF
 }
 
 disable_login_screen() {
-    local previous=plasmalogin
+    local previous=''
     [ -f "$PREVIOUS_DM_FILE" ] && previous="$(cat "$PREVIOUS_DM_FILE")"
     if [ "$(current_dm)" = greetd ]; then
+        [ -n "$previous" ] || die "No previous display manager was recorded; select one before disabling greetd."
         step "Switching the login screen back: greetd → $previous"
         systemctl disable greetd
         systemctl enable "$previous"

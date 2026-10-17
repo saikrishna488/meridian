@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { UninstallDialog } from "../../components/UninstallDialog";
 import { isBuiltinApp } from "../../lib/apps";
 import { AppIcon } from "../../components/AppIcon";
-import { Dock, APP_DRAG } from "../../components/Dock";
+import { APP_DRAG } from "../../components/Dock";
 import { on, request } from "../../lib/bridge";
-import { errorMessage, mount, useCallbackRef, usePopover, useWindowKey } from "../../lib/react";
+import { errorMessage, mount, useMenuFocus, useCallbackRef, usePopover, useWindowKey } from "../../lib/react";
 import type { ProviderId } from "../../lib/generated/ProviderId";
 import type { SearchItem } from "../../lib/generated/SearchItem";
 
@@ -12,7 +12,9 @@ type Result = { provider: ProviderId; item: SearchItem };
 
 function Applications() {
   const [uninstall, setUninstall] = useState<string | null>(null);
+  const contextMenu = useRef<HTMLDivElement>(null);
   const [context, setContext] = useState<{ id: string; x: number; y: number } | null>(null);
+  useMenuFocus(contextMenu, !!context, () => setContext(null));
   useEffect(() => on("apps.uninstall_requested", e => setUninstall(e.data.id)), []);
   const [dragging, setDragging] = useState(false);
   const [query, setQuery] = useState("");
@@ -69,16 +71,22 @@ function Applications() {
     } finally { setLaunching(null); }
   }
   useWindowKey(event => {
-    if (event.isComposing || uninstall) return;
+    if (event.isComposing || uninstall || event.target instanceof HTMLButtonElement) return;
     if (context) { if (event.key === "Escape") { setContext(null); event.preventDefault(); } return; }
+    if ((event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) && selected >= 0) {
+      event.preventDefault(); const bounds = list.current?.children[selected]?.getBoundingClientRect();
+      if (bounds) setContext({ id: results[selected]!.item.id, x: bounds.left, y: bounds.bottom }); return;
+    }
     const row = list.current?.children[0] as HTMLElement | undefined;
-    const page = row ? Math.max(1, Math.floor((scroller.current?.clientHeight ?? 0) / row.offsetHeight) - 1) : 1;
+    const grid = list.current ? getComputedStyle(list.current).gridTemplateColumns.split(" ").filter(Boolean).length : 0;
+    const columns = grid || Math.max(1, Math.floor((list.current?.clientWidth ?? 600) / 112));
+    const page = row && row.offsetHeight ? Math.max(1, Math.floor((scroller.current?.clientHeight ?? 0) / row.offsetHeight) - 1) * columns : columns;
     switch (event.key) {
-      case "ArrowDown": move(Math.max(1, Math.floor((list.current?.clientWidth ?? 600) / 112))); break;
+      case "ArrowDown": move(columns); break;
       case "ArrowRight": move(1); break;
       case "ArrowLeft": move(-1); break;
-      case "ArrowUp": move(-Math.max(1, Math.floor((list.current?.clientWidth ?? 600) / 112))); break;
-      case "Tab": move(event.shiftKey ? -1 : 1); break;
+      case "ArrowUp": move(-columns); break;
+      case "Tab": return;
       case "PageDown": move(page); break;
       case "PageUp": move(-page); break;
       case "Enter": if (selected >= 0) void activate(selected); break;
@@ -93,11 +101,13 @@ function Applications() {
     <div className={`scrim${dragging ? " dragging" : ""}`} id="scrim" onDragOver={event => { if (event.dataTransfer.types.includes(APP_DRAG)) event.preventDefault(); }} onDrop={event => { const id = event.dataTransfer.getData(APP_DRAG); if (!id) return; event.preventDefault(); setDragging(false); void request({ method: "desktop.add_app", params: { id } }).then(() => dismiss()).catch(report); }} onClick={() => void dismiss().catch(report)} />
     <section ref={menu} className={`menu${dragging ? " dragging" : ""}${visible ? "" : " hidden"}`} id="menu" role="dialog" aria-label="Applications"
       >
-      <header className="apps-heading"><div><span className="apps-eyebrow">MERIDIAN</span><h1>Applications</h1><p>Everything you need, in one place.</p></div><button aria-label="Close applications" onClick={() => void dismiss().catch(report)}>×</button></header>
+      <div className="apps-toolbar">
       <label className="apps-search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.75"/><path d="m13 13 4 4"/></svg><input ref={input} id="search" className="search" type="text" placeholder="Search applications" autoComplete="off"
         spellCheck={false} aria-label="Search applications" aria-controls="list" aria-autocomplete="list"
         aria-activedescendant={selected >= 0 ? `row-${selected}` : undefined}
         value={query} onChange={event => changeQuery(event.target.value)} />{query && <button className="clear-search" type="button" aria-label="Clear search" onClick={() => { changeQuery(""); input.current?.focus(); }}>×</button>}</label>
+      <button className="close-applications" aria-label="Close applications" onClick={() => void dismiss().catch(report)}>×</button>
+      </div>
       <div className="apps-section-heading"><h2>{query ? "Search Results" : "All Applications"}</h2><span>{searching ? "Searching…" : `${results.length} ${results.length === 1 ? "item" : "items"}`}</span></div>
       <div ref={scroller} className="scroller" id="scroller">
         <ul ref={list} className="list" id="list" role="listbox" aria-label="Applications">
@@ -106,7 +116,7 @@ function Applications() {
             return <li key={key} id={`row-${index}`} role="option" aria-selected={selected === index}
               onContextMenu={event => { event.preventDefault(); setContext({ id: result.item.id, x: event.clientX, y: event.clientY }); }}
               draggable onDragEnd={() => setDragging(false)} onDragStart={event => { setDragging(true); event.dataTransfer.setData(APP_DRAG, result.item.id); event.dataTransfer.effectAllowed = "copyMove"; }}
-              tabIndex={-1} title={result.item.subtitle ?? result.item.title}
+              tabIndex={-1} title={`${result.item.title}${result.item.subtitle ? `\n${result.item.subtitle}` : ""}`}
               className={`row${launching === key ? " launching" : ""}`} onClick={() => { setSelected(index); void activate(index); }}>
               <AppIcon id={result.item.id} name={result.item.title} icon={result.item.icon} />
               <span className="name">{result.item.title}</span>
@@ -117,12 +127,11 @@ function Applications() {
         {!searching && !results.length && <div className="empty" id="empty"><span className="empty-symbol" aria-hidden="true">⌕</span><strong>{query ? "No results found" : "No applications available"}</strong><span>{query ? `Try a different search for “${query}”.` : "Applications will appear here when they are installed."}</span></div>}
         {searching && !results.length && <div className="empty loading" role="status"><span className="search-spinner" /><span>Finding applications…</span></div>}
       </div>
-      <p className="status" id="status" role="status" aria-live="polite">{status}</p>
-      <footer className="apps-footer"><span className="apps-hint">Drag an app to the dock to keep it there</span><kbd>Esc</kbd><span className="apps-hint">to clear or close</span></footer>
+      <p className="status" data-kind={status.startsWith("Added") ? "success" : "error"} id="status" role="status" aria-live="polite">{status}</p>
     </section>
-    <div className="launcher-dock"><Dock /></div>
-    {context && <div className="app-context" role="menu" aria-label="Application actions" style={{ left: Math.min(context.x, window.innerWidth - 180), top: Math.min(context.y, window.innerHeight - 100) }}>
-      <button role="menuitem" autoFocus onClick={() => { void request({ method: "desktop.add_app", params: { id: context.id } }).then(() => setStatus("Added to desktop")).catch(report); setContext(null); }}>Add to Desktop</button>
+    {context && <div ref={contextMenu} className="app-context" role="menu" aria-label="Application actions" style={{ left: Math.max(8, Math.min(context.x, window.innerWidth - 188)), top: Math.max(8, Math.min(context.y, window.innerHeight - 170)) }}>
+      <button role="menuitem" onClick={() => { void request({ method: "dock.pin", params: { id: context.id, pinned: true } }).then(() => setStatus("Added to dock")).catch(report); setContext(null); }}>Add to Dock</button>
+      <button role="menuitem" onClick={() => { void request({ method: "desktop.add_app", params: { id: context.id } }).then(() => setStatus("Added to desktop")).catch(report); setContext(null); }}>Add to Desktop</button>
       <button role="menuitem" disabled={isBuiltinApp(context.id)} onClick={() => { setUninstall(context.id); setContext(null); }}>Uninstall…</button>
       <button role="menuitem" onClick={() => setContext(null)}>Cancel</button>
     </div>}

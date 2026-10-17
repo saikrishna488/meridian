@@ -19,3 +19,67 @@ html[data-theme="dark"], html[data-theme="dark"] body { background: #25272c; col
 [data-theme="dark"] .finder-context, [data-theme="dark"] .finder-dialog-scrim form, [data-theme="dark"] .finder-dialog-scrim button { background: #303238; border-color: #545862; }
 [data-theme="dark"] .file-item:hover { background: #363b45; }
 [data-theme="dark"] .file-item.selected { background: #285c95; }
+
+.finder-sidebar .file-art { width: 24px; height: 24px; flex: none; }
+
+/* Finder follows the same surface, selection and control palette as Settings. */
+html, body { background: var(--surface); color: var(--ink); }
+.finder-app { color: var(--ink); font-size: 12px; }
+.finder-sidebar { width: 190px; background: var(--surface-subtle); border-color: var(--line); padding: 26px 12px; }
+.finder-sidebar h2 { margin: 0 10px 12px; color: var(--ink-muted); font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: .8px; }
+.finder-sidebar nav + h2 { margin-top: 28px; }
+.finder-sidebar nav button { gap: 10px; min-height: 38px; padding-inline: 10px; color: var(--ink); }
+.finder-sidebar nav button > .ui-icon { width: 20px; height: 20px; color: var(--ink-muted); }
+.finder-sidebar nav button[aria-current="page"] { background: var(--selection); color: var(--selection-ink); }
+.finder-toolbar { min-height: 64px; gap: 6px; padding-inline: 20px; background: var(--surface); border-color: var(--line); }
+.finder-toolbar > button { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; color: var(--ink-muted); border-radius: 5px; }
+.finder-toolbar > button:hover, .finder-toolbar > button[aria-pressed="true"] { background: var(--surface-hover); color: var(--ink); }
+.finder-toolbar h1 { margin-left: 10px; font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
+.finder-search { display: flex; align-items: center; gap: 7px; max-width: 180px; min-width: 80px; min-height: 32px; margin-left: 4px; padding-inline: 9px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface-subtle); color: var(--ink-muted); }
+.finder-search:focus-within { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.finder-toolbar .finder-search input { width: 100%; min-width: 0; border: 0; padding: 0; height: 28px; background: transparent; color: var(--ink); outline: none; }
+.finder-locationbar { display: flex; align-items: center; gap: 20px; padding: 10px 20px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.finder-locationbar form { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; color: var(--ink-muted); }
+.finder-locationbar input { width: 100%; min-width: 0; border: 0; background: transparent; font-size: 11px; color: var(--ink-muted); border-radius: 3px; padding: 4px; }
+.finder-locationbar input:focus { background: var(--surface-subtle); color: var(--ink); }
+.finder-locationbar > label { display: flex; gap: 7px; align-items: center; font-size: 10px; color: var(--ink-muted); }
+.finder-locationbar select { max-width: 90px; padding: 3px 5px; border: 1px solid var(--line); border-radius: 4px; font: inherit; background: var(--surface); color: var(--ink); }
+.file-collection { align-content: start; }
+.file-item { color: var(--ink); }
+.file-item:hover { background: var(--surface-hover); }
+.file-item.selected { background: var(--selection); }
+.file-item.selected .file-name { color: var(--selection-ink); }
+.file-item:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+.file-name { font-size: 12px; line-height: 1.4; }
+.file-collection.list .file-item:nth-child(even) { background: var(--surface-subtle); }
+.file-collection.list .file-item.selected { background: var(--selection); }
+.file-kind, .file-size, .file-date { color: var(--ink-muted); }
+.finder-footer { background: var(--surface-subtle); border-color: var(--line); color: var(--ink-muted); min-height: 36px; font-size: 10px; }
+.footer-selection { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.folder-empty { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 70px 24px; color: var(--ink-muted); grid-column: 1 / -1; }
+.folder-empty h2 { color: var(--ink); font-size: 17px; font-weight: 500; margin: 4px 0 0; }
+.folder-empty p { margin: 0; font-size: 12px; line-height: 1.6; }
+.folder-empty button { display: flex; align-items: center; justify-content: center; gap: 6px; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 5px; padding: 8px 12px; }
+.finder-spinner { width: 24px; height: 24px; border: 2px solid var(--line); border-top-color: var(--action); border-radius: 50%; animation: finder-spin .8s linear infinite; }
+@keyframes finder-spin { to { transform: rotate(360deg); } }
+.finder-context { background: var(--surface-raised); color: var(--ink); border-color: var(--line); padding: 6px; border-radius: 8px; }
+.finder-context button { min-height: 32px; color: inherit; font-size: 12px; }
+.finder-context button:hover, .finder-context button:focus-visible { background: var(--selection); color: var(--selection-ink); outline: none; }
+.finder-dialog-scrim { padding: 20px; background: #0005; }
+.finder-dialog-scrim form { width: min(380px, 100%); background: var(--surface-raised); color: var(--ink); border-color: var(--line); padding: 26px; }
+.finder-dialog-scrim input { background: var(--surface); color: var(--ink); border-color: var(--line); }
+.finder-dialog-scrim button { background: var(--surface); color: var(--ink); border-color: var(--line); min-height: 32px; }
+.finder-dialog-scrim button[type="submit"] { background: #2563c7; border-color: #2563c7; color: white; }
+.finder-dialog-scrim p { color: var(--ink-muted); font-size: 12px; line-height: 1.7; }
+.finder-notice { background: var(--selection); color: var(--selection-ink); }
+:root[data-theme="dark"] .finder-sidebar, :root[data-theme="dark"] .finder-footer { background: var(--surface-subtle); color: var(--ink-muted); border-color: var(--line); }
+:root[data-theme="dark"] .finder-toolbar { background: var(--surface); border-color: var(--line); }
+:root[data-theme="dark"] .file-item.selected { background: var(--selection); }
+:root[data-theme="dark"] .finder-toolbar .finder-search input { background: transparent; color: var(--ink); }
+:root[data-theme="dark"] .finder-context, :root[data-theme="dark"] .finder-dialog-scrim form { background: var(--surface-raised); color: var(--ink); border-color: var(--line); }
+@media (max-width: 740px) { .finder-sidebar { width: 155px; padding-inline: 8px; } .finder-toolbar { flex-wrap: wrap; padding: 10px 12px; } .finder-toolbar h1 { margin-left: 4px; } .finder-search { max-width: 145px; } .finder-locationbar { padding: 8px 12px; gap: 8px; } }
+@media (max-width: 520px) { .finder-sidebar { width: 54px; padding-inline: 6px; } .finder-sidebar h2 { font-size: 0; margin: 8px 0; } .finder-sidebar nav button { font-size: 0; padding: 8px; justify-content: center; } .finder-search { max-width: 130px; } .finder-toolbar .toolbar-spacer { display: none; } .finder-toolbar h1 { flex: 1; min-width: 60px; } .finder-locationbar > label { font-size: 0; } }
+@media (prefers-reduced-motion: reduce) { .finder-spinner { animation-duration: 2s; } }
+
+:root[data-theme] body { background: var(--surface); color: var(--ink); }
+.finder-locationbar select { font-size: 10px; }

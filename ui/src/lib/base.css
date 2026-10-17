@@ -64,7 +64,6 @@ button {
 
 [data-theme="light"] .menu { background: rgb(245 247 252 / .97); }
 [data-theme="light"] .menu button, [data-theme="light"] .menu .name, [data-theme="light"] .menu h1 { color: #293348; }
-[data-theme="light"] .menu input { background: #e0e5ef; }
 
 /* Shared switch, used by Settings and Control Center. */
 .meridian-toggle { position: relative; flex: none; width: 40px; height: 24px; padding: 2px; border: 0; border-radius: 999px; background: #a9b0bc; cursor: pointer; transition: background 160ms ease; }
@@ -73,3 +72,29 @@ button {
 .meridian-toggle[aria-checked="true"] .toggle-thumb { transform: translateX(16px); }
 .meridian-toggle:disabled { opacity: .45; cursor: default; }
 @media (prefers-reduced-motion: reduce) { .meridian-toggle, .meridian-toggle .toggle-thumb { transition: none; } }
+
+.ui-icon { display: inline-block; flex: none; vertical-align: middle; pointer-events: none; }
+button:disabled { cursor: default; }
+input, select, textarea { accent-color: var(--action); }
+input::selection, textarea::selection { background: var(--selection); color: var(--selection-ink); }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; } }
+@media (forced-colors: active) { button[aria-selected="true"], button[aria-current="page"], .row[aria-selected="true"] { outline: 2px solid Highlight; } }
+
+/* Shared removal confirmation is used by both Finder and Applications. */
+.uninstall-scrim { position: fixed; inset: 0; display: grid; place-items: center; padding: 20px; background: #0006; z-index: 200; }
+.uninstall-dialog { width: min(420px, 100%); max-height: calc(100vh - 40px); overflow: auto; padding: 28px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-raised); color: var(--ink); box-shadow: 0 20px 60px #0004; text-align: left; font-size: 13px; }
+.uninstall-dialog h2 { margin: 16px 0 12px; font-size: 19px; font-weight: 600; letter-spacing: -.4px; }
+.uninstall-dialog p { color: var(--ink-muted); font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.uninstall-symbol { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 8px; background: var(--surface-subtle); color: var(--danger); font-size: 24px; }
+.uninstall-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
+.uninstall-actions button { min-height: 34px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); color: var(--ink); padding: 7px 16px; cursor: pointer; font-size: 12px; }
+.uninstall-actions .danger { background: #b42332; border-color: #b42332; color: white; }
+.uninstall-actions button:disabled { opacity: .45; cursor: default; }
+.uninstall-dialog .uninstall-error { color: var(--danger); }
+.password-input { position: relative; display: flex; min-width: 0; }
+.password-input input { width: 100%; min-width: 0; padding-right: 46px; }
+.password-visibility { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 32px; height: 30px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: #ced5e2; cursor: pointer; }
+.password-visibility:hover { background: #ffffff12; }
+.caps-lock-hint { font-size: 11px; color: #ffe0a0; }
+
+* { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }

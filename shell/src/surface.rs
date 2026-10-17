@@ -121,16 +121,22 @@ impl WebSurface {
             }
             let header = gtk::HeaderBar::new();
             header.set_show_title_buttons(false);
-            let controls = gtk::Box::new(gtk::Orientation::Horizontal, 7);
+            let controls = gtk::Box::new(gtk::Orientation::Horizontal, 0);
             controls.add_css_class("meridian-window-controls");
-            for (name, class) in [("Close", "close"), ("Minimize", "minimize"), ("Maximize", "maximize")] {
+            for (name, class) in [("Minimize", "minimize"), ("Maximize", "maximize"), ("Close", "close")] {
                 let button = gtk::Button::new();
                 button.update_property(&[gtk::accessible::Property::Label(name)]);
                 let glyph = gtk::DrawingArea::new();
                 glyph.set_content_width(16);
                 glyph.set_content_height(16);
-                glyph.set_draw_func(move |_, cairo, _, _| {
-                    cairo.set_source_rgba(0., 0., 0., 0.65);
+                glyph.set_draw_func(move |glyph, cairo, _, _| {
+                    let color = glyph.color();
+                    cairo.set_source_rgba(
+                        color.red().into(),
+                        color.green().into(),
+                        color.blue().into(),
+                        color.alpha().into(),
+                    );
                     cairo.set_line_width(1.25);
                     match class {
                         "close" => {
@@ -144,18 +150,14 @@ impl WebSurface {
                             cairo.line_to(11.5, 8.);
                         }
                         _ => {
-                            cairo.move_to(5., 11.);
-                            cairo.line_to(11., 5.);
-                            cairo.move_to(6., 5.);
-                            cairo.line_to(11., 5.);
-                            cairo.line_to(11., 10.);
+                            cairo.rectangle(4.5, 4.5, 7., 7.);
                         }
                     }
                     let _ = cairo.stroke();
                 });
                 button.set_valign(gtk::Align::Center);
                 button.set_halign(gtk::Align::Center);
-                button.set_size_request(18, 18);
+                button.set_size_request(40, 32);
                 button.set_child(Some(&glyph));
                 button.set_tooltip_text(Some(name));
                 button.add_css_class("meridian-window-button");
@@ -173,8 +175,11 @@ impl WebSurface {
                 });
                 controls.append(&button);
             }
-            header.pack_start(&controls);
-            header.set_title_widget(Some(&gtk::Label::new(Some(title))));
+            header.pack_end(&controls);
+            let title_label = gtk::Label::new(Some(title));
+            title_label.set_margin_start(8);
+            header.pack_start(&title_label);
+            header.set_title_widget(Some(&gtk::Box::new(gtk::Orientation::Horizontal, 0)));
             window.set_titlebar(Some(&header));
             if kind == SurfaceKind::Finder {
                 window.set_default_size(1100, 720);
@@ -254,8 +259,8 @@ impl WebSurface {
     }
 }
 
-/// Dock surface height, including room for magnification and tooltips.
-pub const PANEL_HEIGHT: i32 = 128;
+/// Full-width desktop taskbar height; keep in sync with the UI token.
+pub const PANEL_HEIGHT: i32 = 56;
 
 fn entry_dir(kind: SurfaceKind) -> &'static str {
     match kind {
@@ -291,7 +296,7 @@ fn configure_layer(window: &gtk::Window, kind: SurfaceKind, monitor: Option<&gdk
         SurfaceKind::Locker => unreachable!("the locker uses gtk4_session_lock, not layer-shell"),
     }));
     let edges: &[Edge] = match kind {
-        SurfaceKind::Panel => &[Edge::Bottom],
+        SurfaceKind::Panel => &[Edge::Bottom, Edge::Left, Edge::Right],
         SurfaceKind::Topbar => &[Edge::Top, Edge::Left, Edge::Right],
         SurfaceKind::Preferences | SurfaceKind::Finder | SurfaceKind::Terminal => {
             unreachable!("preferences is a normal desktop window")
@@ -312,11 +317,8 @@ fn configure_layer(window: &gtk::Window, kind: SurfaceKind, monitor: Option<&gdk
         SurfaceKind::Panel => {
             window.set_layer(Layer::Top);
             window.set_keyboard_mode(KeyboardMode::None);
-            let width = monitor.map_or(720, |m| m.geometry().width().min(720));
-            window.set_default_size(width, PANEL_HEIGHT);
-            // Reserve only the visible dock (64px) and bottom gap (6px).
-            // The rest of the surface is headroom for hover motion/tooltips.
-            window.set_exclusive_zone(70);
+            window.set_default_size(1, PANEL_HEIGHT);
+            window.set_exclusive_zone(PANEL_HEIGHT);
         }
         SurfaceKind::Topbar => {
             window.set_layer(Layer::Top);

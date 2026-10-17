@@ -57,7 +57,7 @@ test("dock follows host windows and activates the selected window", async t => {
   await waitFor(() => !ui.get(".window"));
   ui.emit("popover.state", { applications: true, options: false });
   await waitFor(() => ui.get("#applications").getAttribute("aria-expanded") === "true");
-  assert.equal(ui.get("#options"), null);
+  assert.ok(ui.get(".system-tray #options"));
 });
 
 test("applications preserve keyboard selection, launching, and dismissal", async t => {
@@ -159,13 +159,16 @@ test("wallpaper initializes desktop state without file-management requests", asy
 });
 
 
-test("top bar hosts Options and the active application", async t => {
-  const ui = await surface(t, "panel", request => request.method === "shell.hello" ? { surface: "topbar" } : request.method === "windows.list" ? [{ id: 1, name: "Browser", active: true }] : null);
-  await waitFor(() => ui.get(".active-app")?.textContent === "Browser");
-  assert.equal(ui.get(".bar"), null);
-  ui.get("#options").click();
+test("bottom taskbar hosts Meridian, applications and Control Center", async t => {
+  const ui = await surface(t, "panel");
+  assert.ok(ui.get(".taskbar > .menu-brand"));
+  assert.ok(ui.get(".taskbar > .bar"));
+  assert.equal(ui.get(".topbar"), null);
+  ui.get(".system-tray #options").click();
   await waitFor(() => ui.requests.some(r => r.method === "popover.toggle"));
   assert.deepEqual(ui.requests.at(-1), { method: "popover.toggle", params: { popover: "options" } });
+  ui.emit("popover.state", { options: true, applications: false });
+  await waitFor(() => ui.get("#options").getAttribute("aria-expanded") === "true");
 });
 
 test("dock groups app windows and keeps pinned apps after their windows close", async t => {
@@ -188,10 +191,9 @@ test("dock groups app windows and keeps pinned apps after their windows close", 
   assert.deepEqual(ui.requests.find(r => r.method === "search.activate").params, { provider: "apps", item_id: "terminal.desktop" });
 });
 
-test("dragging an application to the launcher dock pins its desktop id", async t => {
-  const ui = await surface(t, "applications", request => request.method === "search.query" ? searchResult(request.params.serial, [app("terminal.desktop", "Terminal")]) : null);
-  ui.emit("popover.shown");
-  await waitFor(() => ui.get("#row-0"));
+test("dragging an application to the taskbar pins its desktop id", async t => {
+  const ui = await surface(t, "panel", request => request.method === "dock.list" ? ["finder.desktop"] : request.method === "search.query" ? searchResult(request.params.serial, [app("terminal.desktop", "Terminal"), app("finder.desktop", "Finder")]) : null);
+  await waitFor(() => ui.get('[aria-label="Finder"]'));
   const data = new Map();
   const transfer = { types: ["application/x-meridian-app"], setData: (key, value) => data.set(key, value), getData: key => data.get(key) };
   function drag(target, type) {
@@ -199,21 +201,18 @@ test("dragging an application to the launcher dock pins its desktop id", async t
     Object.defineProperty(event, "dataTransfer", { value: transfer });
     target.dispatchEvent(event);
   }
-  drag(ui.get("#row-0"), "dragstart");
-  drag(ui.get(".launcher-dock .bar"), "dragover");
-  drag(ui.get(".launcher-dock .bar"), "drop");
+  data.set("application/x-meridian-app", "terminal.desktop");
+  drag(ui.get(".bar"), "dragover");
+  drag(ui.get(".bar"), "drop");
   await waitFor(() => ui.requests.some(r => r.method === "dock.pin"));
   assert.deepEqual(ui.requests.find(r => r.method === "dock.pin").params, { id: "terminal.desktop", pinned: true });
 });
 
-test("top bar opens desktop menus from the Meridian symbol and File button", async t => {
-  const ui = await surface(t, "panel", r => r.method === "shell.hello" ? { surface: "topbar" } : r.method === "windows.list" ? [] : null);
-  assert.equal(ui.get(".topbar").textContent.includes("Applications"), false);
+test("taskbar opens the Meridian menu from its left button", async t => {
+  const ui = await surface(t, "panel");
   ui.get(".menu-brand").click();
   await waitFor(() => ui.requests.some(r => r.method === "menu.open"));
-  assert.equal(ui.requests.at(-1).params.menu, "Meridian");
-  [...ui.window.document.querySelectorAll(".topbar button")].find(b => b.textContent === "File").click();
-  await waitFor(() => ui.requests.at(-1).params.menu === "File");
+  assert.deepEqual(ui.requests.at(-1).params, { menu: "Meridian", x: 0 });
 });
 
 test("Meridian About reads host version and laptop details and closes with Escape", async t => {

@@ -14,7 +14,7 @@ export function mount(element: ReactNode): void {
   // Each app window is its own WebView. Read the persisted value so newly
   // opened windows match the rest of the desktop before waiting for updates.
   void request({ method: "desktop.get" }).then(state => {
-    if (appearanceRevision === 0) applyAppearance(state.appearance);
+    if (appearanceRevision === 0 && state) applyAppearance(state.appearance);
   }).catch(error => console.warn("Could not read Meridian appearance:", error));
   createRoot(root).render(element);
 }
@@ -78,4 +78,50 @@ export function usePopover(
     return () => { offShow(); offDismiss(); open.current = false; generation.current++; };
   }, [loadLatest, focusLatest, reportLatest, dismiss]);
   return { visible, menu, dismiss };
+}
+
+/** Keep a modal's keyboard focus inside it and restore focus when it closes. */
+export function useDialogFocus(ref: RefObject<HTMLElement | null>, open: boolean, close: () => void) {
+  const dismiss = useCallbackRef(close);
+  useEffect(() => {
+    const element = ref.current;
+    if (!open || !element) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const controls = () => Array.from(element.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), a[href], [tabindex="0"]'));
+    (element.querySelector<HTMLElement>('[autofocus], [data-autofocus]') ?? controls()[0])?.focus();
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); dismiss(); }
+      if (event.key === "Tab") {
+        const items = controls(); if (!items.length) { event.preventDefault(); return; }
+        const index = items.indexOf(document.activeElement as HTMLElement);
+        if (index < 0 || (!event.shiftKey && index === items.length - 1) || (event.shiftKey && index === 0)) {
+          event.preventDefault(); (event.shiftKey ? items.at(-1) : items[0])?.focus();
+        }
+      }
+    };
+    element.addEventListener("keydown", keydown);
+    return () => { element.removeEventListener("keydown", keydown); if (previous?.isConnected) previous.focus(); };
+  }, [ref, open, dismiss]);
+}
+
+/** Arrow navigation for an open context menu, including keyboard dismissal. */
+export function useMenuFocus(ref: RefObject<HTMLElement | null>, open: boolean, close: () => void) {
+  const dismiss = useCallbackRef(close);
+  useEffect(() => {
+    const element = ref.current;
+    if (!open || !element) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const controls = () => Array.from(element.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
+    controls()[0]?.focus();
+    const keydown = (event: KeyboardEvent) => {
+      const items = controls(), index = items.indexOf(document.activeElement as HTMLButtonElement);
+      if (event.key === "Escape" || event.key === "Tab") { event.preventDefault(); event.stopPropagation(); dismiss(); }
+      if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key) && items.length) {
+        event.preventDefault(); event.stopPropagation();
+        items[event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (index + (event.key === "ArrowDown" ? 1 : items.length - 1)) % items.length]?.focus();
+      }
+    };
+    element.addEventListener("keydown", keydown);
+    return () => { element.removeEventListener("keydown", keydown); if (previous?.isConnected) previous.focus(); };
+  }, [ref, open, dismiss]);
 }

@@ -210,7 +210,7 @@ const HOST_ROOT: &str = "/run/host";
 
 /// Host data directories in desktop-entry precedence order: the user's own
 /// (the home directory is shared with the container), then the system's,
-/// following Fedora's default `XDG_DATA_DIRS`.
+/// following the desktop session’s `XDG_DATA_DIRS`.
 fn host_data_dirs() -> Vec<PathBuf> {
     let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
     vec![

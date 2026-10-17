@@ -7,13 +7,12 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
-    container: registry.fedoraproject.org/fedora:44
+    container: debian:testing
     steps:
       - name: Install build dependencies
-        run: >
-          dnf install -y --setopt=install_weak_deps=False
-          git rust cargo rustfmt clippy nodejs npm
-          gtk4-devel webkitgtk6.0-devel gtk4-layer-shell-devel pam-devel clang-devel
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git ca-certificates build-essential pkg-config rustc cargo rustfmt rust-clippy nodejs npm libgtk-4-dev libwebkitgtk-6.0-dev libgtk4-layer-shell-dev libpam0g-dev libclang-dev
       - uses: actions/checkout@v4
       - name: Check
         env:
