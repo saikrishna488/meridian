@@ -13,6 +13,21 @@ display configuration, file operations, and terminal sessions are implemented.
 Some settings remain placeholders, and Sharing is a UI-only prototype.
 See [the architecture](docs/ARCHITECTURE.md) for implementation details and limits.
 
+## Screenshots
+
+The Meridian desktop, with its bottom taskbar and Dusk wallpaper:
+
+![Meridian desktop with Dusk wallpaper, welcome card, and bottom taskbar](docs/previews/desktop-light.png)
+
+| Applications | Settings in dark mode |
+| --- | --- |
+| [![Applications launcher with search and an app grid](docs/previews/refined-launcher-light.png)](docs/previews/refined-launcher-light.png) | [![Settings Home in dark mode with appearance, wallpaper, and device preferences](docs/previews/refined-settings-dark.png)](docs/previews/refined-settings-dark.png) |
+| **Control Center** | **Lock screen** |
+| [![Control Center with Wi-Fi, Bluetooth, brightness, volume, and power controls](docs/previews/refined-controls-light.png)](docs/previews/refined-controls-light.png) | [![Meridian lock screen with clock and password field over Dusk wallpaper](docs/previews/refined-lock-screen.png)](docs/previews/refined-lock-screen.png) |
+
+These UI previews use sample data. Click an image to view it at full size, or
+see [more screenshots and capture details](docs/previews/README.md).
+
 ## Debian requirements
 
 The current checkout needs Rust >= 1.92, GTK >= 4.18, WebKitGTK >= 2.52, gtk4-layer-shell >= 1.2, and Node >= 22.22.2. Development and CI target Debian testing with matching packages; Debian derivatives with those versions also work. Older stable releases need compatible backports; the scripts do not change your APT sources. Development dependencies are installed directly on the host.
