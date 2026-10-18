@@ -213,7 +213,10 @@ The preview uses sample metrics.
 
 ## Desktop controls
 
-The panel uses Meridian's vector logo, with a notification bell on the right.
+The top bar holds Meridian's menu, the focused application's name and Quit menu,
+Control Center, notifications, battery status, and clock. The centered bottom dock
+holds pinned and running apps, with a separator before Trash. Dock context menus
+offer Quit and Remove from dock.
 Notification Center receives desktop messages through the standard
 `org.freedesktop.Notifications` session service, shows unread state, supports app
 actions, and lets you dismiss messages or clear history. History stays in memory

@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const watch = process.argv.includes("--watch");
-const surfaces = ["panel", "applications", "options", "greeter", "locker", "wallpaper", "desktop-menu", "settings", "finder", "terminal", "pulse", "notifications", "utilities"];
+const surfaces = ["panel", "topbar", "applications", "options", "greeter", "locker", "wallpaper", "desktop-menu", "settings", "finder", "terminal", "pulse", "notifications", "utilities"];
 const options = {
   absWorkingDir: root,
   entryPoints: surfaces.map(name => `src/surfaces/${name}/${name}.tsx`),

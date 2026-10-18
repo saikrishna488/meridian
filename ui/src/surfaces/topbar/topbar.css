@@ -1,0 +1,20 @@
+body { height: 32px; }
+.topbar { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-bottom: 1px solid #ffffff20; background: rgb(27 32 43 / .97); color: #f3f6fc; box-shadow: 0 2px 8px #0003; }
+.topbar button { display: flex; align-items: center; justify-content: center; flex: none; height: 28px; padding: 0 9px; border: 0; border-radius: 6px; background: transparent; color: inherit; cursor: pointer; font-size: 12px; }
+.topbar button:hover, .topbar button[aria-expanded="true"] { background: #ffffff20; }
+.topbar .menu-brand { width: 34px; padding: 0; color: #a8c7ff; }
+.meridian-logo { width: 20px; height: 20px; filter: drop-shadow(0 2px 2px #0004); }
+.topbar .focused-app { display: block; min-width: 0; max-width: 35vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.topbar-spacer { flex: 1; }
+.system-tray { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.system-tray button > svg, .system-tray button > img { filter: drop-shadow(0 2px 2px #0003); }
+.system-tray .taskbar-battery { gap: 5px; font-variant-numeric: tabular-nums; font-size: 11px; }
+.taskbar-battery.low { color: var(--danger); }
+#notifications { position: relative; }
+.notification-dot { position: absolute; top: 4px; right: 6px; width: 5px; height: 5px; border-radius: 50%; background: var(--action); }
+.when { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 11px; font-variant-numeric: tabular-nums; }
+.when .date { margin: 0; opacity: .7; font-size: 10px; }
+[data-theme="light"] .topbar { background: rgb(243 246 251 / .97); border-color: #c8d1df; color: #202b3c; }
+[data-theme="light"] .topbar button:hover, [data-theme="light"] .topbar button[aria-expanded="true"] { background: #2841641a; }
+[data-theme="light"] .menu-brand { color: #2563c7; }
+@media (max-width: 650px) { .topbar { padding-inline: 4px; gap: 2px; } .system-tray { gap: 0; } .system-tray button { padding-inline: 6px; } .when .date, .taskbar-battery > span { display: none; } }

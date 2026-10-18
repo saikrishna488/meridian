@@ -86,6 +86,7 @@ interface ResultMap {
   "popover.close": null;
   "windows.list": WindowInfo[];
   "windows.activate": null;
+  "windows.close": null;
   "settings.displays": import("./generated/DisplayOutput").DisplayOutput[];
   "settings.display_apply": import("./generated/DisplayTrial").DisplayTrial;
   "settings.display_decide": null;

@@ -66,16 +66,17 @@ potentially blocking work is also dispatched to worker threads.
 | Surface kind | Role | Placement |
 |---|---|---|
 | Wallpaper | Background and shortcuts | Background layer, every output |
-| Panel | Taskbar: Meridian menu, pinned/running apps, Control Center and clock | Bottom-anchored full-width top layer, reserves 56 logical pixels |
+| Panel | Centered dock: launcher, pinned/running apps, and separated Trash | Bottom-anchored transparent top layer, reserves 88 logical pixels |
+| Topbar | Meridian menu, focused app menu with Quit, system controls and clock | Top-anchored full-width top layer, reserves 32 logical pixels |
 | Applications / Options / DesktopMenu | Launcher and menus | Overlay layer |
 | Preferences / Finder / Terminal | Built-in application windows | Ordinary GTK windows |
 | Locker | Password prompt | Session-lock surface per monitor |
 | Greeter | Login screen in a separate executable | Overlay in the greeter session |
 
-Panel uses the `surfaces/panel` frontend entry point. Its surface and exclusive zone are both 56 logical pixels tall. The legacy Topbar protocol kind remains for compatibility, but no topbar surface is created. Menus open above the taskbar.
+Panel uses `surfaces/panel`; its 88-pixel surface includes space for the floating dock shadow. Topbar uses `surfaces/topbar`. The launcher opens above the dock; Meridian and application menus, Control Center, and notifications open below the top bar. Quit requests graceful closure through the compositor, allowing applications to prompt for unsaved work.
 
 The host watches monitor changes. Each output gets a wallpaper; the first
-monitor reported by GDK receives the taskbar and is used for menus.
+monitor reported by GDK receives the dock and top bar and is used for menus.
 This is an implementation choice, not a user-configurable primary-output policy.
 
 ## 5. UI and rendering

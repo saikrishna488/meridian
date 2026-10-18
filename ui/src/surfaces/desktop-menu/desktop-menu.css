@@ -1,5 +1,5 @@
 .desktop-scrim { position: fixed; inset: 0; }
-.desktop-menu { position: fixed; bottom: 8px; max-height: calc(100vh - 16px); overflow-y: auto; width: min(272px, calc(100vw - 16px)); padding: 6px; border: 1px solid rgb(255 255 255 / .18); border-radius: 10px; background: rgb(32 36 49 / .97); box-shadow: 0 12px 35px rgb(0 0 0 / .35); color: var(--on-wallpaper, white); }
+.desktop-menu { position: fixed; top: 8px; max-height: calc(100vh - 16px); overflow-y: auto; width: min(272px, calc(100vw - 16px)); padding: 6px; border: 1px solid rgb(255 255 255 / .18); border-radius: 10px; background: rgb(32 36 49 / .97); box-shadow: 0 12px 35px rgb(0 0 0 / .35); color: var(--on-wallpaper, white); }
 .desktop-menu.hidden { visibility: hidden; }
 .desktop-menu button { display: block; width: 100%; border: 0; border-radius: 5px; padding: 8px 12px; background: transparent; color: inherit; text-align: left; cursor: pointer; font-size: 13px; }
 .desktop-menu button:hover:not(:disabled), .desktop-menu button:focus-visible { background: rgb(125 162 255 / .3); }

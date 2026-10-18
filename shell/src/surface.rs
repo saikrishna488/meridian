@@ -288,13 +288,14 @@ impl WebSurface {
     }
 }
 
-/// Full-width desktop taskbar height; keep in sync with the UI token.
-pub const PANEL_HEIGHT: i32 = 56;
+/// Dock surface height, including shadow space; keep in sync with the UI token.
+pub const PANEL_HEIGHT: i32 = 88;
 
 fn entry_dir(kind: SurfaceKind) -> &'static str {
     match kind {
         SurfaceKind::Wallpaper => "surfaces/wallpaper",
-        SurfaceKind::Panel | SurfaceKind::Topbar => "surfaces/panel",
+        SurfaceKind::Panel => "surfaces/panel",
+        SurfaceKind::Topbar => "surfaces/topbar",
         SurfaceKind::Applications => "surfaces/applications",
         SurfaceKind::Options => "surfaces/options",
         SurfaceKind::Notifications => "surfaces/notifications",

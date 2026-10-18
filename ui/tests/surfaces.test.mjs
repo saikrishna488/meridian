@@ -57,7 +57,8 @@ test("dock follows host windows and activates the selected window", async t => {
   await waitFor(() => !ui.get(".window"));
   ui.emit("popover.state", { applications: true, options: false });
   await waitFor(() => ui.get("#applications").getAttribute("aria-expanded") === "true");
-  assert.ok(ui.get(".system-tray #options"));
+  assert.equal(ui.get(".system-tray"), null);
+  assert.ok(ui.get(".dock-trash #trash"));
 });
 
 test("applications preserve keyboard selection, launching, and dismissal", async t => {
@@ -159,11 +160,14 @@ test("wallpaper initializes desktop state without file-management requests", asy
 });
 
 
-test("bottom taskbar hosts Meridian, applications and Control Center", async t => {
-  const ui = await surface(t, "panel");
-  assert.ok(ui.get(".taskbar > .menu-brand"));
-  assert.ok(ui.get(".taskbar > .bar"));
-  assert.equal(ui.get(".topbar"), null);
+test("top bar hosts Meridian and Control Center while the dock hosts applications", async t => {
+  const dock = await surface(t, "panel");
+  assert.ok(dock.get(".taskbar > .bar"));
+  assert.equal(dock.get(".menu-brand"), null);
+  assert.equal(dock.get("#options"), null);
+  const ui = await surface(t, "topbar");
+  assert.ok(ui.get(".topbar > .menu-brand"));
+  assert.equal(ui.get(".bar"), null);
   ui.get(".system-tray #options").click();
   await waitFor(() => ui.requests.some(r => r.method === "popover.toggle"));
   assert.deepEqual(ui.requests.at(-1), { method: "popover.toggle", params: { popover: "options" } });
@@ -208,8 +212,8 @@ test("dragging an application to the taskbar pins its desktop id", async t => {
   assert.deepEqual(ui.requests.find(r => r.method === "dock.pin").params, { id: "terminal.desktop", pinned: true });
 });
 
-test("taskbar opens the Meridian menu from its left button", async t => {
-  const ui = await surface(t, "panel");
+test("top bar opens the Meridian menu from its left button", async t => {
+  const ui = await surface(t, "topbar");
   ui.get(".menu-brand").click();
   await waitFor(() => ui.requests.some(r => r.method === "menu.open"));
   assert.deepEqual(ui.requests.at(-1).params, { menu: "Meridian", x: 0 });
@@ -399,4 +403,37 @@ test("Control Center requires confirmation for destructive power actions and rec
     await waitFor(() => ui.requests.some(req => req.method === `session.${id}`));
     await waitFor(() => !ui.get(`#${id}`).disabled);
   }
+});
+
+test("focused app name updates and its menu quits all app windows", async t => {
+  const windows = [{ id: 7, name: "Terminal", title: "Shell", active: true }, { id: 8, name: "Terminal", title: "Other shell", active: false }, { id: 9, name: "Browser", title: "Web", active: false }];
+  const ui = await surface(t, "topbar", r => r.method === "windows.list" ? windows : null);
+  await waitFor(() => ui.get(".focused-app")?.textContent === "Terminal");
+  ui.get(".focused-app").click();
+  await waitFor(() => ui.requests.some(r => r.method === "menu.open"));
+  assert.deepEqual(ui.requests.find(r => r.method === "menu.open").params, { menu: "Application", window_id: 7, x: 0 });
+  const menu = await surface(t, "desktop-menu", r => r.method === "windows.list" ? windows.map(w => ({ ...w, active: false })) : null);
+  menu.emit("popover.shown");
+  menu.emit("menu.opened", { menu: "Application", window_id: 7, x: 40 });
+  await waitFor(() => menu.get('[role="menuitem"]')?.textContent === "Quit Terminal");
+  menu.get('[role="menuitem"]').click();
+  await waitFor(() => menu.requests.filter(r => r.method === "windows.close").length === 2);
+  assert.deepEqual(menu.requests.filter(r => r.method === "windows.close").map(r => r.params.id), [7, 8]);
+  ui.emit("windows.changed", [{ id: 9, name: "Browser", title: "Web", active: true }]);
+  await waitFor(() => ui.get(".focused-app")?.textContent === "Browser");
+  ui.emit("windows.changed", []);
+  await waitFor(() => !ui.get(".focused-app"));
+});
+
+test("dock context offers only quit and remove, including unpinned running apps", async t => {
+  const ui = await surface(t, "panel", r => r.method === "windows.list" ? [{ id: 7, name: "Terminal", title: "Shell", active: true }] : null);
+  await waitFor(() => ui.get('[aria-label="Terminal"]'));
+  ui.get('[aria-label="Terminal"]').dispatchEvent(new ui.window.MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+  await waitFor(() => ui.get('.dock-context'));
+  const buttons = [...ui.window.document.querySelectorAll('.dock-context button')];
+  assert.deepEqual(buttons.map(b => b.textContent), ["Quit", "Remove from dock"]);
+  assert.equal(buttons[1].disabled, true);
+  buttons[0].click();
+  await waitFor(() => ui.requests.some(r => r.method === "windows.close"));
+  assert.deepEqual(ui.requests.find(r => r.method === "windows.close").params, { id: 7 });
 });

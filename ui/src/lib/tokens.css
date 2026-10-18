@@ -13,7 +13,7 @@
   --text-display: 52px;
 
   /* Layout */
-  --dock-surface-height: 56px; /* keep in sync with PANEL_HEIGHT in shell/src/surface.rs */
+  --dock-surface-height: 88px; /* keep in sync with PANEL_HEIGHT in shell/src/surface.rs */
   --weight-regular: 420;
   --weight-medium: 520;
   --weight-semibold: 600;

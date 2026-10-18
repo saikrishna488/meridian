@@ -435,7 +435,8 @@ impl Shell {
                 serialize(ok())
             }
             Request::MenuOpen(menu) => {
-                if !["Meridian", "File", "Edit", "View", "Window", "Help"].contains(&menu.menu.as_str()) {
+                if !["Meridian", "File", "Edit", "View", "Window", "Help", "Application"].contains(&menu.menu.as_str())
+                {
                     return Err(ErrorBody::new(ErrorCode::InvalidRequest, "unknown desktop menu"));
                 }
                 self.open_popover(Popover::DesktopMenu);
@@ -869,6 +870,15 @@ impl Shell {
                 }
                 serialize(ok())
             }
+            Request::WindowsClose(a) => {
+                let windows = self.windows.as_ref().ok_or_else(|| {
+                    ErrorBody::new(ErrorCode::Unavailable, "the compositor does not share its window list")
+                })?;
+                if !windows.close(a.id) {
+                    return Err(ErrorBody::new(ErrorCode::NotFound, "no such window"));
+                }
+                serialize(ok())
+            }
             Request::SettingsDisplays => Ok(Reply::Later(Box::pin(async move {
                 let outputs = crate::files::blocking(|| {
                     meridian_services::displays::list().map_err(|e| ErrorBody::new(ErrorCode::Unavailable, e))
@@ -1278,8 +1288,9 @@ impl Shell {
     }
 
     fn update_dock_visibility(&self, windows: &[Window]) {
-        if let Some(panel) = &self.state.borrow().panel {
-            panel.window.set_visible(!windows.iter().any(|window| window.fullscreen));
+        let state = self.state.borrow();
+        for surface in [&state.panel, &state.topbar].into_iter().flatten() {
+            surface.window.set_visible(!windows.iter().any(|window| window.fullscreen));
         }
     }
 
@@ -1434,6 +1445,10 @@ impl Shell {
             }
             if let Some(monitor) = &primary {
                 let panel = WebSurface::new(&self.app, &self.env, SurfaceKind::Panel, Some(monitor), self.dispatcher());
+                let topbar =
+                    WebSurface::new(&self.app, &self.env, SurfaceKind::Topbar, Some(monitor), self.dispatcher());
+                topbar.window.present();
+                self.state.borrow_mut().topbar = Some(topbar);
                 panel.window.present();
                 self.state.borrow_mut().panel = Some(panel);
                 if let Some(windows) = &self.windows {

@@ -42,8 +42,12 @@ test("launcher and apps reorder, and dragging to trash only requests confirmatio
   assert.ok(!ui.requests.some(r => r.method === "apps.uninstall"));
   ui.get('[aria-label="Firefox"]').dispatchEvent(new ui.window.MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
   await waitFor(() => ui.get('.dock-context [role="menuitem"]'));
-  [...ui.window.document.querySelectorAll('.dock-context button')].find(b => b.textContent === "Uninstall…").click();
-  await waitFor(() => ui.requests.filter(r => r.method === "apps.uninstall_prompt").length === 2);
+  const actions = [...ui.window.document.querySelectorAll('.dock-context button')];
+  assert.deepEqual(actions.map(b => b.textContent), ["Quit", "Remove from dock"]);
+  assert.equal(actions[0].disabled, true);
+  actions[1].click();
+  await waitFor(() => ui.requests.some(r => r.method === "dock.pin" && r.params.pinned === false));
+  assert.equal(ui.requests.filter(r => r.method === "apps.uninstall_prompt").length, 1);
 });
 test("trash confirmation executes the reviewed target only after Uninstall", async t => {
   const ui = await surface(t, "applications", req => req.method === "apps.uninstall_plan" ? { id: app.id, name: "Firefox", target: "flatpak:--user:app/org.mozilla.firefox/x86_64/stable", detail: "Saved data is kept." } : defaults(req));
@@ -636,8 +640,8 @@ test("shared dropdown supports keyboard selection and four system fonts", async 
   await waitFor(() => ui.window.document.documentElement.style.getPropertyValue("--font-ui").includes("Noto Sans"));
 });
 
-test("panel uses only its logo and opens system notifications with unread state", async t => {
-  const ui = await surface(t, "panel", r => r.method === "notifications.get" ? { available: true, items: [] } : defaults(r));
+test("top bar uses its logo and opens system notifications with unread state", async t => {
+  const ui = await surface(t, "topbar", r => r.method === "notifications.get" ? { available: true, items: [] } : defaults(r));
   assert.ok(ui.get(".menu-brand svg")); assert.equal(ui.get(".menu-brand").textContent, "");
   ui.emit("notifications.changed", { available: true, items: [{ id: 1, unread: true }] });
   await waitFor(() => ui.get('[aria-label="Notifications, 1 unread"]'));
@@ -815,8 +819,8 @@ test("Trash preserves the item and reports an original-location conflict", async
   assert.equal(ui.get('.restore-button').disabled, false);
 });
 
-test("taskbar clock opens Meridian Calendar", async t => {
-  const ui = await surface(t, "panel", defaults);
+test("top bar clock opens Meridian Calendar", async t => {
+  const ui = await surface(t, "topbar", defaults);
   ui.get('[aria-label="Open Calendar"]').click();
   await waitFor(() => ui.requests.some(r => r.method === "search.activate"));
   assert.deepEqual(ui.requests.find(r => r.method === "search.activate").params, { provider: "apps", item_id: "meridian-calendar.desktop" });
@@ -836,14 +840,14 @@ test("Power preferences save supported lock timing and explain when it applies",
   assert.ok(ui.get('.power-source').textContent.includes("Running on battery"));
 });
 
-test("taskbar battery opens Power preferences and absent batteries stay hidden", async t => {
-  const ui = await surface(t, "panel", req => req.method === "power.status" ? { on_ac: false, batteries: [{ name: "BAT0", percent: 12, status: "Discharging", health: null }] } : defaults(req));
+test("top bar battery opens Power preferences and absent batteries stay hidden", async t => {
+  const ui = await surface(t, "topbar", req => req.method === "power.status" ? { on_ac: false, batteries: [{ name: "BAT0", percent: 12, status: "Discharging", health: null }] } : defaults(req));
   await waitFor(() => ui.get('.taskbar-battery'));
   assert.ok(ui.get('.taskbar-battery').classList.contains("low"));
   ui.get('.taskbar-battery').click();
   await waitFor(() => ui.requests.some(r => r.method === "preferences.page_open"));
   assert.deepEqual(ui.requests.find(r => r.method === "preferences.page_open").params, { page: "power" });
-  const desktop = await surface(t, "panel", req => req.method === "power.status" ? { on_ac: true, batteries: [] } : defaults(req));
+  const desktop = await surface(t, "topbar", req => req.method === "power.status" ? { on_ac: true, batteries: [] } : defaults(req));
   await new Promise(resolve => setTimeout(resolve, 20));
   assert.equal(desktop.get('.taskbar-battery'), null);
 });

@@ -22,6 +22,12 @@ export function Dock() {
   const [status, setStatus] = useState("");
   useMenuFocus(contextMenu, !!context, () => setContext(null));
   useEffect(() => {
+    if (!context) return;
+    const dismiss = (event: PointerEvent) => { if (!contextMenu.current?.contains(event.target as Node)) setContext(null); };
+    document.addEventListener("pointerdown", dismiss);
+    return () => document.removeEventListener("pointerdown", dismiss);
+  }, [context]);
+  useEffect(() => {
     let alive = true, revision = 0, layoutRevision = 0, pinsRevision = 0;
     const off = [on("windows.changed", e => { revision++; setWindows(e.data); }), on("dock.changed", e => { pinsRevision++; setPins(e.data); }),
       on("dock.layout_changed", e => { layoutRevision++; setLayout(e.data); }),
@@ -45,6 +51,8 @@ export function Dock() {
       return { key: app?.id ?? `@window:${name}`, name, app };
     }), { key: "@trash", name: "Trash", special: "trash" }];
   const ordered = [...items].sort((a, b) => {
+    if (a.special === "trash") return 1;
+    if (b.special === "trash") return -1;
     const ai = layout.indexOf(a.key), bi = layout.indexOf(b.key);
     return (ai < 0 ? layout.length + items.indexOf(a) : ai) - (bi < 0 ? layout.length + items.indexOf(b) : bi);
   });
@@ -99,12 +107,12 @@ export function Dock() {
     <ul className="windows dock-items" aria-label="Pinned and running applications">
       {ordered.map(item => {
         const running = windows.filter(w => w.name.toLowerCase() === item.name.toLowerCase()), active = running.some(w => w.active);
-        return <li key={item.key} className={dropping === item.key ? "dock-drop-target" : undefined}>
+        return <li key={item.key} className={`${item.special === "trash" ? "dock-trash" : ""}${dropping === item.key ? " dock-drop-target" : ""}`}>
           <button id={item.special} data-dock-key={item.key} className={item.special ? "bar-button" : `window${running.length ? " running" : ""}`}
             title={item.name} aria-label={item.name} aria-pressed={item.special ? undefined : active} aria-haspopup={item.special === "applications" ? "dialog" : undefined}
             aria-expanded={item.special === "applications" ? expanded : undefined} data-tooltip={item.name}
-            draggable onDragStart={event => start(event, item)} onDragOver={event => over(event, item.key)} onDrop={event => void drop(event, item)}
-            onContextMenu={event => { event.preventDefault(); if (item.app) setContext(item); }} onClick={() => click(item)}>
+            draggable={item.special !== "trash"} onDragStart={event => start(event, item)} onDragOver={event => over(event, item.key)} onDrop={event => void drop(event, item)}
+            onContextMenu={event => { event.preventDefault(); if (!item.special) setContext(item); }} onClick={() => click(item)}>
             {item.special === "applications" ? <AppIcon name="Applications" icon="view-app-grid" /> : item.special === "trash" ? <AppIcon name="Trash" icon="user-trash" /> : <AppIcon id={item.app?.id} name={item.name} icon={item.app?.icon} />}
           </button>
         </li>;
@@ -112,9 +120,10 @@ export function Dock() {
     </ul>
     {context && <div ref={contextMenu} className="dock-context" role="menu" aria-label={`${context.name} actions`}>
       <strong>{context.name}</strong>
-      {pins.includes(context.key) && <button role="menuitem" onClick={() => { void request({ method: "dock.pin", params: { id: context.key, pinned: false } }).catch(fail); setContext(null); }}>Remove from dock</button>}
-      {context.app && !isBuiltinApp(context.app.id) && <button role="menuitem" autoFocus onClick={() => { void request({ method: "apps.uninstall_prompt", params: { id: context.app!.id } }).catch(fail); setContext(null); }}>Uninstall…</button>}
-      <button role="menuitem" onClick={() => setContext(null)}>Cancel</button>
+      <button role="menuitem" disabled={!windows.some(w => w.name.toLowerCase() === context.name.toLowerCase())} onClick={() => {
+        void Promise.all(windows.filter(w => w.name.toLowerCase() === context.name.toLowerCase()).map(w => request({ method: "windows.close", params: { id: w.id } }))).catch(fail); setContext(null);
+      }}>Quit</button>
+      <button role="menuitem" disabled={!pins.includes(context.key)} onClick={() => { void request({ method: "dock.pin", params: { id: context.key, pinned: false } }).catch(fail); setContext(null); }}>Remove from dock</button>
     </div>}
     {status && <button className="dock-error" role="status" onClick={() => setStatus("")}>{status}</button>}
   </nav>;

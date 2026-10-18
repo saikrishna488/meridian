@@ -153,6 +153,17 @@ impl WindowService {
         true
     }
 
+    /// Ask a window to close gracefully. The client may prompt before closing.
+    pub fn close(&self, id: u32) -> bool {
+        let inner = self.inner.borrow();
+        let Some(toplevel) = inner.state.toplevels.iter().find(|t| t.window.id == id) else { return false };
+        toplevel.handle.close();
+        if let Err(e) = inner.conn.flush() {
+            log::warn!("wayland flush: {e}");
+        }
+        true
+    }
+
     /// Listeners must not register further listeners.
     pub fn connect_changed(&self, f: impl Fn(&[Window]) + 'static) {
         self.inner.borrow_mut().listeners.push(Box::new(f));

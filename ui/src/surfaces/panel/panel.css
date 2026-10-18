@@ -1,61 +1,26 @@
 body { height: var(--dock-surface-height); padding: 0; }
-.taskbar { display: flex; align-items: center; gap: 12px; width: 100%; height: 100%; padding: 4px 12px; background: rgb(25 31 43 / .96); border-top: 1px solid #ffffff26; color: #f3f6fc; }
-.taskbar button { border: 0; color: inherit; cursor: pointer; }
-.menu-brand { display: flex; align-items: center; gap: 8px; flex: none; height: 44px; padding: 0 12px; border-radius: 5px; background: transparent; font-size: 13px; font-weight: 600; }
-.menu-brand > span:first-child { font-size: 28px; color: #8fbcff; }
-.menu-brand:hover, .system-tray button:hover { background: #ffffff1a; }
-.bar { position: relative; display: flex; justify-content: center; flex: 1; min-width: 0; height: 48px; }
-.windows { display: flex; align-items: center; gap: 4px; min-width: 0; margin: 0; padding: 0 3px; list-style: none; overflow-x: auto; scrollbar-width: none; }
+.taskbar { display: flex; align-items: center; justify-content: center; height: 100%; padding: 8px 20px 16px; }
+.bar { position: relative; display: flex; width: max-content; max-width: 100%; height: 64px; padding: 5px 8px; border: 1px solid #ffffff30; border-radius: 20px; background: rgb(27 32 43 / .96); color: #f3f6fc; box-shadow: 0 6px 12px #0005, inset 0 1px 0 #ffffff12; }
+.windows { display: flex; align-items: center; gap: 5px; min-width: 0; margin: 0; padding: 0 3px; list-style: none; overflow-x: auto; scrollbar-width: none; }
 .windows::-webkit-scrollbar { display: none; }
 .windows li { flex: none; }
-.bar-button, .window { position: relative; display: grid; place-items: center; width: 46px; height: 46px; padding: 6px; border: 0; border-radius: 5px; background: transparent; cursor: pointer; transition: background var(--dur-fast); }
+.bar-button, .window { position: relative; display: grid; place-items: center; width: 50px; height: 50px; padding: 5px; border: 0; border-radius: 13px; background: transparent; color: inherit; cursor: pointer; transition: background var(--dur-fast); }
 .bar-button:hover, .window:hover, .bar-button[aria-expanded="true"], .window[aria-pressed="true"] { background: #ffffff20; }
-.dock-icon { display: grid; place-items: center; width: 32px; height: 32px; font-size: 22px; }
-.dock-icon img { display: block; width: 100%; height: 100%; object-fit: contain; }
-.app-icon { border-radius: 6px; }
-.app-icon.has-image { background: transparent; }
-.app-icon.system-artwork { overflow: hidden; background: linear-gradient(145deg, #f6f7fb, #dce1ec); }
-.app-icon.system-artwork img { width: 80%; height: 80%; }
-.app-icon.generic-image { position: relative; }
-.generic-monogram { position: absolute; inset: 0; display: grid; place-items: center; color: white; font-weight: 600; }
-.window.running::after { content: ""; position: absolute; bottom: 1px; width: 6px; height: 3px; border-radius: 2px; background: #a7b2c3; }
-.window.running[aria-pressed="true"]::after { width: 20px; background: #80b8ff; }
-.system-tray { display: flex; align-items: center; gap: 8px; flex: none; height: 44px; }
-.system-tray button { display: grid; place-items: center; width: 40px; height: 44px; border-radius: 5px; background: transparent; }
-.system-tray button[aria-expanded="true"] { background: #ffffff28; }
-.system-tray .when { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 12px; white-space: nowrap; }
-.system-tray .date { margin: 0; font-size: 10px; }
-.dock-drop-target, .bar.drop-active { outline: 2px solid #8fbcff; border-radius: 5px; }
-.dock-context { position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 4px 8px; background: #303a4c; }
-.dock-context strong { max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dock-context button, .dock-error { border: 0; padding: 8px; border-radius: 5px; background: #ffffff20; cursor: pointer; }
-.dock-error { position: absolute; inset: 0; background: #553336; font-size: 12px; overflow: auto; z-index: 6; }
-[data-theme="light"] .taskbar { background: rgb(237 242 250 / .97); border-color: #c8d1df; color: #202b3c; }
-[data-theme="light"] .taskbar button:hover, [data-theme="light"] .taskbar button[aria-expanded="true"], [data-theme="light"] .window[aria-pressed="true"] { background: #2841641a; }
-[data-theme="light"] .dock-context { background: #e3eaf5; }
-@media (max-width: 650px) { .system-tray .date { display: none; } .taskbar { gap: 4px; padding-inline: 4px; } .menu-brand { padding-inline: 8px; } .system-tray { gap: 2px; } }
-.menu-brand { justify-content:center; width:44px; padding:0; }
-.menu-brand .meridian-logo { color:currentColor; }
-#notifications { position:relative; }.notification-dot { position:absolute; right:8px; top:8px; width:5px; height:5px; background:#668ed8; border-radius:50%; }
-
-/* Keep the compositor's 56px reservation while giving each group room. */
-.taskbar { background: #1b202bf5; border-top-color: #ffffff1c; padding-inline: 16px; }
-.menu-brand, .bar-button, .window, .system-tray button { border-radius: 11px; }
-.menu-brand { color: #a8c7ff; }
-.windows { gap: 5px; }
-.bar-button, .window { width: 46px; height: 44px; }
-.window.running::after { bottom: 0; height: 3px; width: 4px; }
+.dock-icon { width: 40px; height: 40px; font-size: 24px; }
+.app-icon { border-radius: 10px; }
+.generic-monogram { position: absolute; inset: 0; display: grid; place-items: center; font-size: 22px; }
+.window.running::after { content: ""; position: absolute; bottom: 0; width: 4px; height: 3px; border-radius: 2px; background: #a7b2c3; }
 .window.running[aria-pressed="true"]::after { width: 16px; background: var(--action); }
-.system-tray { gap: 4px; }
-.system-tray .when { min-width: 92px; margin-left: 8px; padding-left: 14px; border-left: 1px solid #ffffff24; font-variant-numeric: tabular-nums; }
-.system-tray .date { opacity: .7; }
-.notification-dot { background: var(--action); box-shadow: 0 0 0 2px #1b202b; }
-[data-theme="light"] .taskbar { background: #f3f6fbf5; border-top-color: #d2dae6; }
-[data-theme="light"] .menu-brand { color: #2563c7; }
-[data-theme="light"] .system-tray .when { border-left-color: var(--line); }
-[data-theme="light"] .notification-dot { box-shadow: 0 0 0 2px #f3f6fb; }
-@media (max-width: 650px) { .taskbar { padding-inline: 4px; } .system-tray .when { min-width: 0; margin-left: 2px; padding-left: 8px; } }
-.system-tray button.taskbar-calendar { width:auto; min-width:106px; padding:0 8px; }.taskbar-calendar .when { margin:0; padding-left:10px; }.taskbar-calendar .when .clock { font-size:12px; font-weight:550; }.taskbar-calendar .date { font-size:10px; }
-@media(max-width:650px) { .system-tray button.taskbar-calendar { min-width:68px; padding-inline:3px; }.taskbar-calendar .when { padding-left:7px; } }
-.system-tray button.taskbar-battery { display:flex; align-items:center; justify-content:center; gap:5px; width:auto; min-width:40px; padding:0 8px; font-size:11px; font-variant-numeric:tabular-nums; }.taskbar-battery.low { color:var(--danger); }
-@media(max-width:650px) { .taskbar-battery>span { display:none; } }
+.dock-trash { margin-left: 5px; padding-left: 10px; border-left: 1px solid #ffffff35; }
+.dock-drop-target, .bar.drop-active { outline: 2px solid #8fbcff; border-radius: 13px; }
+.dock-context { position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 5px 10px; border-radius: inherit; background: #303a4c; box-shadow: var(--shadow-lg); font-size: 12px; }
+.dock-context strong { max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dock-context button, .dock-error { flex: none; border: 0; padding: 8px; border-radius: 8px; background: #ffffff20; color: inherit; cursor: pointer; }
+.dock-context button:disabled { opacity: .4; cursor: default; }
+.bar:has(.dock-context) { min-width: min(340px, calc(100vw - 40px)); }
+.dock-error { position: absolute; inset: 0; background: #553336; font-size: 12px; overflow: auto; z-index: 6; }
+[data-theme="light"] .bar { background: rgb(243 246 251 / .96); border-color: #c8d1df; color: #202b3c; box-shadow: 0 6px 12px #17294438, inset 0 1px 0 #fff; }
+[data-theme="light"] .bar button:hover, [data-theme="light"] .window[aria-pressed="true"] { background: #2841641a; }
+[data-theme="light"] .dock-context { background: #e3eaf5; }
+[data-theme="light"] .dock-trash { border-left-color: #28416430; }
+@media (max-width: 650px) { .taskbar { padding-inline: 10px; } .windows { gap: 2px; } .bar-button, .window { width: 44px; } }

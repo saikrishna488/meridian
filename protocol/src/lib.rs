@@ -386,7 +386,7 @@ pub struct BluetoothAction {
 pub enum SurfaceKind {
     /// Wallpaper on every output.
     Wallpaper,
-    /// Top bar: Applications button, running windows, Options button.
+    /// Bottom dock: Applications button, pinned/running windows, and Trash.
     Panel,
     /// Desktop menu bar, anchored to the top edge.
     Topbar,
@@ -491,7 +491,13 @@ impl SurfaceKind {
                 Capability::Dock,
                 Capability::AppManagement,
             ],
-            SurfaceKind::Topbar => &[Capability::Popovers, Capability::Windows],
+            SurfaceKind::Topbar => &[
+                Capability::Popovers,
+                Capability::Windows,
+                Capability::PowerStatus,
+                Capability::Notifications,
+                Capability::Search,
+            ],
             SurfaceKind::DesktopMenu => &[Capability::Popovers, Capability::Windows, Capability::Session],
             SurfaceKind::Applications => &[
                 Capability::Search,
@@ -692,6 +698,10 @@ pub enum Request {
     /// Focus (raise and unminimize) a window.
     #[serde(rename = "windows.activate")]
     WindowsActivate(WindowsActivate),
+
+    /// Request a graceful close, allowing the app to prompt for unsaved work.
+    #[serde(rename = "windows.close")]
+    WindowsClose(WindowsActivate),
 
     #[serde(rename = "settings.displays")]
     SettingsDisplays,
@@ -991,7 +1001,7 @@ impl Request {
             }
             Request::SearchQuery(_) | Request::SearchActivate(_) => Some(Capability::Search),
             Request::PopoverToggle(_) | Request::PopoverClose => Some(Capability::Popovers),
-            Request::WindowsList | Request::WindowsActivate(_) => Some(Capability::Windows),
+            Request::WindowsList | Request::WindowsActivate(_) | Request::WindowsClose(_) => Some(Capability::Windows),
             Request::SettingsUsers
             | Request::SettingsUserCreate(_)
             | Request::SettingsUserAction(_)
@@ -1413,6 +1423,9 @@ mod tests {
 pub struct MenuOpen {
     pub menu: String,
     pub x: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub window_id: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]

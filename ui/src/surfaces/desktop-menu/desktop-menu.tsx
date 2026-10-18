@@ -10,14 +10,17 @@ function DesktopMenu() {
   const [busy, setBusy] = useState(false);
   const [label, setLabel] = useState("Meridian");
   const [x, setX] = useState(8);
+  const [windowId, setWindowId] = useState<number | undefined>();
   const [about, setAbout] = useState(false);
   const [info, setInfo] = useState<SystemInfo | null>(null);
   const [windows, setWindows] = useState<WindowInfo[]>([]);
+  const focused = windows.find(w => w.id === windowId);
   const [error, setError] = useState("");
   const first = useRef<HTMLButtonElement>(null);
   const report = (e: unknown) => setError(e instanceof Error ? e.message : "Couldn’t complete this action");
   const { visible, menu, dismiss } = usePopover(async () => { setAbout(false); setError(""); }, () => first.current?.focus(), report);
   useEffect(() => on("menu.opened", e => {
+    setWindowId(e.data.window_id);
     setLabel(e.data.menu); setX(e.data.x); setAbout(false); setError("");
     void request({ method: "windows.list" }).then(setWindows).catch(report);
   }), []);
@@ -66,6 +69,10 @@ function DesktopMenu() {
           <hr /><button id="lock" role="menuitem" disabled={busy} onClick={() => void sessionAction("session.lock")}>Lock</button>
           <ConfirmButton id="sign-out" role="menuitem" className="session-menu-button" label="Sign out" report={report} action={() => sessionAction("session.sign_out")} />
         </>}
+        {label === "Application" && <button ref={first} role="menuitem" disabled={!focused} onClick={() => {
+          if (!focused) return;
+          void Promise.all(windows.filter(w => w.name === focused.name).map(w => request({ method: "windows.close", params: { id: w.id } }))).then(dismiss).catch(report);
+        }}>Quit {focused?.name ?? "application"}</button>}
         {label === "File" && <button ref={first} role="menuitem" onClick={() => toggle("applications")}>Open application…</button>}
         {label === "Edit" && <><p className="menu-note">App editing commands are unavailable.</p>{["Undo", "Redo", "Cut", "Copy", "Paste", "Select All"].map(item => <button key={item} role="menuitem" disabled>{item}</button>)}</>}
         {label === "View" && <button ref={first} role="menuitem" onClick={() => toggle("options")}>Control Center…</button>}

@@ -50,9 +50,11 @@ button {
 #root {
   display: contents;
 }
+.ui-icon { filter: drop-shadow(0 1px 1px rgb(0 0 0 / .18)); }
+
 /* Shared icon tiles. Built-in artwork is fixed; installed app artwork is inset. */
 .dock-icon { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 28%; font-size: 28px; font-weight: 600; color: white; }
-.app-icon { background: linear-gradient(145deg, hsl(var(--app-hue) 65% 65%), hsl(var(--app-hue) 55% 39%)); }
+.app-icon { filter: drop-shadow(0 3px 3px rgb(0 0 0 / .25)); background: linear-gradient(145deg, hsl(var(--app-hue) 65% 65%), hsl(var(--app-hue) 55% 39%)); }
 .app-icon img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .app-icon.has-image { background: transparent; }
 .app-icon.system-artwork { overflow: hidden; background: linear-gradient(145deg, #f6f7fb, #dce1ec); box-shadow: inset 0 1px 1px #fff9, 0 2px 4px #0002; }
