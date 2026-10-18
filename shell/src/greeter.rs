@@ -43,6 +43,7 @@ struct LastLogin {
 
 pub struct Greeter {
     app: gtk::Application,
+    authenticating: std::cell::Cell<bool>,
     env: WebEnv,
     sessions: Vec<Session>,
     state_file: PathBuf,
@@ -57,6 +58,7 @@ impl Greeter {
         log::info!("sessions: {}", sessions.iter().map(|s| s.info.id.as_str()).collect::<Vec<_>>().join(", "));
         let greeter = Rc::new_cyclic(|weak_self| Greeter {
             app: app.clone(),
+            authenticating: std::cell::Cell::new(false),
             env: WebEnv::new(SchemeHandler::new(roots), dev),
             sessions,
             state_file: glib::user_cache_dir().join("meridian-greeter").join("last-login.json"),
@@ -95,8 +97,17 @@ impl Greeter {
             }
             Request::GreeterInfo => serialize(proto::reply_ok(&self.info())),
             Request::GreeterLogin(login) => {
+                if self.authenticating.replace(true) {
+                    return Err(ErrorBody::new(ErrorCode::Unavailable, "A login attempt is already running."));
+                }
                 let greeter = self.weak_self.upgrade().expect("dispatching on a live greeter");
-                Ok(Reply::Later(Box::pin(async move { greeter.login(login).await })))
+                Ok(Reply::Later(Box::pin(async move {
+                    let result = greeter.clone().login(login).await;
+                    if result.is_err() {
+                        greeter.authenticating.set(false);
+                    }
+                    result
+                })))
             }
             Request::GreeterPower(p) => {
                 let greeter = self.weak_self.upgrade().expect("dispatching on a live greeter");
@@ -127,12 +138,23 @@ impl Greeter {
             .iter()
             .find(|s| s.info.id == login.session)
             .ok_or_else(|| ErrorBody::new(ErrorCode::NotFound, "no such session"))?;
-        if login.username.trim().is_empty() {
+        if login.username.trim().is_empty()
+            || login.username.len() > 256
+            || login.username.chars().any(char::is_control)
+            || login.password.len() > 4096
+            || login.password.contains('\0')
+        {
             return Err(ErrorBody::new(ErrorCode::InvalidRequest, "enter a username"));
         }
         let env = session_env(session);
         let client = greetd::Client::connect().await.map_err(login_error)?;
-        client.login(login.username.trim(), &login.password, &session.cmd, &env).await.map_err(login_error)?;
+        glib::future_with_timeout(
+            Duration::from_secs(90),
+            client.login(login.username.trim(), &login.password, &session.cmd, &env),
+        )
+        .await
+        .map_err(|_| ErrorBody::new(ErrorCode::Unavailable, "Login timed out. Please try again."))?
+        .map_err(login_error)?;
         log::info!("login accepted for {}; starting {}", login.username.trim(), session.info.id);
         self.write_last(&LastLogin {
             user: Some(login.username.trim().to_owned()),
@@ -178,8 +200,8 @@ fn login_error(e: LoginError) -> ErrorBody {
             ErrorCode::Failed,
             format!("This account needs another login step (“{}”), which isn't supported yet", prompt.trim()),
         ),
-        LoginError::Failed(message) => {
-            log::error!("login failed: {message}");
+        LoginError::Failed(_message) => {
+            log::error!("component=greeter event=login_failed");
             ErrorBody::new(ErrorCode::Failed, "Login failed. See the system journal for details.")
         }
     }

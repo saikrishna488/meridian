@@ -21,12 +21,14 @@ body {
   font-feature-settings: "cv11", "ss01"; /* Inter: single-storey a, open digits */
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  user-select: none;
-  -webkit-user-select: none;
+  user-select: text;
+  -webkit-user-select: text;
   cursor: default;
 }
 
 button {
+  user-select: none;
+  -webkit-user-select: none;
   font: inherit;
   color: inherit;
   letter-spacing: inherit;
@@ -138,3 +140,15 @@ button:disabled { opacity: .45; }
 button, input, select, textarea { -webkit-tap-highlight-color:transparent; }
 button:focus-visible, [role="button"]:focus-visible { outline:2px solid var(--focus-ring); outline-offset:3px; }
 @media(prefers-reduced-motion:reduce) { *, *::before, *::after { animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important; scroll-behavior:auto!important; } }
+
+/* Preserve visible focus and selection in system high-contrast modes. */
+@media (prefers-contrast: more) {
+  :root, [data-theme] { --line: currentColor; --focus-ring: currentColor; --ink-muted: var(--ink); }
+  button, input, select, [role="option"] { border:1px solid currentColor; }
+  :focus-visible { outline:3px solid currentColor !important; outline-offset:2px; }
+}
+@media (forced-colors: active) {
+  :root, [data-theme] { --surface: Canvas; --surface-raised: Canvas; --surface-subtle: Canvas; --ink: CanvasText; --ink-muted: CanvasText; --line: ButtonText; --selection: Highlight; --selection-ink: HighlightText; --focus-ring: Highlight; }
+  :focus-visible { outline:3px solid Highlight !important; outline-offset:2px; }
+  [aria-selected="true"], [aria-current="page"], [aria-pressed="true"] { outline:2px solid Highlight; outline-offset:-2px; }
+}

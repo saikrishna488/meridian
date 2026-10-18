@@ -19,6 +19,10 @@ pub struct Terminals {
 }
 
 impl Terminals {
+    #[cfg(any(test, feature = "integration-tests"))]
+    pub fn count(&self) -> usize {
+        self.sessions.len()
+    }
     pub fn start(&mut self) -> Result<TerminalSession, ErrorBody> {
         self.start_in(None)
     }

@@ -1,3 +1,6 @@
+import type { SearchPreferences } from "./generated/SearchPreferences";
+import type { PrimaryDisplayState } from "./generated/PrimaryDisplayState";
+import type { FilePreview } from "./generated/FilePreview";
 // Client side of the UI ⇄ host bridge.
 //
 // Requests go through WebKit's script message handler with reply; events
@@ -16,6 +19,12 @@ import type { WindowInfo } from "./generated/WindowInfo";
 
 /** Result type of each request method. Keep in sync with `shell/src/bridge.rs`. */
 interface ResultMap {
+  "notifications.do_not_disturb": import("./generated/NotificationState").NotificationState;
+  "settings.primary_display": PrimaryDisplayState;
+  "settings.primary_display_set": PrimaryDisplayState;
+  "settings.search": SearchPreferences;
+  "settings.search_set": SearchPreferences;
+  "files.preview": FilePreview;
   "shell.hello": SurfaceInfo;
   "desktop.font_set": import("./generated/DesktopState").DesktopState;
   "desktop.appearance_set": import("./generated/DesktopState").DesktopState;
@@ -40,6 +49,10 @@ interface ResultMap {
   "files.rename": null;
   "files.trash": null;
   "files.transfer": null;
+  "files.transfers": import("./generated/TransferProgress").TransferProgress[];
+  "files.transfer_start": import("./generated/TransferProgress").TransferProgress;
+  "files.transfer_status": import("./generated/TransferProgress").TransferProgress;
+  "files.transfer_cancel": null;
   "files.thumbnail": string | null;
   "files.wallpaper": import("./generated/DesktopState").DesktopState;
   "menu.open": null;
@@ -156,11 +169,20 @@ export async function request<R extends Request>(req: R): Promise<ResultMap[R["m
   if (!handler) {
     throw new BridgeError("unavailable", "not running inside meridian-shell");
   }
-  const raw = await handler.postMessage(JSON.stringify(req));
+  const message = JSON.stringify(req);
+  if (new TextEncoder().encode(message).length > 2 * 1024 * 1024) {
+    throw new BridgeError("invalid_request", "Request exceeds the 2 MiB limit.");
+  }
+  const raw = await handler.postMessage(message);
   if (typeof raw !== "string") {
     throw new BridgeError("failed", `malformed reply to ${req.method}`);
   }
-  const reply = JSON.parse(raw) as Reply;
+  let reply: Reply;
+  try { reply = JSON.parse(raw) as Reply; }
+  catch { throw new BridgeError("failed", `malformed reply to ${req.method}`); }
+  if (!reply || typeof reply !== "object" || typeof reply.ok !== "boolean" || (!reply.ok && (!reply.error || typeof reply.error.message !== "string"))) {
+    throw new BridgeError("failed", `malformed reply to ${req.method}`);
+  }
   if (!reply.ok) {
     throw new BridgeError(reply.error.code, reply.error.message);
   }
@@ -202,8 +224,9 @@ window.__meridianDispatch = (json: string) => {
 };
 
 /** Handshake: marks the surface ready for events. Call after registering listeners. */
+let handshake: Promise<SurfaceInfo> | undefined;
 export function hello(): Promise<SurfaceInfo> {
-  return request({ method: "shell.hello" });
+  return handshake ??= request({ method: "shell.hello" }).catch(error => { handshake = undefined; throw error; });
 }
 
 /** Resolve after the next rendered frame (refresh-rate independent). */

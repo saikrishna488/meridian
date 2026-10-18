@@ -24,3 +24,11 @@ env_logger.workspace = true
 libc = "0.2"
 
 semver = "1"
+
+[features]
+integration-tests = []
+
+[[bin]]
+name = "meridian-smoke"
+path = "src/bin/meridian-smoke.rs"
+required-features = ["integration-tests"]

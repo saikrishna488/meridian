@@ -32,7 +32,19 @@ function Calendar() {
 }
 function Clock() {
   const [now,setNow] = useState(Date.now()), [tab,setTab] = useState("Clock"), [running,setRunning] = useState(false), [elapsed,setElapsed] = useState(0), [started,setStarted] = useState(0), [minutes,setMinutes] = useState("5"), [deadline,setDeadline] = useState<number | null>(null), [done,setDone] = useState(false), [laps,setLaps] = useState<number[]>([]);
-  useEffect(() => { const id = setInterval(() => setNow(Date.now()),100); return () => clearInterval(id); },[]);
+  useEffect(() => {
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const sync = () => {
+      if (timer !== undefined) clearInterval(timer);
+      timer = undefined;
+      if (!document.hidden) {
+        setNow(Date.now());
+        timer = setInterval(() => setNow(Date.now()), tab === "Stopwatch" && running ? 100 : 1000);
+      }
+    };
+    sync(); document.addEventListener("visibilitychange", sync);
+    return () => { if (timer !== undefined) clearInterval(timer); document.removeEventListener("visibilitychange", sync); };
+  }, [tab, running]);
   useEffect(() => { if(deadline!==null && now>=deadline) { setDeadline(null); setDone(true); } },[now,deadline]);
   const value = elapsed+(running?Math.max(0,now-started):0);
   function duration(ms:number) { const s=Math.max(0,Math.floor(ms/1000)); return `${String(Math.floor(s/3600)).padStart(2,"0")}:${String(Math.floor(s/60)%60).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`; }

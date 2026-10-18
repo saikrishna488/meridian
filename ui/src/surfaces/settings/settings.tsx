@@ -1,3 +1,4 @@
+import { SearchSettings } from "./search";
 import { Select } from "../../components/Select";
 import { useEffect, useRef, useState } from "react";
 import { hello, on, request } from "../../lib/bridge";
@@ -11,7 +12,7 @@ import { Power } from "./power";
 import { DeviceManager } from "./device-manager";
 import { MeridianLogo } from "../../components/MeridianLogo";
 import { Users } from "./users";
-import { Displays, Wireless, Sharing } from "./devices";
+import { Displays, Wireless } from "./devices";
 import { Icon, type IconName } from "../../components/Icon";
 
 const sections: { name: string; icon: IconName; description: string }[] = [
@@ -27,13 +28,13 @@ const sections: { name: string; icon: IconName; description: string }[] = [
   { name: "Displays", icon: "monitor", description: "Arrange your screens and adjust how things look." },
   { name: "Device Manager", icon: "settings", description: "Inspect and manage kernel drivers." },
   { name: "Users", icon: "home", description: "Manage local accounts and administrator access." },
+  { name: "Search", icon: "search", description: "Choose launcher search providers." },
   { name: "Sound", icon: "sound", description: "Choose speakers and microphones, and set comfortable levels." },
-  { name: "Sharing", icon: "share", description: "A preview of future sharing preferences." },
 ];
 const navigationGroups = [
-  { name: "Workspace", sections: ["Home", "Appearance", "Wallpaper", "Desktop & Taskbar", "Startup Apps"] },
+  { name: "Workspace", sections: ["Home", "Appearance", "Wallpaper", "Desktop & Taskbar", "Startup Apps", "Search"] },
   { name: "Devices & connections", sections: ["Wi-Fi", "Bluetooth", "Displays", "Sound"] },
-  { name: "System", sections: ["Power & Lock", "General", "Device Manager", "Users", "Sharing"] },
+  { name: "System", sections: ["Power & Lock", "General", "Device Manager", "Users"] },
 ];
 const shortcuts = [["Screenshot desktop", "Print Screen"], ["Screenshot area", "Super + Shift + S / Shift + Print Screen"],["Applications", "Super + Space"], ["Control Center", "Super + C"], ["Lock desktop", "Super + L"], ["Open Orbit", "Super + E"], ["Settings", "Super + I"], ["Switch windows", "Alt + Tab"], ["Minimize window", "Super + ↓"], ["Maximize / restore", "Super + ↑"], ["Snap left / right", "Super + ← / →"], ["Window menu", "Alt + Space"]];
 const searchTerms: Record<string, string> = {
@@ -59,7 +60,7 @@ function Settings() {
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     const offWallpaper = on("preferences.wallpaper", () => { setSection("Wallpaper"); setSearch(""); });
-    const offPage = on("preferences.page", event => { const names = { home: "Home", sound: "Sound", power: "Power & Lock", "startup-apps": "Startup Apps" }; setSection(names[event.data.page]); setSearch(""); setError(""); });
+    const offPage = on("preferences.page", event => { const names = { home: "Home", sound: "Sound", power: "Power & Lock", "startup-apps": "Startup Apps", wifi: "Wi-Fi", bluetooth: "Bluetooth", displays: "Displays", appearance: "Appearance", wallpaper: "Wallpaper", desktop: "Desktop & Taskbar", general: "General", users: "Users", "device-manager": "Device Manager", search: "Search" }; setSection(names[event.data.page]); setSearch(""); setError(""); });
     void hello().catch(console.error);
     return () => { offWallpaper(); offPage(); };
   }, []);
@@ -84,7 +85,7 @@ function Settings() {
   return <main className="settings-app">
     <aside className="settings-sidebar"><div className="settings-identity"><span className="settings-brand"><MeridianLogo width="24" height="24" /></span><div><h1>Settings</h1><small>Make Meridian yours</small></div></div>
       <label className="settings-search"><Icon name="search" width="16" height="16" /><input aria-label="Search settings" placeholder="Find a setting" value={search} onKeyDown={event => { if (event.key === "Enter" && categories[0]) { event.preventDefault(); navigate(categories[0].name); } if (event.key === "Escape") setSearch(""); }} onChange={e => setSearch(e.target.value)} />{search && <button aria-label="Clear settings search" onClick={() => setSearch("")}><Icon name="close" width="14" height="14" /></button>}</label>
-      <nav aria-label="Settings categories">{navigationGroups.map(group => { const matching = group.sections.flatMap(name => categories.filter(item => item.name === name)); return matching.length > 0 && <div className="settings-nav-group" key={group.name}><h2>{group.name}</h2>{matching.map(({ name, icon }) => <button key={name} aria-label={name} aria-current={section === name ? "page" : undefined} onClick={() => navigate(name)}><Icon name={icon} /><span>{name}</span>{name === "Sharing" && <span className="preview-badge">Preview</span>}</button>)}</div>; })}</nav>
+      <nav aria-label="Settings categories">{navigationGroups.map(group => { const matching = group.sections.flatMap(name => categories.filter(item => item.name === name)); return matching.length > 0 && <div className="settings-nav-group" key={group.name}><h2>{group.name}</h2>{matching.map(({ name, icon }) => <button key={name} aria-label={name} aria-current={section === name ? "page" : undefined} onClick={() => navigate(name)}><Icon name={icon} /><span>{name}</span></button>)}</div>; })}</nav>
       {!categories.length && <p className="settings-no-results">No settings match “{search}”. Try “display” or “wallpaper”.</p>}
 
     </aside>
@@ -94,7 +95,7 @@ function Settings() {
         <h3 className="home-section-title">Everyday essentials</h3>
         <div className="settings-quick-links">{["Wallpaper", "Wi-Fi", "Displays", "Sound", "Startup Apps", "General"].map(name => { const item = sections.find(s => s.name === name)!; return <button key={name} onClick={() => navigate(name)}><span className="quick-link-icon"><Icon name={item.icon} /></span><span><strong>{name}</strong><small>{name === "Wi-Fi" ? settings.wifi === null ? "Connection settings" : settings.wifi ? "Wi-Fi is on" : "Wi-Fi is off" : name === "Sound" ? settings.volume === null ? "Volume controls" : `Volume · ${settings.volume}%` : name === "Displays" ? "Resolution and scaling" : name === "Startup Apps" ? "Ready when you sign in" : name === "General" ? "System information and updates" : "Choose your background"}</small></span><Icon name="forward" width="16" height="16" /></button>; })}</div>
         <div className="settings-card shortcut-card"><div className="shortcut-heading"><Icon name="keyboard" /><h3>Keyboard shortcuts</h3></div>{shortcuts.map(([name, keys]) => <div className="settings-row" key={name}><span>{name}</span><kbd>{keys}</kbd></div>)}<p className="section-caption card-caption">In a nested development window, use Ctrl + Alt + H for Applications and Ctrl + Alt + C for Control Center.</p></div>
-      </> : section === "Power & Lock" ? <Power /> : section === "Startup Apps" ? <Startup /> : section === "General" ? <General /> : section === "Device Manager" ? <DeviceManager navigate={navigate} /> : section === "Users" ? <Users /> : section === "Displays" ? <Displays /> : section === "Wi-Fi" || section === "Bluetooth" ? <Wireless key={section} kind={section === "Wi-Fi" ? "wifi" : "bluetooth"} /> : section === "Sharing" ? <Sharing /> : section === "Wallpaper" ? <>
+      </> : section === "Search" ? <SearchSettings /> : section === "Power & Lock" ? <Power /> : section === "Startup Apps" ? <Startup /> : section === "General" ? <General /> : section === "Device Manager" ? <DeviceManager navigate={navigate} /> : section === "Users" ? <Users /> : section === "Displays" ? <Displays /> : section === "Wi-Fi" || section === "Bluetooth" ? <Wireless key={section} kind={section === "Wi-Fi" ? "wifi" : "bluetooth"} /> : section === "Wallpaper" ? <>
         <div className="settings-card">{desktop ? <img className="wallpaper-current" src={desktop.wallpaper_uri} alt="Current desktop wallpaper" /> : <div className="wallpaper-loading" role="status">Loading wallpaper…</div>}<div className="wallpaper-choices" aria-label="Wallpapers">{desktop?.wallpapers.map(choice => <button className="wallpaper-choice" key={choice.id} aria-pressed={desktop.wallpaper === choice.id} disabled={busy} onClick={() => void wallpaper(choice.id)}><img src={choice.uri} alt="" /><span>{choice.name}{desktop.wallpaper === choice.id && <Icon name="check" width="14" height="14" />}</span></button>)}</div><div className="wallpaper-custom"><button disabled={busy} onClick={() => void wallpaper()}><Icon name="image" width="16" height="16" />{busy ? "Updating…" : "Choose custom image…"}</button><small>PNG, JPEG or WebP · up to 20 MB</small></div></div>
       </> : section === "Appearance" ? <>
         <div className="appearance-options" aria-label="Choose appearance">{(["light", "dark"] as const).map(mode => <button className={`appearance-choice ${mode}`} key={mode} aria-pressed={desktop?.appearance === mode} disabled={busy || !desktop} onClick={() => void appearance(mode)}><span className="appearance-preview" aria-hidden="true"><span className="appearance-preview-sidebar" /><span className="appearance-preview-content"><i /><i /><i /></span></span><span className="appearance-choice-label">{mode === "light" ? "Light" : "Dark"}<span className="choice-check">{desktop?.appearance === mode && <Icon name="check" width="14" height="14" />}</span></span></button>)}</div><div className="settings-card"><div className="settings-row"><label htmlFor="system-font">Font</label><Select id="system-font" aria-label="System font" value={desktop?.font ?? "Inter"} disabled={busy || !desktop} onChange={e => void font(e.target.value)}>{["Inter", "Noto Sans", "DejaVu Sans", "Liberation Sans"].map(name => <option key={name} value={name}>{name}</option>)}</Select></div></div>

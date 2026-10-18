@@ -230,6 +230,16 @@ pub enum PreferencesPage {
     Sound,
     Power,
     StartupApps,
+    Wifi,
+    Bluetooth,
+    Displays,
+    Appearance,
+    Wallpaper,
+    Desktop,
+    General,
+    Users,
+    DeviceManager,
+    Search,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
@@ -447,6 +457,8 @@ pub enum Capability {
     Unlock,
     /// Browse and manage files from Finder.
     Files,
+    /// Manage desktop files without granting full file-manager access.
+    DesktopFiles,
     /// Select the desktop wallpaper from Settings.
     Appearance,
     /// Manage this terminal window's interactive shells.
@@ -461,7 +473,7 @@ impl SurfaceKind {
     /// The fixed capability set of each surface kind.
     pub fn capabilities(self) -> &'static [Capability] {
         match self {
-            SurfaceKind::Wallpaper => &[Capability::Dock, Capability::Popovers],
+            SurfaceKind::Wallpaper => &[Capability::Dock, Capability::DesktopFiles, Capability::Popovers],
             SurfaceKind::Preferences => &[
                 Capability::Appearance,
                 Capability::Settings,
@@ -471,6 +483,7 @@ impl SurfaceKind {
             ],
             SurfaceKind::Finder => &[
                 Capability::Files,
+                Capability::DesktopFiles,
                 Capability::Search,
                 Capability::AppManagement,
                 Capability::Popovers,
@@ -483,8 +496,6 @@ impl SurfaceKind {
             SurfaceKind::Calendar => &[Capability::Calendar],
             SurfaceKind::Clock => &[],
             SurfaceKind::Panel => &[
-                Capability::PowerStatus,
-                Capability::Notifications,
                 Capability::Popovers,
                 Capability::Windows,
                 Capability::Search,
@@ -534,12 +545,46 @@ pub enum Popover {
     Notifications,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct PrimaryDisplayChoice {
+    pub connector: Option<String>,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct PrimaryDisplayState {
+    pub connector: Option<String>,
+    pub effective: Option<String>,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct SearchPreferences {
+    pub settings: bool,
+    pub calculator: bool,
+}
+impl Default for SearchPreferences {
+    fn default() -> Self {
+        Self { settings: true, calculator: false }
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct FilePreview {
+    pub kind: String,
+    pub content: String,
+    pub truncated: bool,
+}
+
 /// Identifies a search provider. Closed set: providers are native code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[serde(rename_all = "kebab-case")]
 #[ts(export)]
 pub enum ProviderId {
     Apps,
+    Settings,
+    Calculator,
 }
 
 /// A request sent by a UI surface to the host.
@@ -595,6 +640,8 @@ pub enum Request {
     NotificationsGet,
     #[serde(rename = "notifications.read")]
     NotificationsRead,
+    #[serde(rename = "notifications.do_not_disturb")]
+    NotificationsDoNotDisturb(SetEnabled),
     #[serde(rename = "notifications.dismiss")]
     NotificationsDismiss(NotificationId),
     #[serde(rename = "notifications.clear")]
@@ -625,8 +672,18 @@ pub enum Request {
     FileRename(FileName),
     #[serde(rename = "files.transfer")]
     FileTransfer(FileTransfer),
+    #[serde(rename = "files.transfer_start")]
+    FileTransferStart(FileTransfer),
+    #[serde(rename = "files.transfer_status")]
+    FileTransferStatus(TransferId),
+    #[serde(rename = "files.transfer_cancel")]
+    FileTransferCancel(TransferId),
+    #[serde(rename = "files.transfers")]
+    FileTransfers,
     #[serde(rename = "files.thumbnail")]
     FileThumbnail(FilePath),
+    #[serde(rename = "files.preview")]
+    FilePreview(FilePath),
     #[serde(rename = "files.wallpaper")]
     FileWallpaper(FilePath),
     #[serde(rename = "files.trash")]
@@ -705,6 +762,14 @@ pub enum Request {
 
     #[serde(rename = "settings.displays")]
     SettingsDisplays,
+    #[serde(rename = "settings.primary_display")]
+    SettingsPrimaryDisplay,
+    #[serde(rename = "settings.primary_display_set")]
+    SettingsPrimaryDisplaySet(PrimaryDisplayChoice),
+    #[serde(rename = "settings.search")]
+    SettingsSearch,
+    #[serde(rename = "settings.search_set")]
+    SettingsSearchSet(SearchPreferences),
     #[serde(rename = "settings.display_apply")]
     SettingsDisplayApply(DisplayApply),
     #[serde(rename = "settings.display_decide")]
@@ -943,6 +1008,7 @@ impl Request {
             Request::Hello => None,
             Request::NotificationsGet
             | Request::NotificationsRead
+            | Request::NotificationsDoNotDisturb(_)
             | Request::NotificationsDismiss(_)
             | Request::NotificationsClear
             | Request::NotificationsAction(_) => Some(Capability::Notifications),
@@ -954,11 +1020,11 @@ impl Request {
             | Request::DesktopAppearanceSet(_)
             | Request::DesktopWallpaperSet(_)
             | Request::DesktopWallpaperChoose => Some(Capability::Appearance),
-            Request::DesktopAddFile(_) => Some(Capability::Dock),
-            Request::DesktopAddApp(_)
+            Request::DesktopAddFile(_)
             | Request::DesktopChooseFiles
             | Request::DesktopRemove(_)
-            | Request::DesktopOpen(_) => Some(Capability::Dock),
+            | Request::DesktopOpen(_) => Some(Capability::DesktopFiles),
+            Request::DesktopAddApp(_) => Some(Capability::Dock),
             Request::FileLocations
             | Request::FileBookmarks
             | Request::FileBookmarkSet(_)
@@ -970,7 +1036,12 @@ impl Request {
             | Request::FileOpen(_)
             | Request::FileMkdir(_)
             | Request::FileTransfer(_)
+            | Request::FileTransferStart(_)
+            | Request::FileTransferStatus(_)
+            | Request::FileTransferCancel(_)
+            | Request::FileTransfers
             | Request::FileThumbnail(_)
+            | Request::FilePreview(_)
             | Request::FileWallpaper(_)
             | Request::FileRename(_)
             | Request::FileTrash(_) => Some(Capability::Files),
@@ -1016,7 +1087,11 @@ impl Request {
             Request::SettingsSystemInfo | Request::SettingsCheckUpdates | Request::SettingsOpenReleases => {
                 Some(Capability::Settings)
             }
-            Request::SettingsDisplays
+            Request::SettingsPrimaryDisplay
+            | Request::SettingsPrimaryDisplaySet(_)
+            | Request::SettingsSearch
+            | Request::SettingsSearchSet(_)
+            | Request::SettingsDisplays
             | Request::SettingsIdle
             | Request::SettingsIdleSet(_)
             | Request::SettingsAudio
@@ -1225,10 +1300,23 @@ pub fn reply_err(error: &ErrorBody) -> String {
 }
 
 /// Parse a request from its JSON wire form, including range validation.
+pub const MAX_REQUEST_BYTES: usize = 2 * 1024 * 1024;
+
 pub fn parse_request(json: &str) -> Result<Request, ErrorBody> {
-    let request: Request =
-        serde_json::from_str(json).map_err(|e| ErrorBody::new(ErrorCode::InvalidRequest, e.to_string()))?;
+    if json.len() > MAX_REQUEST_BYTES {
+        return Err(ErrorBody::new(ErrorCode::InvalidRequest, "Request exceeds the 2 MiB limit."));
+    }
+    // Parser diagnostics must not echo user-supplied values, including secrets.
+    let request: Request = serde_json::from_str(json).map_err(|e| {
+        ErrorBody::new(
+            ErrorCode::InvalidRequest,
+            format!("Invalid request at line {}, column {}.", e.line(), e.column()),
+        )
+    })?;
     match &request {
+        Request::SearchQuery(query) if query.query.len() > 4096 => {
+            Err(ErrorBody::new(ErrorCode::InvalidRequest, "Search text exceeds 4096 bytes."))
+        }
         Request::SettingsSetBrightness(p) | Request::SettingsSetVolume(p) if p.percent > 100 => {
             Err(ErrorBody::new(ErrorCode::InvalidRequest, "percent must be 0–100"))
         }
@@ -1239,6 +1327,30 @@ pub fn parse_request(json: &str) -> Result<Request, ErrorBody> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn new_desktop_workflows_retain_capability_boundaries() {
+        let preview = Request::FilePreview(FilePath { path: "/tmp/readme".into() });
+        assert_eq!(preview.required_capability(), Some(Capability::Files));
+        assert!(SurfaceKind::Finder.has(Capability::Files));
+        for surface in [SurfaceKind::Panel, SurfaceKind::Applications, SurfaceKind::Locker] {
+            assert!(!surface.has(Capability::Files));
+        }
+        for request in [
+            Request::SettingsSearch,
+            Request::SettingsPrimaryDisplay,
+            Request::SettingsSearchSet(SearchPreferences::default()),
+        ] {
+            assert_eq!(request.required_capability(), Some(Capability::Settings));
+        }
+        assert!(parse_request(r#"{"method":"search.activate","params":{"provider":"shell","item_id":"rm"}}"#).is_err());
+        assert_eq!(
+            Request::NotificationsDoNotDisturb(SetEnabled { enabled: true }).required_capability(),
+            Some(Capability::Notifications)
+        );
+        assert!(!SurfaceKind::Preferences.has(Capability::Notifications));
+        assert!(SurfaceKind::Topbar.has(Capability::Notifications));
+    }
 
     #[test]
     fn startup_management_is_only_available_in_preferences() {
@@ -1672,6 +1784,7 @@ pub struct NotificationItem {
 #[ts(export)]
 pub struct NotificationState {
     pub available: bool,
+    pub do_not_disturb: bool,
     pub items: Vec<NotificationItem>,
 }
 #[derive(Debug, Clone, PartialEq, Deserialize, TS)]
@@ -1730,4 +1843,47 @@ pub struct CalendarEvent {
     pub date: String,
     pub title: String,
     pub time: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct TransferId {
+    pub id: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct TransferProgress {
+    pub id: u32,
+    pub bytes: f64,
+    pub total: f64,
+    pub entries: f64,
+    pub done: bool,
+    pub error: Option<String>,
+}
+
+#[cfg(test)]
+mod reliability_tests {
+    use super::*;
+    #[test]
+    fn malformed_and_oversized_messages_never_echo_input_or_panic() {
+        let secret = "SECRET_MUST_NOT_APPEAR";
+        for json in [
+            "".to_owned(),
+            "null".into(),
+            "[]".into(),
+            format!(r#"{{"method":"{secret}"}}"#),
+            format!(
+                r#"{{"method":"greeter.login","params":{{"username":"test","password":"{secret}","session":{{"{secret}":1}}}}}}"#
+            ),
+            "[".repeat(1000),
+            "x".repeat(MAX_REQUEST_BYTES + 1),
+        ] {
+            let error = parse_request(&json).unwrap_err();
+            assert_eq!(error.code, ErrorCode::InvalidRequest);
+            assert!(!error.message.contains(secret));
+            assert!(error.message.len() < 256);
+        }
+    }
 }

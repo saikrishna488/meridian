@@ -20,12 +20,29 @@ fn main() -> glib::ExitCode {
         meridian_shell::startup::launch();
         return glib::ExitCode::SUCCESS;
     }
+    let _instance = match meridian_shell::instance::InstanceGuard::acquire("shell") {
+        Ok(guard) => guard,
+        Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+            log::info!("component=shell event=duplicate_instance_rejected");
+            return glib::ExitCode::SUCCESS;
+        }
+        Err(error) => {
+            log::error!("component=shell event=instance_lock_failed error={error}");
+            return glib::ExitCode::FAILURE;
+        }
+    };
     let dev = std::env::var_os("MERIDIAN_DEV").is_some_and(|v| v == "1");
 
     let app = gtk::Application::builder().application_id(APP_ID).build();
     let shell: Rc<RefCell<Option<Rc<shell::Shell>>>> = Rc::default();
     let failed = Rc::new(Cell::new(false));
 
+    let shutdown_shell = shell.clone();
+    app.connect_shutdown(move |_| {
+        if let Some(shell) = shutdown_shell.borrow_mut().take() {
+            shell.shutdown();
+        }
+    });
     {
         let failed = failed.clone();
         app.connect_activate(move |app| {

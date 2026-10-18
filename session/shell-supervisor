@@ -1,0 +1,27 @@
+#!/bin/sh
+# labwc owns the session. Restart only its UI shell, never the compositor.
+set -u
+child=
+stop() {
+    trap '' TERM INT HUP
+    if [ -n "$child" ]; then kill -TERM "$child" 2>/dev/null || true; wait "$child" 2>/dev/null || true; fi
+    exit 0
+}
+trap stop TERM INT HUP
+delay=1
+while :; do
+    started=$(date +%s)
+    "${MERIDIAN_SHELL:-meridian-shell}" &
+    child=$!
+    wait "$child"
+    status=$?
+    child=
+    [ "$status" -eq 0 ] && exit 0
+    echo "component=shell event=process_exited status=$status retry_seconds=$delay" >&2
+    sleep "$delay" &
+    child=$!
+    wait "$child"
+    child=
+    if [ "$(($(date +%s) - started))" -ge 60 ]; then delay=1; else delay=$((delay * 2)); fi
+    [ "$delay" -le 30 ] || delay=30
+done

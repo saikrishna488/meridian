@@ -6,24 +6,30 @@
 mod audio_devices;
 mod bluetooth_agent;
 pub mod bridge;
+mod cache;
 mod calendar;
+mod config;
 mod desktop;
 mod files;
 pub mod greetd;
 pub mod greeter;
+pub mod instance;
 pub mod lock_auth;
 mod notifications;
 pub mod paths;
 pub mod power;
 pub mod power_settings;
 mod pulse;
+mod recovery;
 pub mod scheme;
+mod search;
 mod settings_devices;
 pub mod shell;
 pub mod startup;
 mod store;
 pub mod surface;
 mod terminal;
+mod transfer;
 mod trash;
 mod uninstall;
 
@@ -52,6 +58,7 @@ pub fn install_css() {
     let css = gtk::CssProvider::new();
     css.load_from_string(
         "window.meridian-surface { background: transparent; }
+        .meridian-recovery { background: #171e2a; color: #edf2fb; padding: 40px; }
         window.meridian-preferences { background: #ffffff; color: #182338; }
         window.meridian-preferences headerbar { min-height: 36px; padding: 0 0 0 8px; background: #f4f6fa; color: #182338; box-shadow: inset 0 -1px #dce0e7; }
         window.meridian-preferences.meridian-dark { background: #171e2a; color: #edf2fb; }

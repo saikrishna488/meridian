@@ -21,6 +21,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/tools/codecs.sh"
 source "$ROOT/tools/debian.sh"
 source "$ROOT/tools/release-manifest.sh"
+source "$ROOT/tools/install-transaction.sh"
 PREFIX=/usr/local
 SHARE="$PREFIX/share/meridian"
 SESSION_FILE=/usr/share/wayland-sessions/meridian.desktop
@@ -63,6 +64,11 @@ install_files() {
     media_packages_for_host
     apt-get install -y --no-install-recommends "${MEDIA_SELECTED[@]}"
 
+    step "Backing up the current installation"
+    meridian_transaction_begin "$SHARE" "$PREFIX/share/themes/Meridian" "$PREFIX/bin/meridian-shell" \
+        "$PREFIX/bin/meridian-greeter" "$PREFIX/bin/meridian-vault" "$PREFIX/bin/meridian-drift" \
+        "$PREFIX/bin/meridian-session" "$SESSION_FILE" /etc/pam.d/meridian-lock \
+        "$PREFIX/share/applications/meridian-vault.desktop" "$PREFIX/share/applications/meridian-drift.desktop"
     step "Installing Meridian to $PREFIX"
     install -Dm755 "$ROOT/target/release/meridian-shell" "$PREFIX/bin/meridian-shell"
     install -Dm755 "$ROOT/target/release/meridian-greeter" "$PREFIX/bin/meridian-greeter"
@@ -75,6 +81,7 @@ install_files() {
 
     rm -rf "$SHARE"
     install -d "$SHARE"
+    install -Dm755 "$ROOT/session/shell-supervisor" "$SHARE/shell-supervisor"
     cp -r "$ROOT/ui/dist" "$SHARE/ui"
     find "$SHARE/ui" -name '*.map' -delete
     cp -r "$ROOT/assets" "$SHARE/assets"
@@ -97,6 +104,7 @@ install_files() {
     if command -v restorecon >/dev/null; then
         restorecon -R "$PREFIX/bin/meridian-"* "$SHARE" "$SESSION_FILE" /etc/pam.d/meridian-lock
     fi
+    meridian_transaction_commit
     echo "Installed. \"Meridian\" now appears in the login screen's session list."
     echo "If Meridian is already running, sign out and back in to load the new shell and UI together."
 }

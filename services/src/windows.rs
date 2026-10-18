@@ -39,7 +39,7 @@ struct Toplevel {
 #[derive(Default)]
 struct State {
     toplevels: Vec<Toplevel>,
-    next_id: u32,
+    stopped: bool,
     dirty: bool,
 }
 
@@ -52,6 +52,7 @@ struct Inner {
     seat: Option<WlSeat>,
     _manager: ZwlrForeignToplevelManagerV1,
     listeners: Vec<Listener>,
+    watch: Option<glib::SourceId>,
 }
 
 /// Cheap to clone; all clones share state.
@@ -81,10 +82,18 @@ impl WindowService {
 
         let fd = conn.backend().poll_fd().as_raw_fd();
         let service = WindowService {
-            inner: Rc::new(RefCell::new(Inner { conn, queue, state, seat, _manager: manager, listeners: Vec::new() })),
+            inner: Rc::new(RefCell::new(Inner {
+                conn,
+                queue,
+                state,
+                seat,
+                _manager: manager,
+                listeners: Vec::new(),
+                watch: None,
+            })),
         };
         let weak = Rc::downgrade(&service.inner);
-        glib_unix::unix_fd_add_local(
+        let watch = glib_unix::unix_fd_add_local(
             fd,
             glib::IOCondition::IN | glib::IOCondition::HUP | glib::IOCondition::ERR,
             move |_, cond| {
@@ -92,15 +101,30 @@ impl WindowService {
                 let service = WindowService { inner };
                 if cond.intersects(glib::IOCondition::HUP | glib::IOCondition::ERR) {
                     log::error!("compositor connection for the window list closed");
-                    service.inner.borrow_mut().state.toplevels.clear();
+                    {
+                        let mut inner = service.inner.borrow_mut();
+                        inner.state.toplevels.clear();
+                        inner.state.stopped = true;
+                        inner.watch.take();
+                    }
                     service.notify();
                     return glib::ControlFlow::Break;
                 }
                 service.dispatch();
-                glib::ControlFlow::Continue
+                if !service.is_available() {
+                    service.inner.borrow_mut().watch.take();
+                    glib::ControlFlow::Break
+                } else {
+                    glib::ControlFlow::Continue
+                }
             },
         );
+        service.inner.borrow_mut().watch = Some(watch);
         Ok(service)
+    }
+
+    pub fn is_available(&self) -> bool {
+        !self.inner.borrow().state.stopped
     }
 
     fn dispatch(&self) {
@@ -113,7 +137,11 @@ impl WindowService {
                 log::debug!("wayland read: {e}");
             }
             if let Err(e) = queue.dispatch_pending(state) {
-                log::error!("wayland dispatch: {e}");
+                log::error!("component=windows event=dispatch_failed error={e}");
+                state.stopped = true;
+                state.toplevels.clear();
+                state.stopped = true;
+                state.dirty = true;
             }
             if let Err(e) = conn.flush() {
                 log::warn!("wayland flush: {e}");
@@ -198,8 +226,15 @@ impl Dispatch<ZwlrForeignToplevelManagerV1, ()> for State {
     ) {
         match event {
             manager_v1::Event::Toplevel { toplevel } => {
-                let id = state.next_id;
-                state.next_id += 1;
+                static NEXT_ID: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(1);
+                let Ok(id) = NEXT_ID.fetch_update(
+                    std::sync::atomic::Ordering::Relaxed,
+                    std::sync::atomic::Ordering::Relaxed,
+                    |id| id.checked_add(1),
+                ) else {
+                    toplevel.destroy();
+                    return;
+                };
                 state.toplevels.push(Toplevel {
                     handle: toplevel,
                     window: Window {
@@ -215,6 +250,7 @@ impl Dispatch<ZwlrForeignToplevelManagerV1, ()> for State {
             manager_v1::Event::Finished => {
                 log::warn!("compositor stopped sending window updates");
                 state.toplevels.clear();
+                state.stopped = true;
                 state.dirty = true;
             }
             _ => {}
@@ -266,6 +302,14 @@ fn is_activated(raw: &[u8]) -> bool {
 
 fn has_state(raw: &[u8], state: handle_v1::State) -> bool {
     raw.as_chunks::<4>().0.iter().map(|c| u32::from_ne_bytes(*c)).any(|s| s == state as u32)
+}
+
+impl Drop for Inner {
+    fn drop(&mut self) {
+        if let Some(watch) = self.watch.take() {
+            watch.remove();
+        }
+    }
 }
 
 #[cfg(test)]

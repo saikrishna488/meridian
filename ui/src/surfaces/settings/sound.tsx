@@ -27,7 +27,12 @@ export function Sound() {
     catch (e) { if (alive.current && !quiet) { setError(errorMessage(e)); setLoaded(true); } }
     finally { pending.current = false; if (alive.current) setBusy(false); }
   }
-  useEffect(() => { alive.current = true; void load(); return () => { alive.current = false; }; }, []);
+  useEffect(() => {
+    alive.current = true; void load();
+    const refresh = () => { if (!document.hidden) void load(true); };
+    window.addEventListener("focus", refresh); document.addEventListener("visibilitychange", refresh);
+    return () => { alive.current = false; window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); };
+  }, []);
   async function act(device: AudioDevice, action: AudioAction["action"], percent: number | null = null) {
     if (pending.current) return;
     pending.current = true; setBusy(true); setError(""); setMessage("");

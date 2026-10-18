@@ -16,30 +16,31 @@ use webkit6::{NetworkSession, PolicyDecisionType, UserContentManager, WebContext
 use crate::bridge::{self, Dispatch};
 use crate::scheme::{SCHEME, SchemeHandler};
 
-/// Web engine state shared by all surfaces: one context (one URI scheme
-/// handler), one ephemeral network session, one web process.
+/// Shared resource handler; each surface receives an isolated context/session.
 pub struct WebEnv {
-    context: WebContext,
-    session: NetworkSession,
-    /// First WebView created; later ones are related to it so they share
-    /// its web process.
-    first_view: RefCell<Option<glib::WeakRef<WebView>>>,
     dev: bool,
     scheme: Rc<SchemeHandler>,
+    theme_signal: Option<(gtk::IconTheme, glib::SignalHandlerId)>,
 }
 
 impl WebEnv {
     pub fn new(scheme: SchemeHandler, dev: bool) -> Self {
         let scheme = Rc::new(scheme);
-        let context = WebContext::new();
-        let security = context.security_manager().expect("WebContext always has a security manager");
-        security.register_uri_scheme_as_secure(SCHEME);
-        // ES module scripts are fetched in CORS mode.
-        security.register_uri_scheme_as_cors_enabled(SCHEME);
-        let handler = scheme.clone();
-        context.register_uri_scheme(SCHEME, move |request| handler.handle(request));
+        let theme_signal = gdk::Display::default().map(|display| {
+            let weak = Rc::downgrade(&scheme);
+            let theme = gtk::IconTheme::for_display(&display);
+            let signal = theme.connect_changed(move |_| {
+                if let Some(scheme) = weak.upgrade() {
+                    scheme.invalidate_icons();
+                }
+            });
+            (theme, signal)
+        });
+        WebEnv { dev, scheme, theme_signal }
+    }
 
-        WebEnv { context, session: NetworkSession::new_ephemeral(), first_view: RefCell::new(None), dev, scheme }
+    pub fn invalidate_icons(&self) {
+        self.scheme.invalidate_icons();
     }
 
     pub fn check_locker(&self) -> Result<(), String> {
@@ -48,7 +49,13 @@ impl WebEnv {
 
     fn settings(&self) -> webkit6::Settings {
         let s = webkit6::Settings::new();
-        s.set_hardware_acceleration_policy(webkit6::HardwareAccelerationPolicy::Always);
+        let software_test =
+            cfg!(feature = "integration-tests") && std::env::var("MERIDIAN_NESTED_TEST").as_deref() == Ok("1");
+        s.set_hardware_acceleration_policy(if software_test {
+            webkit6::HardwareAccelerationPolicy::Never
+        } else {
+            webkit6::HardwareAccelerationPolicy::Always
+        });
         s.set_enable_developer_extras(self.dev);
         s.set_enable_back_forward_navigation_gestures(false);
         s.set_allow_file_access_from_file_urls(false);
@@ -65,18 +72,27 @@ impl WebEnv {
     }
 
     fn create_view(&self, ucm: &UserContentManager) -> WebView {
-        let related = self.first_view.borrow().as_ref().and_then(|w| w.upgrade());
-        let builder = WebView::builder().user_content_manager(ucm).settings(&self.settings());
-        let view = match related {
-            // A related view inherits context and session, and shares the
-            // web process.
-            Some(first) => builder.related_view(&first).build(),
-            None => builder.web_context(&self.context).network_session(&self.session).build(),
-        };
-        if self.first_view.borrow().is_none() {
-            *self.first_view.borrow_mut() = Some(view.downgrade());
+        // Separate contexts and sessions isolate renderer crashes and storage.
+        let context = WebContext::new();
+        let security = context.security_manager().expect("WebContext always has a security manager");
+        security.register_uri_scheme_as_secure(SCHEME);
+        security.register_uri_scheme_as_cors_enabled(SCHEME);
+        let handler = self.scheme.clone();
+        context.register_uri_scheme(SCHEME, move |request| handler.handle(request));
+        WebView::builder()
+            .user_content_manager(ucm)
+            .settings(&self.settings())
+            .web_context(&context)
+            .network_session(&NetworkSession::new_ephemeral())
+            .build()
+    }
+}
+
+impl Drop for WebEnv {
+    fn drop(&mut self) {
+        if let Some((theme, signal)) = self.theme_signal.take() {
+            theme.disconnect(signal);
         }
-        view
     }
 }
 
@@ -85,8 +101,13 @@ pub struct WebSurface {
     pub window: gtk::Window,
     pub view: WebView,
     /// Set once the page has completed the `shell.hello` handshake;
-    /// events sent earlier are dropped (pages fetch state on load).
+    /// events sent earlier are coalesced until the handshake.
     ready: Cell<bool>,
+    recovery: RefCell<crate::recovery::Recovery>,
+    recovery_timer: RefCell<Option<glib::SourceId>>,
+    queued: RefCell<Vec<Event>>,
+    restorable: RefCell<Vec<Event>>,
+    fallback: gtk::Box,
 }
 
 impl WebSurface {
@@ -235,35 +256,179 @@ impl WebSurface {
         } else {
             view.set_background_color(&gdk::RGBA::new(0.0, 0.0, 0.0, 0.0));
         }
-        lock_down(&view, env.dev);
-        window.set_child(Some(&view));
+        lock_down(&view, env.dev, kind);
+        let overlay = gtk::Overlay::new();
+        overlay.set_child(Some(&view));
+        let fallback = gtk::Box::new(gtk::Orientation::Vertical, 12);
+        fallback.add_css_class("meridian-recovery");
+        fallback.set_visible(false);
+        overlay.add_overlay(&fallback);
+        window.set_child(Some(&overlay));
 
-        let surface = Rc::new(WebSurface { kind, window, view, ready: Cell::new(false) });
-        bridge::attach(&ucm, Rc::downgrade(&surface), dispatch);
+        let surface = Rc::new(WebSurface {
+            kind,
+            window,
+            view,
+            ready: Cell::new(false),
+            recovery: RefCell::default(),
+            recovery_timer: RefCell::default(),
+            queued: RefCell::default(),
+            restorable: RefCell::default(),
+            fallback,
+        });
+        bridge::attach(&ucm, Rc::downgrade(&surface), dispatch.clone());
+        surface.install_fallback(dispatch);
 
-        // Recover from web process crashes instead of leaving a dead surface.
         let weak = Rc::downgrade(&surface);
-        surface.view.connect_web_process_terminated(move |view, reason| {
-            log::error!("web process for {kind:?} terminated ({reason:?}); reloading");
-            if let Some(s) = weak.upgrade() {
-                s.ready.set(false);
+        surface.view.connect_web_process_terminated(move |_, reason| {
+            log::error!("component=webview event=process_terminated surface={kind:?} reason={reason:?}");
+            if let Some(surface) = weak.upgrade() {
+                surface.recover();
             }
-            view.reload();
+        });
+        let weak = Rc::downgrade(&surface);
+        surface.view.connect_load_failed(move |_, _, _, _| {
+            if let Some(surface) = weak.upgrade() {
+                surface.recover();
+            }
+            true
+        });
+        // Also recover a page that loaded but never completed its handshake.
+        let weak = Rc::downgrade(&surface);
+        glib::timeout_add_local_once(std::time::Duration::from_secs(20), move || {
+            if let Some(surface) = weak.upgrade()
+                && !surface.ready.get()
+            {
+                surface.recover();
+            }
         });
 
         surface.view.load_uri(&format!("{SCHEME}://ui/{}/index.html", entry_dir(kind)));
         surface
     }
 
+    #[cfg(any(test, feature = "integration-tests"))]
+    pub fn fallback_visible(&self) -> bool {
+        self.fallback.is_visible()
+    }
+
+    pub fn is_ready(&self) -> bool {
+        self.ready.get()
+    }
+
     pub fn mark_ready(&self) {
-        self.ready.set(true);
+        if self.ready.replace(true) {
+            return;
+        }
+        self.fallback.set_visible(false);
+        if let Some(timer) = self.recovery_timer.borrow_mut().take() {
+            timer.remove();
+        }
+        let mut events = self.restorable.borrow().clone();
+        for event in std::mem::take(&mut *self.queued.borrow_mut()) {
+            events.retain(|old| std::mem::discriminant(old) != std::mem::discriminant(&event));
+            events.push(event);
+        }
+        for event in events {
+            self.send(&event);
+        }
+    }
+
+    fn recover(self: &Rc<Self>) {
+        self.ready.set(false);
+        self.fallback.set_visible(true);
+        if self.recovery_timer.borrow().is_some() {
+            return;
+        }
+        let delay = self.recovery.borrow_mut().failed(std::time::Instant::now());
+        log::warn!("component=webview event=retry surface={:?} delay_ms={}", self.kind, delay.as_millis());
+        let weak = Rc::downgrade(self);
+        *self.recovery_timer.borrow_mut() = Some(glib::timeout_add_local_once(delay, move || {
+            if let Some(surface) = weak.upgrade() {
+                surface.recovery_timer.borrow_mut().take();
+                surface.view.load_uri(&format!("{SCHEME}://ui/{}/index.html", entry_dir(surface.kind)));
+                let weak = Rc::downgrade(&surface);
+                glib::timeout_add_local_once(std::time::Duration::from_secs(20), move || {
+                    if let Some(surface) = weak.upgrade()
+                        && !surface.ready.get()
+                    {
+                        surface.recover();
+                    }
+                });
+            }
+        }));
+    }
+
+    fn install_fallback(self: &Rc<Self>, dispatch: Dispatch) {
+        let label = gtk::Label::new(Some("Meridian is restoring this component…"));
+        label.set_wrap(true);
+        self.fallback.append(&label);
+        if self.kind != SurfaceKind::Locker {
+            return;
+        }
+        // A native PAM-backed unlock path stays usable if WebKit cannot restart.
+        label.set_label("Session locked. Enter your password to unlock.");
+        let password = gtk::PasswordEntry::new();
+        let button = gtk::Button::with_label("Unlock");
+        self.fallback.append(&password);
+        self.fallback.append(&button);
+        let weak = Rc::downgrade(self);
+        let entry = password.downgrade();
+        let status = label.downgrade();
+        button.connect_clicked(move |button| {
+            let (Some(surface), Some(entry), Some(status)) = (weak.upgrade(), entry.upgrade(), status.upgrade()) else {
+                return;
+            };
+            let secret = entry.text().to_string();
+            entry.set_text("");
+            button.set_sensitive(false);
+            let result = dispatch(
+                &surface,
+                meridian_protocol::Request::LockerUnlock(meridian_protocol::LockerUnlock { password: secret }),
+            );
+            let button = button.downgrade();
+            glib::MainContext::default().spawn_local(async move {
+                let result = match result {
+                    Ok(bridge::Reply::Now(json)) => Ok(json),
+                    Ok(bridge::Reply::Later(future)) => future.await,
+                    Err(error) => Err(error),
+                };
+                if let Some(button) = button.upgrade() {
+                    button.set_sensitive(true);
+                }
+                if let Err(error) = result {
+                    status.set_label(&error.message);
+                }
+            });
+        });
+        let button = button.downgrade();
+        password.connect_activate(move |_| {
+            if let Some(button) = button.upgrade()
+                && button.is_sensitive()
+            {
+                button.emit_clicked();
+            }
+        });
     }
 
     /// Push an event to the page. The serialized event is passed as a typed
     /// argument, never spliced into script source.
     pub fn send(&self, event: &Event) {
+        if matches!(
+            event,
+            Event::MenuOpened(_) | Event::FinderLocation(_) | Event::PreferencesPage(_) | Event::PreferencesWallpaper
+        ) {
+            let mut saved = self.restorable.borrow_mut();
+            saved.retain(|old| std::mem::discriminant(old) != std::mem::discriminant(event));
+            saved.push(event.clone());
+        }
         if !self.ready.get() {
-            log::debug!("{:?} not ready; dropping {event:?}", self.kind);
+            // Coalesce state by event kind, retaining commands sent during startup.
+            let mut queued = self.queued.borrow_mut();
+            queued.retain(|old| std::mem::discriminant(old) != std::mem::discriminant(event));
+            if queued.len() < 64 {
+                queued.push(event.clone());
+            }
             return;
         }
         let json = match serde_json::to_string(event) {
@@ -274,14 +439,14 @@ impl WebSurface {
         args.insert("event", json);
         let kind = self.kind;
         self.view.call_async_javascript_function(
-            "window.__meridianDispatch(event);",
+            "window.__meridianDispatch(event); return true;",
             Some(&args.end()),
             None,
             None,
             gtk::gio::Cancellable::NONE,
             move |result| {
-                if let Err(e) = result {
-                    log::warn!("dispatching event to {kind:?} failed: {e}");
+                if result.is_err() {
+                    log::warn!("component=webview event=dispatch_failed surface={kind:?}");
                 }
             },
         );
@@ -405,8 +570,9 @@ fn configure_layer(window: &gtk::Window, kind: SurfaceKind, monitor: Option<&gdk
 }
 
 /// Confine the WebView to `meridian://` content and deny every permission.
-fn lock_down(view: &WebView, dev: bool) {
-    view.connect_decide_policy(|_, decision, kind| match kind {
+fn lock_down(view: &WebView, dev: bool, surface: SurfaceKind) {
+    let last_external = Cell::new(None::<std::time::Instant>);
+    view.connect_decide_policy(move |_, decision, kind| match kind {
         PolicyDecisionType::NavigationAction | PolicyDecisionType::NewWindowAction => {
             let uri = decision
                 .downcast_ref::<webkit6::NavigationPolicyDecision>()
@@ -415,10 +581,18 @@ fn lock_down(view: &WebView, dev: bool) {
                 .and_then(|r| r.uri())
                 .map(|u| u.to_string())
                 .unwrap_or_default();
-            let allowed = kind == PolicyDecisionType::NavigationAction && uri.starts_with(&format!("{SCHEME}://ui/"));
+            let allowed = kind == PolicyDecisionType::NavigationAction
+                && uri == format!("{SCHEME}://ui/{}/index.html", entry_dir(surface));
             if allowed {
                 decision.use_();
-            } else if uri == "https://github.com/saikrishna488/meridian" {
+            } else if uri == "https://github.com/saikrishna488/meridian"
+                && decision
+                    .downcast_ref::<webkit6::NavigationPolicyDecision>()
+                    .and_then(|decision| decision.navigation_action())
+                    .is_some_and(|action| action.is_user_gesture())
+                && last_external.get().is_none_or(|last| last.elapsed() >= std::time::Duration::from_secs(1))
+            {
+                last_external.set(Some(std::time::Instant::now()));
                 decision.ignore();
                 let mut command = if std::env::var_os("MERIDIAN_HOST_APPS").is_some() {
                     let mut command = std::process::Command::new("flatpak-spawn");
@@ -438,7 +612,7 @@ fn lock_down(view: &WebView, dev: bool) {
                     Err(error) => log::warn!("could not open source link: {error}"),
                 }
             } else {
-                log::warn!("blocked navigation to {uri:?}");
+                log::warn!("component=webview event=navigation_blocked surface={surface:?}");
                 decision.ignore();
             }
             true
@@ -466,4 +640,19 @@ fn lock_down(view: &WebView, dev: bool) {
     });
     // The context menu (with "Inspect Element") only in dev mode.
     view.connect_context_menu(move |_, _, _| !dev);
+}
+
+impl Drop for WebSurface {
+    fn drop(&mut self) {
+        // GtkApplication also owns its windows; dropping the Rust wrapper alone
+        // does not release a removed monitor's or an old lock screen's widgets.
+        // gtk4-session-lock owns lock-window teardown. Destroying one here can
+        // race its unlock/monitor callbacks and violates the active-lock role.
+        if self.kind != SurfaceKind::Locker {
+            self.window.destroy();
+        }
+        if let Some(timer) = self.recovery_timer.get_mut().take() {
+            timer.remove();
+        }
+    }
 }

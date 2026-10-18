@@ -17,11 +17,11 @@ function Session({ active, fontSize, cwd, appearance, onExit }: { active: boolea
   const refit = useRef<(() => void) | null>(null);
   const [error, setError] = useState("");
   const [scrolledUp, setScrolledUp] = useState(false);
-  const [shell, setShell] = useState("Starting shell…");
   const exit = useRef(onExit); exit.current = onExit;
   useEffect(() => {
     let alive = true, id: number | null = null, timer: ReturnType<typeof setTimeout> | undefined;
     let observer: ResizeObserver | undefined;
+    let removePaste: (() => void) | undefined;
     let frame = 0;
     const repaint = () => {
       cancelAnimationFrame(frame);
@@ -49,10 +49,20 @@ function Session({ active, fontSize, cwd, appearance, onExit }: { active: boolea
         const session = cwd ? await request({ method: "terminal.start_at", params: { path: cwd } }) : await request({ method: "terminal.start" });
         id = session.id;
         if (!alive) { await request({ method: "terminal.close", params: { id } }); return; }
-        setShell(session.shell);
         const term = new Emulator({ fontSize, fontFamily: '"DejaVu Sans Mono", "Cascadia Code", monospace', cursorBlink: true, cursorStyle: "bar", letterSpacing: 0, lineHeight: 1, scrollback: 5000, allowProposedApi: false, minimumContrastRatio: 4.5, theme: colors() });
         const addon = new FitAddon(); emulator.current = term; fit.current = addon;
         term.loadAddon(addon); term.open(container.current!);
+        // Own native/context-menu paste before xterm's textarea and container
+        // listeners can handle the same bubbling event.
+        const paste = (event: ClipboardEvent) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const text = event.clipboardData?.getData("text/plain");
+          if (text) term.paste(text);
+        };
+        const screen = container.current!;
+        screen.addEventListener("paste", paste, true);
+        removePaste = () => screen.removeEventListener("paste", paste, true);
         const scroll = wheelScroller();
         const updateScroll = () => { if (alive) setScrolledUp(term.buffer.active.type === "normal" && term.buffer.active.viewportY < term.buffer.active.baseY); };
         term.onScroll(updateScroll);
@@ -69,16 +79,30 @@ function Session({ active, fontSize, cwd, appearance, onExit }: { active: boolea
         let inputQueue = Promise.resolve();
         term.onData(data => { inputQueue = inputQueue.then(async () => { if (alive && id !== null) await request({ method: "terminal.write", params: { id, data } }); }).catch(fail); });
         term.onResize(({ cols, rows }) => { inputQueue = inputQueue.then(async () => { if (alive && id !== null && cols >= 2 && rows >= 1) await request({ method: "terminal.resize", params: { id, cols: Math.min(500, cols), rows: Math.min(250, rows) } }); }).catch(fail); });
-        // Let the shell receive Ctrl+C; copy a selection with Ctrl+Shift+C.
+        // Ctrl+C copies a selection, or interrupts the shell without one.
         term.attachCustomKeyEventHandler(event => {
           // Let the application own tab shortcuts before xterm can send a
           // control character to the foreground shell.
           if (event.ctrlKey && ((event.shiftKey && ["t", "w"].includes(event.key.toLowerCase())) || ["PageUp", "PageDown"].includes(event.key))) return false;
-          if (event.type === "keydown" && event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "c") {
-            const text = term.getSelection(); if (text) void request({ method: "terminal.copy", params: { data: text } }).catch(fail); return false;
-          }
-          if (event.type === "keydown" && event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "v") {
-            void request({ method: "terminal.paste" }).then(text => { if (alive && text) term.paste(text); }).catch(fail); return false;
+          if (event.ctrlKey && !event.altKey && !event.metaKey) {
+            const key = event.key.toLowerCase();
+            if (key === "c" && (event.shiftKey || term.getSelection())) {
+              event.preventDefault();
+              if (event.type === "keydown" && !event.repeat) {
+                const text = term.getSelection();
+                if (text) void request({ method: "terminal.copy", params: { data: text } }).catch(fail);
+              }
+              return false;
+            }
+            if (key === "v") {
+              // Returning false only stops xterm; cancel WebKit's native paste
+              // as well, so the clipboard is inserted exactly once.
+              event.preventDefault();
+              if (event.type === "keydown" && !event.repeat) {
+                void request({ method: "terminal.paste" }).then(text => { if (alive && text) term.paste(text); }).catch(fail);
+              }
+              return false;
+            }
           }
           if (event.type === "keydown" && event.shiftKey && !event.ctrlKey && !event.altKey && ["PageUp", "PageDown", "Home", "End"].includes(event.key)) {
             event.preventDefault();
@@ -108,7 +132,7 @@ function Session({ active, fontSize, cwd, appearance, onExit }: { active: boolea
       } catch (e) { fail(e); }
     }
     void start();
-    return () => { alive = false; clearTimeout(timer); cancelAnimationFrame(frame); window.removeEventListener("resize", repaint); document.removeEventListener("fullscreenchange", repaint); window.removeEventListener("focus", repaint); window.removeEventListener("meridian-theme", theme); refit.current = null; observer?.disconnect(); emulator.current?.dispose(); emulator.current = null; fit.current = null; if (id !== null) void request({ method: "terminal.close", params: { id } }).catch(() => {}); };
+    return () => { alive = false; clearTimeout(timer); cancelAnimationFrame(frame); window.removeEventListener("resize", repaint); document.removeEventListener("fullscreenchange", repaint); window.removeEventListener("focus", repaint); window.removeEventListener("meridian-theme", theme); refit.current = null; observer?.disconnect(); removePaste?.(); emulator.current?.dispose(); emulator.current = null; fit.current = null; if (id !== null) void request({ method: "terminal.close", params: { id } }).catch(() => {}); };
   }, []);
   useEffect(() => {
     if (emulator.current) {
@@ -119,7 +143,7 @@ function Session({ active, fontSize, cwd, appearance, onExit }: { active: boolea
     }
     if (active) refit.current?.();
   }, [active, fontSize, appearance]);
-  return <section className={`terminal-session${active ? " active" : ""}`} role="tabpanel" aria-label="Terminal output" aria-hidden={!active}><div className="terminal-screen" ref={container} aria-label="Interactive terminal" />{error && <p className="terminal-error" role="alert">{error}</p>}<footer className="terminal-status"><span><i />{shell}</span><span>{scrolledUp && <button className="terminal-follow" onClick={() => { emulator.current?.scrollToBottom(); emulator.current?.focus(); }}>Jump to latest output</button>}UTF-8 · Interactive shell</span></footer></section>;
+  return <section className={`terminal-session${active ? " active" : ""}`} role="tabpanel" aria-label="Terminal output" aria-hidden={!active}>{scrolledUp && <button className="terminal-follow" onClick={() => { emulator.current?.scrollToBottom(); emulator.current?.focus(); }}>Jump to latest output</button>}<div className="terminal-screen" ref={container} aria-label="Interactive terminal" />{error && <p className="terminal-error" role="alert">{error}</p>}</section>;
 }
 function Terminal() {
   const appearance = useAppearance();

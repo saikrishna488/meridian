@@ -7,14 +7,15 @@ export function usePowerStatus(): PowerState | null {
   useEffect(() => {
     let alive = true, pending = false;
     async function refresh() {
-      if (pending) return; pending = true;
+      if (!alive || document.hidden || pending) return; pending = true;
       try { const result = await request({ method: "power.status" }); if (alive) setState(result); }
       catch (e) { console.debug("Power status unavailable", e); }
       finally { pending = false; }
     }
     void refresh(); const timer = setInterval(() => void refresh(), 30_000);
     window.addEventListener("focus", refresh);
-    return () => { alive = false; clearInterval(timer); window.removeEventListener("focus", refresh); };
+    document.addEventListener("visibilitychange", refresh);
+    return () => { alive = false; clearInterval(timer); window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); };
   }, []);
   return state;
 }

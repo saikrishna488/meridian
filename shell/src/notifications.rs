@@ -27,17 +27,27 @@ pub struct Notifications {
     entries: RefCell<Vec<Entry>>,
     connection: RefCell<Option<gio::DBusConnection>>,
     owner: RefCell<Option<gio::OwnerId>>,
+    registration: RefCell<Option<gio::RegistrationId>>,
     available: Cell<bool>,
     next: Cell<u32>,
     generation: Cell<u64>,
+    do_not_disturb: Cell<bool>,
+    preferences_path: std::path::PathBuf,
+    sender_subscription: RefCell<Option<gio::SignalSubscription>>,
     changed: Box<dyn Fn(NotificationState)>,
 }
 impl Notifications {
     pub fn start(changed: impl Fn(NotificationState) + 'static) -> Rc<Self> {
+        let preferences_path = glib::user_config_dir().join("meridian/notification-preferences.json");
+        let do_not_disturb = crate::config::read_versioned::<bool>(&preferences_path).unwrap_or(false);
         let service = Rc::new(Self {
+            do_not_disturb: Cell::new(do_not_disturb),
+            preferences_path,
+            sender_subscription: RefCell::default(),
             entries: RefCell::new(vec![]),
             connection: RefCell::new(None),
             owner: RefCell::new(None),
+            registration: RefCell::new(None),
             available: Cell::new(false),
             next: Cell::new(1),
             generation: Cell::new(0),
@@ -65,10 +75,35 @@ impl Notifications {
                             }
                         })
                         .build();
-                    if registration.is_ok() {
-                        *service.connection.borrow_mut() = Some(bus);
-                    } else {
-                        log::warn!("Could not register notification service");
+                    match registration {
+                        Ok(registration) => {
+                            if let Some(old) = service.registration.borrow_mut().replace(registration)
+                                && let Some(connection) = service.connection.borrow().as_ref()
+                            {
+                                let _ = connection.unregister_object(old);
+                            }
+                            let weak = Rc::downgrade(&service);
+                            let subscription = bus.subscribe_to_signal(
+                                Some("org.freedesktop.DBus"),
+                                Some("org.freedesktop.DBus"),
+                                Some("NameOwnerChanged"),
+                                Some("/org/freedesktop/DBus"),
+                                None,
+                                gio::DBusSignalFlags::NONE,
+                                move |signal| {
+                                    if let Some((name, _, owner)) = signal.parameters.get::<(String, String, String)>()
+                                        && name.starts_with(':')
+                                        && owner.is_empty()
+                                        && let Some(service) = weak.upgrade()
+                                    {
+                                        service.sender_disconnected(&name);
+                                    }
+                                },
+                            );
+                            *service.sender_subscription.borrow_mut() = Some(subscription);
+                            *service.connection.borrow_mut() = Some(bus);
+                        }
+                        Err(_) => log::warn!("component=notifications event=registration_failed"),
                     }
                 }
             },
@@ -91,7 +126,30 @@ impl Notifications {
     pub fn snapshot(&self) -> NotificationState {
         NotificationState {
             available: self.available.get(),
+            do_not_disturb: self.do_not_disturb.get(),
             items: self.entries.borrow().iter().rev().map(|e| e.item.clone()).collect(),
+        }
+    }
+    pub fn set_do_not_disturb(&self, enabled: bool) -> Result<(), meridian_protocol::ErrorBody> {
+        crate::config::save_versioned(&self.preferences_path, &enabled)?;
+        self.do_not_disturb.set(enabled);
+        if enabled {
+            for entry in self.entries.borrow_mut().iter_mut() {
+                entry.item.unread = false;
+            }
+        }
+        self.publish();
+        Ok(())
+    }
+    fn sender_disconnected(&self, sender: &str) {
+        let mut changed = false;
+        for entry in self.entries.borrow_mut().iter_mut().filter(|entry| entry.sender == sender && entry.active) {
+            entry.active = false;
+            entry.item.actions.clear();
+            changed = true;
+        }
+        if changed {
+            self.publish();
         }
     }
     fn publish(&self) {
@@ -200,7 +258,7 @@ impl Notifications {
                     summary: string(3).chars().take(256).collect(),
                     body: string(4).chars().take(4096).collect(),
                     time: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs_f64() * 1000.0,
-                    unread: true,
+                    unread: !self.do_not_disturb.get(),
                     actions,
                 };
                 self.entries.borrow_mut().retain(|e| e.item.id != id);
@@ -235,14 +293,33 @@ impl Notifications {
     }
 }
 
+impl Drop for Notifications {
+    fn drop(&mut self) {
+        self.sender_subscription.get_mut().take();
+        if let Some(id) = self.registration.get_mut().take()
+            && let Some(connection) = self.connection.get_mut().as_ref()
+        {
+            let _ = connection.unregister_object(id);
+        }
+        if let Some(owner) = self.owner.get_mut().take() {
+            gio::bus_unown_name(owner);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     fn service() -> Notifications {
         Notifications {
+            do_not_disturb: Cell::new(false),
+            preferences_path: std::env::temp_dir()
+                .join(format!("meridian-notification-preferences-test-{}.json", std::process::id())),
+            sender_subscription: RefCell::default(),
             entries: RefCell::new(vec![]),
             connection: RefCell::new(None),
             owner: RefCell::new(None),
+            registration: RefCell::new(None),
             available: Cell::new(true),
             next: Cell::new(1),
             generation: Cell::new(0),
@@ -264,6 +341,19 @@ mod tests {
             active: true,
             generation: 1,
         }
+    }
+    #[test]
+    fn dnd_silences_badges_and_disconnected_senders_lose_actions() {
+        let service = service();
+        service.entries.borrow_mut().push(entry(1));
+        service.set_do_not_disturb(true).unwrap();
+        assert!(service.snapshot().do_not_disturb);
+        assert!(!service.snapshot().items[0].unread);
+        assert_eq!(crate::config::read_versioned::<bool>(&service.preferences_path), Some(true));
+        service.sender_disconnected(":1.2");
+        assert!(service.snapshot().items[0].actions.is_empty());
+        assert!(!service.entries.borrow()[0].active);
+        std::fs::remove_file(&service.preferences_path).unwrap();
     }
     #[test]
     fn clearing_history_publishes_one_update_and_reading_read_items_is_quiet() {

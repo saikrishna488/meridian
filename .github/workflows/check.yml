@@ -12,7 +12,7 @@ jobs:
       - name: Install build dependencies
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends git ca-certificates build-essential pkg-config rustc cargo rustfmt rust-clippy nodejs npm libgtk-4-dev libwebkitgtk-6.0-dev libgtk4-layer-shell-dev libpam0g-dev libclang-dev
+          apt-get install -y --no-install-recommends git ca-certificates build-essential pkg-config rustc cargo rustfmt rust-clippy nodejs npm libgtk-4-dev libwebkitgtk-6.0-dev libgtk4-layer-shell-dev libpam0g-dev libclang-dev labwc dbus-daemon python3 fonts-dejavu-core libgl1-mesa-dri
       - uses: actions/checkout@v4
       - name: Check
         env:
@@ -20,3 +20,5 @@ jobs:
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           tools/check.sh
+      - name: Nested Wayland startup, scrolling, and process recovery
+        run: tools/tests/wayland.sh

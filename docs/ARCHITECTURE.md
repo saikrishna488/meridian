@@ -85,9 +85,10 @@ Each surface loads locally bundled HTML, CSS, and React/TypeScript through
 `meridian://ui/surfaces/<name>/index.html`. Esbuild produces the JavaScript
 bundles; Node.js is a build dependency, not the UI runtime.
 
-WebViews use a shared WebKit context, an ephemeral network session, and related
-views to share a web process. GTK also supplies native window controls,
-file pickers, and other integration; the interface is not exclusively web pixels.
+Each WebView uses a separate WebKit context and ephemeral network session so a
+renderer failure can recover independently. GTK also supplies native window
+controls, file pickers, and other integration; the interface is not exclusively
+web pixels. See [ADR-0008](adr/0008-component-recovery.md).
 
 Hardware acceleration is requested for most WebViews. Terminal explicitly
 disables it to avoid stale text rendering when maximized. Actual rendering,
@@ -233,7 +234,8 @@ They are not prerequisites for describing the features already implemented.
 |---|---|
 | `protocol/src/lib.rs` | Message types, capabilities, validation, JSON replies, generated TS |
 | `services/src/` | App catalog/search, window tracking, settings, output management |
-| `shell/src/shell.rs` | Surface lifecycle and request dispatcher |
+| `shell/src/shell.rs` | Shared shell state, authorization/lock gating and request routing |
+| `shell/src/shell/` | Feature handlers (Settings/Terminal) and lazy surface construction |
 | `shell/src/surface.rs` | GTK/WebKit windows, layer placement, rendering settings |
 | `shell/src/bridge.rs`, `scheme.rs` | Message transport and local resource loading |
 | `shell/src/files.rs`, `terminal.rs`, `desktop.rs` | Built-in app operations and desktop persistence |
@@ -247,3 +249,35 @@ They are not prerequisites for describing the features already implemented.
 | `docs/adr/` | Historical design decisions and implementation updates |
 
 Desktop file drops use GIO moves without overwrite and preserve source files on name collisions. A GIO directory monitor publishes `desktop.changed` when the Desktop folder changes outside Meridian. Real files use system Trash; legacy shortcuts retain removal-only behavior.
+
+
+## Alpha 0.2 reliability qualification
+
+See [Phase 1](PHASE1.md) for current recovery behavior, capability audit, transfer
+failure semantics, CI smoke tests and mandatory hardware/endurance release gates.
+The session supervisor restarts only the shell; labwc remains independent.
+Discarded surfaces explicitly destroy their GTK windows. The lock screen retains
+its session-lock window role while a native PAM-backed fallback is available
+during renderer failure. File transfers stage data before no-overwrite publication;
+cross-device held sources have explicit recovery manifests.
+
+
+Performance ownership: `Shell` owns application surface slots and reuses each
+window after first construction. `WebEnv` owns the shared scheme handler and its
+bounded icon caches, while renderer contexts and storage sessions stay isolated.
+Theme subscriptions hold weak references and disconnect when `WebEnv` drops.
+Production ESM chunks share source modules across entries; independent WebKit
+processes still allocate their own JavaScript heaps. Bundle-size reduction must
+not be described as equivalent physical-memory reduction. See [Phase 2](PHASE2.md)
+for measurement boundaries and remaining hardware qualification.
+
+
+Settings search uses a native allowlist of typed preferences pages. Calculator
+search parses bounded arithmetic and recomputes answers before clipboard writes;
+neither provider can execute arbitrary input. Search preferences are cached by
+`Shell` and stored with the versioned configuration helper. Orbit tabs share one
+surface and one active directory listing. Preview content is bounded plain text
+or generated image data, never navigable HTML. The primary-output preference is
+stored in desktop configuration and only controls Meridian's surfaces. Notification
+Do Not Disturb stores a boolean preference; notification bodies remain session-only.
+See [Phase 3](PHASE3.md) for workflow coverage and remaining beta work.

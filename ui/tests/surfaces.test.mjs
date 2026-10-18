@@ -1,3 +1,4 @@
+import { surfaceScript } from "./bundle.mjs";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
@@ -16,6 +17,7 @@ async function surface(t, name, respond = () => null) {
   const dom = new JSDOM(html, { url: `https://meridian.test/surfaces/${name}/`, runScripts: "outside-only", pretendToBeVisual: true });
   t.after(() => dom.window.close());
   const { window } = dom;
+  window.TextEncoder = TextEncoder;
   window.HTMLElement.prototype.scrollIntoView = function () {};
   window.HTMLElement.prototype.scrollTo = function () {};
   const requests = [];
@@ -23,9 +25,9 @@ async function surface(t, name, respond = () => null) {
     const request = JSON.parse(json);
     requests.push(request);
     const response = await respond(request);
-    return JSON.stringify(response?.error ? { ok: false, error: response.error } : { ok: true, result: response });
+    return JSON.stringify(response?.error && typeof response.error === "object" ? { ok: false, error: response.error } : { ok: true, result: response });
   } } } };
-  const js = await readFile(new URL(`../dist/surfaces/${name}/${name}.js`, import.meta.url), "utf8");
+  const js = await surfaceScript(name);
   window.eval(js);
   await waitFor(() => window.document.querySelector("#root")?.children.length);
   if (name !== "wallpaper") await waitFor(() => requests.some(request => request.method === "shell.hello"));
@@ -186,7 +188,7 @@ test("dock groups app windows and keeps pinned apps after their windows close", 
   assert.equal(ui.window.document.querySelectorAll(".window").length, 1);
   ui.get(".window").click();
   await waitFor(() => ui.requests.some(r => r.method === "windows.activate"));
-  assert.deepEqual(ui.requests.find(r => r.method === "windows.activate").params, { id: 2 });
+  assert.deepEqual(ui.requests.find(r => r.method === "windows.activate").params, { id: 1 });
   ui.emit("windows.changed", []);
   await waitFor(() => !ui.get(".running"));
   assert.ok(ui.get(".window"));
@@ -436,4 +438,17 @@ test("dock context offers only quit and remove, including unpinned running apps"
   buttons[0].click();
   await waitFor(() => ui.requests.some(r => r.method === "windows.close"));
   assert.deepEqual(ui.requests.find(r => r.method === "windows.close").params, { id: 7 });
+});
+
+
+test("Control Center becomes interactive while an optional service is slow", async t => {
+  let complete;
+  const ui = await surface(t, "options", req => req.method === "settings.get"
+    ? new Promise(resolve => { complete = resolve; }) : null);
+  ui.emit("popover.shown");
+  await waitFor(() => !ui.get("#menu").classList.contains("hidden"));
+  assert.ok(complete);
+  assert.equal(ui.get("#wifi").disabled, true);
+  complete({ wifi: true, bluetooth: null, brightness: null, volume: null });
+  await waitFor(() => !ui.get("#wifi").disabled);
 });

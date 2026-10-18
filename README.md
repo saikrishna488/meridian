@@ -8,7 +8,7 @@ Meridian runs on labwc/Wayland and existing Linux services. Its native host is
 written in Rust; React, TypeScript, HTML, and CSS provide the interface inside
 WebKitGTK. GTK4 hosts the web surfaces and native window controls.
 
-**Status:** working prototype. Wallpaper, appearance, networking, Bluetooth,
+**Status:** working prototype. The [0.2 stability qualification](docs/PHASE1.md) tracks automated coverage and the remaining hardware release gates. [0.3 performance work](docs/PHASE2.md) records optimization changes, measurements and qualification gaps. [0.8 workflow work](docs/PHASE3.md) tracks the initial desktop improvements and remaining Public Beta work. Wallpaper, appearance, networking, Bluetooth,
 display configuration, file operations, and terminal sessions are implemented.
 Some settings remain placeholders, and Sharing is a UI-only prototype.
 See [the architecture](docs/ARCHITECTURE.md) for implementation details and limits.
@@ -119,7 +119,7 @@ Open **Meridian → Orbit… / Terminal…**, or search Applications for **Orbit
 
 Orbit browses actual folders, with back/forward navigation, an enclosing-folder button, icon/list views, filtering within the current folder, hidden files, refresh, and a path field. Use **New folder** or a file’s context menu to open, rename, add to the desktop, or move to the system Trash. Rename never overwrites another item. **Applications** lists installed apps with Open, Add to Dock, Add to Desktop, and reviewed Uninstall actions.
 
-Terminal runs your actual interactive shell on a PTY using the locally bundled, MIT-licensed xterm.js renderer. It supports tabs, ANSI colors, shell history and completion, interactive programs, resizing, Ctrl+C, Ctrl+Shift+C to copy a selection, and Ctrl+Shift+V to paste. Closing a tab/window ends its shell and foreground job; detached jobs may survive. Development and installed sessions run on the Debian host.
+Terminal runs your actual interactive shell on a PTY using the locally bundled, MIT-licensed xterm.js renderer. It supports tabs, ANSI colors, shell history and completion, interactive programs, resizing, Ctrl+C to copy selected text (or interrupt when nothing is selected), and Ctrl+V to paste. Ctrl+Shift+C and Ctrl+Shift+V also work. Closing a tab/window ends its shell and foreground job; detached jobs may survive. Development and installed sessions run on the Debian host.
 
 ## Everyday desktop controls
 

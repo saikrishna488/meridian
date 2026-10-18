@@ -97,7 +97,8 @@ export function Dock() {
     if (item.special === "applications") { void request({ method: "popover.toggle", params: { popover: "applications" } }).catch(fail); return; }
     if (item.special === "trash") { void request({ method: "trash.open" }).catch(fail); return; }
     const running = windows.filter(w => w.name.toLowerCase() === item.name.toLowerCase());
-    const window = running.find(w => w.active) ?? running[0];
+    const current = running.findIndex(w => w.active);
+    const window = running[current < 0 ? 0 : (current + 1) % running.length];
     void (window ? request({ method: "windows.activate", params: { id: window.id } }) : item.app ? request({ method: "search.activate", params: { provider: "apps", item_id: item.app.id } }) : Promise.resolve()).catch(fail);
   }
   return <nav ref={dock} className={`bar${dropping ? " drop-active" : ""}`} aria-label="Application dock"
@@ -109,11 +110,12 @@ export function Dock() {
         const running = windows.filter(w => w.name.toLowerCase() === item.name.toLowerCase()), active = running.some(w => w.active);
         return <li key={item.key} className={`${item.special === "trash" ? "dock-trash" : ""}${dropping === item.key ? " dock-drop-target" : ""}`}>
           <button id={item.special} data-dock-key={item.key} className={item.special ? "bar-button" : `window${running.length ? " running" : ""}`}
-            title={item.name} aria-label={item.name} aria-pressed={item.special ? undefined : active} aria-haspopup={item.special === "applications" ? "dialog" : undefined}
-            aria-expanded={item.special === "applications" ? expanded : undefined} data-tooltip={item.name}
+            title={running.length > 1 ? `${item.name} · ${running.length} windows` : item.name} aria-label={item.name} aria-description={running.length > 1 ? `${running.length} windows. Click to switch to the next window.` : undefined} aria-pressed={item.special ? undefined : active} aria-haspopup={item.special === "applications" ? "dialog" : undefined}
+            aria-expanded={item.special === "applications" ? expanded : undefined} data-tooltip={running.length > 1 ? `${item.name} · ${running.length} windows` : item.name}
             draggable={item.special !== "trash"} onDragStart={event => start(event, item)} onDragOver={event => over(event, item.key)} onDrop={event => void drop(event, item)}
             onContextMenu={event => { event.preventDefault(); if (!item.special) setContext(item); }} onClick={() => click(item)}>
             {item.special === "applications" ? <AppIcon name="Applications" icon="view-app-grid" /> : item.special === "trash" ? <AppIcon name="Trash" icon="user-trash" /> : <AppIcon id={item.app?.id} name={item.name} icon={item.app?.icon} />}
+            {running.length > 1 && <span className="dock-window-count" aria-hidden="true">{running.length > 99 ? "99+" : running.length}</span>}
           </button>
         </li>;
       })}

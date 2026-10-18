@@ -24,3 +24,5 @@ body { height: var(--dock-surface-height); padding: 0; }
 [data-theme="light"] .dock-context { background: #e3eaf5; }
 [data-theme="light"] .dock-trash { border-left-color: #28416430; }
 @media (max-width: 650px) { .taskbar { padding-inline: 10px; } .windows { gap: 2px; } .bar-button, .window { width: 44px; } }
+
+.dock-window-count { position:absolute; top:1px; right:0; display:grid; place-items:center; min-width:17px; height:17px; padding:0 4px; border:1px solid var(--line); border-radius:9px; background:var(--surface-raised); color:var(--ink); font-size:10px; font-weight:600; line-height:1; }

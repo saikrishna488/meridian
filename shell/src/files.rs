@@ -8,9 +8,12 @@ use std::path::{Path, PathBuf};
 fn error(e: impl std::fmt::Display) -> ErrorBody {
     ErrorBody::new(ErrorCode::Failed, e.to_string())
 }
-fn absolute(path: &str) -> Result<PathBuf, ErrorBody> {
+pub(crate) fn absolute(path: &str) -> Result<PathBuf, ErrorBody> {
     let path = PathBuf::from(path);
-    if !path.is_absolute() || path.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+    if path.as_os_str().as_encoded_bytes().contains(&0)
+        || !path.is_absolute()
+        || path.components().any(|c| matches!(c, std::path::Component::ParentDir))
+    {
         return Err(ErrorBody::new(
             ErrorCode::InvalidRequest,
             "Choose an absolute file path without parent components.",
@@ -192,7 +195,8 @@ pub fn rename(path: &str, name: &str) -> Result<(), ErrorBody> {
 pub fn trash(path: &str) -> Result<(), ErrorBody> {
     let path = absolute(path)?;
     // Never offer to trash the filesystem root or a user's home itself.
-    let canonical = path.canonicalize().map_err(error)?;
+    let metadata = std::fs::symlink_metadata(&path).map_err(error)?;
+    let canonical = if metadata.is_symlink() { path.clone() } else { path.canonicalize().map_err(error)? };
     if canonical == Path::new("/") || canonical == glib::home_dir() {
         return Err(error("This location cannot be moved to Trash."));
     }
@@ -219,46 +223,12 @@ pub fn open(path: &str) -> Result<(), ErrorBody> {
 }
 /// Transfers never overwrite an existing target or follow directory symlinks.
 pub fn transfer(path: &str, destination: &str, moving: bool) -> Result<(), ErrorBody> {
-    let source = absolute(path)?;
-    let canonical = source.canonicalize().map_err(error)?;
-    if canonical == Path::new("/") || (moving && canonical == glib::home_dir()) {
-        return Err(error("This location cannot be moved or copied."));
-    }
-    let folder = directory_path(destination)?;
-    let meta = std::fs::symlink_metadata(&source).map_err(error)?;
-    if meta.is_dir() && folder.starts_with(&canonical) {
-        return Err(error("Choose a destination outside this folder."));
-    }
-    let target = folder.join(source.file_name().ok_or_else(|| error("Choose a file or folder"))?);
-    if std::fs::symlink_metadata(&target).is_ok() {
-        return Err(error("An item with this name already exists at the destination."));
-    }
-    if moving {
-        gio::File::for_path(&source)
-            .move_(&gio::File::for_path(target), gio::FileCopyFlags::NOFOLLOW_SYMLINKS, gio::Cancellable::NONE, None)
-            .map_err(error)
-    } else {
-        copy_tree(&source, &target)
-    }
+    crate::transfer::run(
+        &meridian_protocol::FileTransfer { path: path.into(), destination: destination.into(), move_file: moving },
+        &crate::transfer::Control::default(),
+    )
 }
-fn copy_tree(source: &Path, target: &Path) -> Result<(), ErrorBody> {
-    let metadata = std::fs::symlink_metadata(source).map_err(error)?;
-    if metadata.is_dir() {
-        std::fs::create_dir(target).map_err(error)?;
-        for entry in std::fs::read_dir(source).map_err(error)? {
-            let entry = entry.map_err(error)?;
-            copy_tree(&entry.path(), &target.join(entry.file_name()))?;
-        }
-        Ok(())
-    } else {
-        if !metadata.is_file() && !metadata.file_type().is_symlink() {
-            return Err(error("Special files cannot be copied."));
-        }
-        gio::File::for_path(source)
-            .copy(&gio::File::for_path(target), gio::FileCopyFlags::NOFOLLOW_SYMLINKS, gio::Cancellable::NONE, None)
-            .map_err(error)
-    }
-}
+
 pub fn thumbnail(path: &str) -> Result<Option<String>, ErrorBody> {
     use gtk::gdk_pixbuf::Pixbuf;
     let path = absolute(path)?;
@@ -282,9 +252,7 @@ pub fn thumbnail(path: &str) -> Result<Option<String>, ErrorBody> {
 static BOOKMARK_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 pub fn bookmarks() -> Vec<FileLocation> {
     let path = glib::user_config_dir().join("meridian/orbit-bookmarks.json");
-    std::fs::read(path)
-        .ok()
-        .and_then(|b| serde_json::from_slice::<Vec<String>>(&b).ok())
+    crate::config::read::<Vec<String>>(&path)
         .unwrap_or_default()
         .into_iter()
         .filter(|s| Path::new(s).is_absolute())
@@ -307,10 +275,7 @@ pub fn bookmark(path: &str) -> Result<Vec<FileLocation>, ErrorBody> {
         }
     }
     let dir = glib::user_config_dir().join("meridian");
-    std::fs::create_dir_all(&dir).map_err(error)?;
-    let temp = dir.join("orbit-bookmarks.json.tmp");
-    std::fs::write(&temp, serde_json::to_vec(&saved).map_err(error)?).map_err(error)?;
-    std::fs::rename(temp, dir.join("orbit-bookmarks.json")).map_err(error)?;
+    crate::config::save(&dir.join("orbit-bookmarks.json"), &saved)?;
     Ok(bookmarks())
 }
 
@@ -405,6 +370,74 @@ mod tests {
         rename(root.join("Documents").to_str().unwrap(), "Renamed").unwrap();
         assert!(root.join("Renamed").is_dir());
         assert!(absolute("relative").is_err());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+}
+
+/// Preview content is plain text or a generated image; it never becomes an HTML document.
+pub fn preview(path: &str) -> Result<meridian_protocol::FilePreview, ErrorBody> {
+    use std::{io::Read, os::unix::fs::OpenOptionsExt};
+    let path = absolute(path)?;
+    let unsupported =
+        || meridian_protocol::FilePreview { kind: "unsupported".into(), content: String::new(), truncated: false };
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NONBLOCK | libc::O_NOCTTY)
+        .open(&path)
+        .map_err(error)?;
+    if !file.metadata().map_err(error)?.is_file() {
+        return Ok(unsupported());
+    }
+    if path
+        .extension()
+        .and_then(|s| s.to_str())
+        .is_some_and(|ext| ["png", "jpg", "jpeg", "webp", "gif", "bmp"].contains(&ext.to_ascii_lowercase().as_str()))
+    {
+        return Ok(thumbnail(path.to_str().ok_or_else(|| error("Unsupported file name"))?)?.map_or_else(
+            unsupported,
+            |content| meridian_protocol::FilePreview { kind: "image".into(), content, truncated: false },
+        ));
+    }
+    const LIMIT: usize = 64 * 1024;
+    let mut data = Vec::new();
+    file.take((LIMIT + 1) as u64).read_to_end(&mut data).map_err(error)?;
+    let truncated = data.len() > LIMIT;
+    data.truncate(LIMIT);
+    let text = match std::str::from_utf8(&data) {
+        Ok(text) => text,
+        Err(e) if truncated && e.error_len().is_none() => {
+            std::str::from_utf8(&data[..e.valid_up_to()]).map_err(error)?
+        }
+        Err(_) => return Ok(unsupported()),
+    };
+    if text.chars().any(|c| c.is_control() && !matches!(c, '\t' | '\n' | '\r')) {
+        return Ok(unsupported());
+    }
+    Ok(meridian_protocol::FilePreview { kind: "text".into(), content: text.to_owned(), truncated })
+}
+
+#[cfg(test)]
+mod preview_tests {
+    use super::*;
+    #[test]
+    fn previews_are_bounded_plain_text_and_reject_binary_and_special_files() {
+        let root = std::env::temp_dir().join(format!("meridian-preview-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("preview.txt");
+        std::fs::write(&path, b"<script>alert(1)</script>").unwrap();
+        assert_eq!(preview(path.to_str().unwrap()).unwrap().content, "<script>alert(1)</script>");
+        std::fs::write(&path, vec![b'a'; 100_000]).unwrap();
+        let result = preview(path.to_str().unwrap()).unwrap();
+        assert!(result.truncated);
+        assert_eq!(result.content.len(), 65536);
+        std::fs::write(&path, b"binary\0data").unwrap();
+        assert_eq!(preview(path.to_str().unwrap()).unwrap().kind, "unsupported");
+        assert_eq!(preview(root.to_str().unwrap()).unwrap().kind, "unsupported");
+        let fifo = root.join("pipe");
+        let name = std::ffi::CString::new(fifo.as_os_str().as_encoded_bytes()).unwrap();
+        assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0);
+        assert_eq!(preview(fifo.to_str().unwrap()).unwrap().kind, "unsupported");
+        assert!(preview("/tmp/../etc/passwd").is_err());
         std::fs::remove_dir_all(root).unwrap();
     }
 }

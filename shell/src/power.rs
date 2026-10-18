@@ -35,7 +35,7 @@ pub async fn sign_out() -> Result<(), ErrorBody> {
         .ok_or_else(|| ErrorBody::new(ErrorCode::Failed, "logind didn't report a session for this process"))?
         .to_owned();
     let bus = gio::bus_get_future(gio::BusType::System).await.map_err(unavailable)?;
-    bus.call_future(Some(LOGIND), &path, SESSION_IFACE, "Terminate", None, None, gio::DBusCallFlags::NONE, -1)
+    bus.call_future(Some(LOGIND), &path, SESSION_IFACE, "Terminate", None, None, gio::DBusCallFlags::NONE, 15_000)
         .await
         .map_err(failed)?;
     Ok(())
@@ -43,7 +43,7 @@ pub async fn sign_out() -> Result<(), ErrorBody> {
 
 async fn manager_call(method: &str, params: Option<&glib::Variant>) -> Result<glib::Variant, ErrorBody> {
     let bus = gio::bus_get_future(gio::BusType::System).await.map_err(unavailable)?;
-    bus.call_future(Some(LOGIND), MANAGER_PATH, MANAGER_IFACE, method, params, None, gio::DBusCallFlags::NONE, -1)
+    bus.call_future(Some(LOGIND), MANAGER_PATH, MANAGER_IFACE, method, params, None, gio::DBusCallFlags::NONE, 15_000)
         .await
         .map_err(failed)
 }

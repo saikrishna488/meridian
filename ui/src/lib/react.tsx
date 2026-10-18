@@ -65,7 +65,9 @@ export function usePopover(
       open.current = true;
       const mine = ++generation.current;
       void (async () => {
-        try { await loadLatest(); } catch (error) { reportLatest(error); }
+        // Paint and focus immediately; optional services may take seconds to
+        // reply. Existing state stays usable while the refresh completes.
+        void loadLatest().catch(error => { if (mine === generation.current && open.current) reportLatest(error); });
         await nextFrame();
         if (mine !== generation.current || !open.current) return;
         setVisible(true);

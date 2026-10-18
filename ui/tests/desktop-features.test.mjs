@@ -1,3 +1,4 @@
+import { surfaceScript } from "./bundle.mjs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
@@ -10,20 +11,21 @@ async function surface(t, name, respond) {
   const dom = new JSDOM(html, { url: `https://meridian.test/surfaces/${name}/`, runScripts: "outside-only", pretendToBeVisual: true });
   t.after(() => dom.window.close());
   const { window } = dom, requests = [];
+  window.TextEncoder = TextEncoder;
   window.HTMLElement.prototype.scrollIntoView = () => {};
   window.HTMLElement.prototype.scrollTo = () => {};
   window.matchMedia = () => ({ matches: false, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {} });
   window.ResizeObserver = class { observe() {} disconnect() {} };
   window.HTMLCanvasElement.prototype.getContext = () => new Proxy({ measureText: text => ({ width: text.length * 8, actualBoundingBoxAscent: 10, actualBoundingBoxDescent: 3 }), createLinearGradient: () => ({ addColorStop() {} }), getImageData: (_x, _y, width, height) => ({ data: new Uint8ClampedArray(width * height * 4), width, height }) }, { get(target, key) { return key in target ? target[key] : () => {}; }, set(target, key, value) { target[key] = value; return true; } });
   window.fetch = async () => { throw new Error("Custom-scheme fetch is unavailable"); };
-  window.webkit = { messageHandlers: { meridian: { async postMessage(json) { const req = JSON.parse(json); requests.push(req); const result = await respond(req); return JSON.stringify(result?.error ? { ok: false, error: result.error } : { ok: true, result }); } } } };
-  window.eval(await readFile(new URL(`../dist/surfaces/${name}/${name}.js`, import.meta.url), "utf8"));
+  window.webkit = { messageHandlers: { meridian: { async postMessage(json) { const req = JSON.parse(json); requests.push(req); const result = await respond(req); return JSON.stringify(result?.error && typeof result.error === "object" ? { ok: false, error: result.error } : { ok: true, result }); } } } };
+  window.eval(await surfaceScript(name));
   await waitFor(() => window.document.querySelector("#root").children.length);
   // Host events must arrive after the surface has registered its listeners.
   if (name !== "wallpaper") await waitFor(() => requests.some(req => req.method === "shell.hello"));
   return { window, requests, get: s => window.document.querySelector(s), emit: (event, data) => window.__meridianDispatch(JSON.stringify({ event, data })) };
 }
-function defaults(req) { return req.method === "desktop.get" ? desktop : req.method === "search.query" ? { ...search, serial: req.params.serial } : req.method === "windows.list" ? [] : req.method === "dock.list" ? [app.id] : req.method === "dock.layout_get" ? [] : req.method === "shell.hello" ? { surface: "panel", capabilities: [] } : null; }
+function defaults(req) { if (["files.transfer_start", "files.transfer_status"].includes(req.method)) return { id: 1, bytes: 4, total: 4, entries: 1, done: true, error: null }; return req.method === "desktop.get" ? desktop : req.method === "search.query" ? { ...search, serial: req.params.serial } : req.method === "windows.list" ? [] : req.method === "dock.list" ? [app.id] : req.method === "dock.layout_get" ? [] : req.method === "shell.hello" ? { surface: "panel", capabilities: [] } : null; }
 function drag(window, element, type, data, clientX = 1) {
   const event = new window.Event(type, { bubbles: true, cancelable: true });
   Object.defineProperty(event, "dataTransfer", { value: { types: Object.keys(data), getData: key => data[key] ?? "", setData: (key, value) => { data[key] = value; }, effectAllowed: "", dropEffect: "" } });
@@ -131,7 +133,9 @@ test("Terminal renders real output, forwards paste to its PTY, and closes tabs",
   await waitFor(() => ui.get('.xterm-rows')?.textContent.includes("REAL_SHELL_OK"));
   const paste = new ui.window.Event("paste", { bubbles: true, cancelable: true }); Object.defineProperty(paste, "clipboardData", { value: { getData: () => "pwd\n" } });
   ui.get('.xterm-helper-textarea').dispatchEvent(paste); await waitFor(() => ui.requests.some(r => r.method === "terminal.write"));
-  assert.ok(ui.requests.find(r => r.method === "terminal.write").params.data.includes("pwd"));
+  assert.deepEqual(ui.requests.filter(r => r.method === "terminal.write").map(r => r.params.data), ["pwd\r"]);
+  assert.equal(ui.get(".terminal-status"), null);
+  assert.ok(!ui.get(".terminal-session").textContent.includes("/bin/bash"));
   ui.get('[aria-label="New terminal session"]').click(); await waitFor(() => ui.window.document.querySelectorAll('[role="tab"]').length === 2); await waitFor(() => next === 2);
   ui.get('[aria-label="Close session 2"]').click(); await waitFor(() => ui.requests.some(r => r.method === "terminal.close" && r.params.id === 2));
 });
@@ -314,11 +318,10 @@ test("Bluetooth connects a paired device through its discovered BlueZ path", asy
   assert.deepEqual(ui.requests.find(r=>r.method==="settings.bluetooth_action").params,{path:device.path,action:"connect"});
   assert.equal(ui.get('#bluetooth').className,"meridian-toggle");
 });
-test("Sharing switches preview their state without changing system services", async t => {
-  const ui=await surface(t,"settings",defaults);[...ui.window.document.querySelectorAll("nav button")].find(b=>b.getAttribute("aria-label") === "Sharing").click();
-  await waitFor(()=>ui.get('[aria-label="File Sharing"]'));assert.ok(ui.get(".settings-content").textContent.includes("Prototype"));
-  for(const label of ["File Sharing","Screen Sharing","Remote Login"]){ui.get(`[aria-label="${label}"]`).click();await waitFor(()=>ui.get(`[aria-label="${label}"]`).getAttribute("aria-checked")==="true");}
-  assert.ok(ui.requests.every(r=>["shell.hello","desktop.get","settings.get"].includes(r.method)));
+test("Settings does not offer nonfunctional sharing switches", async t => {
+  const ui = await surface(t, "settings", defaults);
+  assert.equal(ui.get('nav button[aria-label="Sharing"]'), null);
+  assert.equal(ui.get('[aria-label="File Sharing"]'), null);
 });
 
 
@@ -606,10 +609,10 @@ test("Orbit bookmarks folders and sends reviewed file transfers", async t => {
   await waitFor(() => ui.get(".finder-context")); menu(ui, ".finder-context", "Copy To…");
   await waitFor(() => ui.get('[aria-label="Destination folder"]'));
   type(ui, '[aria-label="Destination folder"]', "/home/test/Projects");
-  assert.ok(!ui.requests.some(r => r.method === "files.transfer"));
+  assert.ok(!ui.requests.some(r => r.method === "files.transfer_start"));
   ui.get('form[role="dialog"] button[type="submit"]').click();
-  await waitFor(() => ui.requests.some(r => r.method === "files.transfer"));
-  assert.deepEqual(ui.requests.find(r => r.method === "files.transfer").params, { path: file.path, destination: folder.path, move_file: false });
+  await waitFor(() => ui.requests.some(r => r.method === "files.transfer_start"));
+  assert.deepEqual(ui.requests.find(r => r.method === "files.transfer_start").params, { path: file.path, destination: folder.path, move_file: false });
 });
 
 test("Orbit previews images and sets a selected image as wallpaper", async t => {
@@ -912,4 +915,196 @@ test("desktop keyboard opens item actions and Delete uses the desktop trash oper
   await waitFor(() => ui.requests.some(r => r.method === "desktop.remove"));
   assert.deepEqual(ui.requests.find(r => r.method === "desktop.remove").params, { id: item.id });
   assert.ok(!ui.requests.some(r => ["apps.uninstall", "files.trash"].includes(r.method)));
+});
+
+
+test("Terminal clipboard shortcuts cancel native paste and write once while Ctrl+C still interrupts", async t => {
+  const ui = await surface(t, "terminal", req => {
+    if (req.method === "terminal.start") return { id: 93, shell: "/bin/bash" };
+    if (req.method === "terminal.read") return { data: [], exited: false };
+    if (req.method === "terminal.paste") return "echo once";
+    return defaults(req);
+  });
+  await waitFor(() => ui.requests.some(r => r.method === "shell.hello"));
+  ui.emit("terminal.opened");
+  await waitFor(() => ui.get(".xterm-helper-textarea"));
+  const input = ui.get(".xterm-helper-textarea");
+  for (const shiftKey of [false, true]) {
+    const before = ui.requests.filter(r => r.method === "terminal.write").length;
+    const event = new ui.window.KeyboardEvent("keydown", { key: "v", code: "KeyV", keyCode: 86, ctrlKey: true, shiftKey, bubbles: true, cancelable: true });
+    input.dispatchEvent(event);
+    assert.equal(event.defaultPrevented, true);
+    input.dispatchEvent(new ui.window.KeyboardEvent("keydown", { key: "v", code: "KeyV", keyCode: 86, ctrlKey: true, shiftKey, repeat: true, bubbles: true, cancelable: true }));
+    input.dispatchEvent(new ui.window.KeyboardEvent("keyup", { key: "v", ctrlKey: true, shiftKey, bubbles: true, cancelable: true }));
+    await waitFor(() => ui.requests.filter(r => r.method === "terminal.write").length > before);
+    await new Promise(resolve => setTimeout(resolve, 25));
+    assert.deepEqual(ui.requests.filter(r => r.method === "terminal.write").slice(before).map(r => r.params.data), ["echo once"]);
+  }
+  assert.equal(ui.requests.filter(r => r.method === "terminal.paste").length, 2);
+  input.dispatchEvent(new ui.window.KeyboardEvent("keydown", { key: "c", code: "KeyC", keyCode: 67, ctrlKey: true, bubbles: true, cancelable: true }));
+  await waitFor(() => ui.requests.some(r => r.method === "terminal.write" && r.params.data === "\x03"));
+  assert.ok(!ui.requests.some(r => r.method === "terminal.copy"));
+});
+
+
+test("Orbit reports transfer progress, cancels once, and recovers after a failed transfer", async t => {
+  let cancelled = false;
+  const ui = await surface(t, "finder", req => {
+    if (req.method === "files.transfer_start" || req.method === "files.transfer_status") return { id: 17, bytes: 65536, total: 1048576, entries: 2, done: cancelled, error: cancelled ? "Transfer cancelled. The original data was preserved." : null };
+    if (req.method === "files.transfer_cancel") { cancelled = true; return null; }
+    return finderReply(req);
+  });
+  await waitFor(() => ui.get('[aria-label="notes.txt"]'));
+  ui.get('[aria-label="notes.txt"]').dispatchEvent(new ui.window.MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+  await waitFor(() => ui.get(".finder-context")); menu(ui, ".finder-context", "Copy To…");
+  await waitFor(() => ui.get('[aria-label="Destination folder"]'));
+  type(ui, '[aria-label="Destination folder"]', "/home/test/Projects");
+  ui.get('form[role="dialog"] button[type="submit"]').click();
+  await waitFor(() => ui.get('[aria-label="File transfer"]'));
+  assert.equal(ui.get('progress').value, 65536);
+  assert.equal(ui.get('progress').max, 1048576);
+  const cancel = ui.get('[aria-label="File transfer"] button');
+  cancel.click(); cancel.click();
+  await waitFor(() => ui.requests.some(req => req.method === "files.transfer_cancel"));
+  await waitFor(() => ui.get('.finder-notice')?.textContent.includes("original data was preserved"));
+  assert.equal(ui.requests.filter(req => req.method === "files.transfer_cancel").length, 1);
+  assert.equal(ui.get('[aria-label="File transfer"]'), null);
+  assert.equal(ui.get('form[role="dialog"]'), null);
+  assert.ok(ui.get('[aria-label="notes.txt"]'));
+});
+
+test("Orbit reconnects to an active transfer after its page reloads", async t => {
+  let complete = false;
+  const active = { id: 21, bytes: 10, total: 100, entries: 1, done: false, error: null };
+  const ui = await surface(t, "finder", req => req.method === "files.transfers" ? [active] : req.method === "files.transfer_status" ? { ...active, bytes: complete ? 100 : 10, done: complete } : finderReply(req));
+  await waitFor(() => ui.get('[aria-label="File transfer"]'));
+  assert.ok(!ui.requests.some(req => req.method === "files.transfer_start"));
+  complete = true;
+  await waitFor(() => ui.get('.finder-notice')?.textContent.includes("Transfer complete"));
+  assert.equal(ui.get('[aria-label="File transfer"]'), null);
+});
+
+test("Orbit tabs retain independent navigation histories and keyboard switching", async t => {
+  const ui = await surface(t, "finder", finderReply);
+  await waitFor(() => ui.get('[aria-label="Projects"]'));
+  ui.get('[aria-label="Projects"]').dispatchEvent(new ui.window.MouseEvent('dblclick', { bubbles: true }));
+  await waitFor(() => ui.get('h1')?.textContent === 'Projects');
+  ui.get('[aria-label="New folder tab"]').click();
+  await waitFor(() => ui.window.document.querySelectorAll('[role="tab"]').length === 2);
+  ui.get('nav[aria-label="Favorites"] button[title="Home"]').click();
+  await waitFor(() => ui.get('[aria-label="notes.txt"]'));
+  ui.get('.finder-app').dispatchEvent(new ui.window.KeyboardEvent('keydown', { key: 'PageUp', ctrlKey: true, bubbles: true, cancelable: true }));
+  await waitFor(() => ui.get('h1')?.textContent === 'Projects');
+  assert.equal(ui.get('[aria-label="Go back"]').disabled, false);
+  ui.get('[aria-label="Go back"]').click();
+  await waitFor(() => ui.get('[aria-label="notes.txt"]'));
+  ui.get('.finder-app').dispatchEvent(new ui.window.KeyboardEvent('keydown', { key: 'w', ctrlKey: true, bubbles: true, cancelable: true }));
+  await waitFor(() => ui.window.document.querySelectorAll('[role="tab"]').length === 1);
+});
+
+test("Orbit preview renders markup as text and returns keyboard focus on close", async t => {
+  const ui = await surface(t, 'finder', req => req.method === 'files.preview'
+    ? { kind: 'text', content: '<script>unsafe()</script>', truncated: true } : finderReply(req));
+  await waitFor(() => ui.get('[aria-label="notes.txt"]'));
+  const item = ui.get('[aria-label="notes.txt"]'); item.focus(); item.click();
+  await waitFor(() => item.getAttribute('aria-pressed') === 'true');
+  item.dispatchEvent(new ui.window.KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true }));
+  await waitFor(() => ui.get('[aria-label="File contents"]'));
+  assert.equal(ui.get('[aria-label="File contents"]').textContent, '<script>unsafe()</script>');
+  assert.equal(ui.get('.file-preview script'), null);
+  assert.ok(ui.get('.file-preview').textContent.includes('64 KiB'));
+  ui.get('[aria-label="Close preview"]').dispatchEvent(new ui.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  await waitFor(() => !ui.get('.file-preview'));
+  assert.equal(ui.window.document.activeElement, item);
+});
+
+test("Settings persists launcher providers and opens typed settings search targets", async t => {
+  const ui = await surface(t, 'settings', req => ['settings.search','settings.search_set'].includes(req.method)
+    ? req.params ?? { settings: true, calculator: false } : defaults(req));
+  ui.emit('preferences.page', { page: 'search' });
+  await waitFor(() => ui.get('[aria-label="Search calculator"]')?.disabled === false);
+  ui.get('[aria-label="Search calculator"]').click();
+  await waitFor(() => ui.requests.some(req => req.method === 'settings.search_set'));
+  assert.deepEqual(ui.requests.find(req => req.method === 'settings.search_set').params, { settings: true, calculator: true });
+  ui.emit('preferences.page', { page: 'bluetooth' });
+  await waitFor(() => ui.get('#settings-title')?.textContent === 'Bluetooth');
+});
+
+test("non-application launcher results activate without app management actions", async t => {
+  const ui = await surface(t, 'applications', req => req.method === 'search.query'
+    ? { serial: req.params.serial, sections: [{ provider: 'settings', title: 'Settings', items: [{ id: 'wifi', title: 'Wi-Fi settings', subtitle: 'System settings', icon: 'preferences-system' }] }] } : defaults(req));
+  ui.emit('popover.shown'); await waitFor(() => ui.get('.row'));
+  ui.get('.row').dispatchEvent(new ui.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+  assert.equal(ui.get('.app-context'), null);
+  assert.equal(ui.get('.row').draggable, false);
+  ui.get('.row').click();
+  await waitFor(() => ui.requests.some(req => req.method === 'search.activate'));
+  assert.deepEqual(ui.requests.find(req => req.method === 'search.activate').params, { provider: 'settings', item_id: 'wifi' });
+});
+
+test("Do Not Disturb keeps new messages when its reply is delayed and groups by app", async t => {
+  const item = { id: 1, app: 'Mail', summary: 'Message', body: '', time: Date.now(), unread: false, actions: [] };
+  let finish;
+  const ui = await surface(t, 'notifications', req => req.method === 'notifications.do_not_disturb'
+    ? new Promise(resolve => { finish = resolve; }) : req.method === 'notifications.read'
+    ? { available: true, do_not_disturb: false, items: [item] } : defaults(req));
+  ui.emit('popover.shown'); await waitFor(() => ui.get('.notification'));
+  ui.get('[aria-label="Do Not Disturb"]').click();
+  await waitFor(() => finish);
+  ui.emit('notifications.changed', { available: true, do_not_disturb: true, items: [item, { ...item, id: 2, app: 'Calendar', summary: 'Meeting' }] });
+  finish({ available: true, do_not_disturb: true, items: [item] });
+  await waitFor(() => ui.get('[aria-label="Do Not Disturb"]').getAttribute('aria-checked') === 'true');
+  assert.equal(ui.window.document.querySelectorAll('.notification-group').length, 2);
+  assert.ok(ui.get('.notification-list').textContent.includes('Meeting'));
+});
+
+test("Orbit leaves sidebar keyboard activation available when a file is selected", async t => {
+  const ui = await surface(t, 'finder', finderReply);
+  await waitFor(() => ui.get('[aria-label="notes.txt"]'));
+  ui.get('[aria-label="notes.txt"]').click();
+  await waitFor(() => ui.get('[aria-label="notes.txt"]').getAttribute('aria-pressed') === 'true');
+  const button = ui.get('nav[aria-label="Favorites"] button[title="Applications"]'); button.focus();
+  const event = new ui.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+  button.dispatchEvent(event);
+  assert.equal(event.defaultPrevented, false);
+  assert.equal(ui.requests.some(request => request.method === 'files.open'), false);
+});
+
+test("dock groups show a window count and cycle through an application's windows", async t => {
+  const windows = [{ id: 1, name: 'Firefox', title: 'First window', active: true }, { id: 2, name: 'Firefox', title: 'Second window', active: false }];
+  const ui = await surface(t, 'panel', req => req.method === 'windows.list' ? windows : defaults(req));
+  await waitFor(() => ui.get('[aria-label="Firefox"] .dock-window-count'));
+  assert.equal(ui.get('.dock-window-count').textContent, '2');
+  ui.get('[aria-label="Firefox"]').click();
+  await waitFor(() => ui.requests.some(req => req.method === 'windows.activate'));
+  assert.deepEqual(ui.requests.find(req => req.method === 'windows.activate').params, { id: 2 });
+  ui.emit('windows.changed', windows.map(window => ({ ...window, active: window.id === 2 })));
+  await waitFor(() => ui.get('[aria-label="Firefox"]').getAttribute('aria-pressed') === 'true');
+  await new Promise(resolve => setTimeout(resolve, 10));
+  ui.get('[aria-label="Firefox"]').click();
+  await waitFor(() => ui.requests.filter(req => req.method === 'windows.activate').length === 2);
+  assert.equal(ui.requests.filter(req => req.method === 'windows.activate')[1].params.id, 1);
+});
+
+test("primary display selection persists and stale brightness replies cannot affect another monitor", async t => {
+  const mode = { width: 1920, height: 1080, refresh: 60000, preferred: true };
+  const outputs = ['HDMI-A-1', 'DP-1'].map(name => ({ name, description: name, enabled: true, x: 0, y: 0, scale: 1, transform: 0, current: mode, modes: [mode] }));
+  let first;
+  const ui = await surface(t, 'settings', req => req.method === 'settings.displays' ? outputs
+    : req.method === 'settings.primary_display' ? { connector: null, effective: 'HDMI-A-1' }
+    : req.method === 'settings.primary_display_set' ? { connector: req.params.connector, effective: req.params.connector }
+    : req.method === 'settings.monitor_brightness' ? req.params.connector === 'HDMI-A-1'
+      ? new Promise(resolve => { first = resolve; }) : { percent: 80 } : defaults(req));
+  ui.emit('preferences.page', { page: 'displays' });
+  await waitFor(() => first && ui.get('#primary-display')?.disabled === false);
+  ui.get('#primary-display').value = 'DP-1';
+  ui.get('#primary-display').dispatchEvent(new ui.window.Event('change', { bubbles: true }));
+  await waitFor(() => ui.requests.some(req => req.method === 'settings.primary_display_set'));
+  assert.deepEqual(ui.requests.find(req => req.method === 'settings.primary_display_set').params, { connector: 'DP-1' });
+  [...ui.window.document.querySelectorAll('.display-tile')].find(button => button.textContent.includes('DP-1')).click();
+  await waitFor(() => ui.get('#monitor-brightness')?.value === '80');
+  first({ percent: 10 });
+  await new Promise(resolve => setTimeout(resolve, 25));
+  assert.equal(ui.get('#monitor-brightness').value, '80');
+  assert.equal(ui.get('#monitor-brightness').disabled, false);
 });

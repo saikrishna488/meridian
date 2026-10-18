@@ -12,12 +12,15 @@ step "release integrity"
 bash tools/tests/release-manifest.sh
 bash tools/tests/screenshot.sh
 bash tools/tests/power.sh
+bash tools/tests/session.sh
+bash tools/tests/install-transaction.sh
+python3 tools/tests/profile-desktop.py
 
 step "rustfmt"
 cargo fmt --all --check
 
 step "clippy"
-cargo clippy --workspace --all-targets -- -D warnings
+cargo clippy --workspace --all-targets --all-features -- -D warnings
 
 step "tests (also regenerates ui/src/lib/generated)"
 cargo test --workspace

@@ -12,9 +12,10 @@ const WALLPAPERS: [(&str, &str); 4] = [
     ("meridian-alpine", "Alpine"),
     ("meridian-aurora", "Aurora"),
 ];
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
 struct Config {
+    primary_display: Option<String>,
     appearance: String,
     font: String,
     wallpaper: String,
@@ -25,6 +26,7 @@ struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            primary_display: None,
             appearance: "light".into(),
             font: "Inter".into(),
             wallpaper: "meridian-dusk".into(),
@@ -41,19 +43,13 @@ fn load() -> Config {
     load_at(&dir())
 }
 fn load_at(directory: &Path) -> Config {
-    std::fs::read(directory.join("desktop.json"))
-        .ok()
-        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-        .unwrap_or_default()
+    crate::config::read_versioned(&directory.join("desktop.json")).unwrap_or_default()
 }
 fn save(config: &Config) -> Result<(), ErrorBody> {
     save_at(&dir(), config)
 }
 fn save_at(directory: &Path, config: &Config) -> Result<(), ErrorBody> {
-    std::fs::create_dir_all(directory).map_err(error)?;
-    let temp = directory.join("desktop.json.tmp");
-    std::fs::write(&temp, serde_json::to_vec_pretty(config).map_err(error)?).map_err(error)?;
-    std::fs::rename(temp, directory.join("desktop.json")).map_err(error)
+    crate::config::save_versioned(&directory.join("desktop.json"), config)
 }
 fn state(config: &Config) -> DesktopState {
     let wallpapers = WALLPAPERS
@@ -182,30 +178,20 @@ fn desktop_items(config: &Config) -> Vec<DesktopItem> {
     items
 }
 fn move_to_folder(source: &Path, destination: &Path) -> Result<(), ErrorBody> {
-    use gtk::gio::prelude::*;
-    if !source.is_absolute() {
-        return Err(error("Choose an absolute file path"));
-    }
-    let name = source.file_name().ok_or_else(|| error("Cannot move this location"))?;
+    let source = crate::files::absolute(source.to_str().ok_or_else(|| error("Choose a UTF-8 file path."))?)?;
     let parent = source.parent().ok_or_else(|| error("Cannot move this location"))?.canonicalize().map_err(error)?;
     std::fs::create_dir_all(destination).map_err(error)?;
     let destination = destination.canonicalize().map_err(error)?;
     if parent == destination {
         return Ok(());
     }
-    let canonical = source.canonicalize().map_err(error)?;
-    if destination.starts_with(&canonical) || canonical == glib::home_dir() {
-        return Err(error("Cannot move this folder into the Desktop folder"));
-    }
-    gtk::gio::File::for_path(source)
-        .move_(
-            &gtk::gio::File::for_path(destination.join(name)),
-            gtk::gio::FileCopyFlags::NOFOLLOW_SYMLINKS,
-            gtk::gio::Cancellable::NONE,
-            None,
-        )
-        .map_err(error)
+    crate::files::transfer(
+        source.to_str().unwrap(),
+        destination.to_str().ok_or_else(|| error("Choose a UTF-8 folder path."))?,
+        true,
+    )
 }
+
 pub fn add_file(path: &str) -> Result<DesktopState, ErrorBody> {
     move_to_folder(Path::new(path), &folder())?;
     Ok(get())
@@ -358,6 +344,17 @@ pub fn set_font(font: &str) -> Result<DesktopState, ErrorBody> {
         log::warn!("Could not apply font to external applications: {}", error.message);
     }
     Ok(get())
+}
+
+/// Saved connector preference survives unplugging; the shell chooses a fallback.
+pub fn primary_display() -> Option<String> {
+    load().primary_display
+}
+pub fn set_primary_display(connector: Option<String>) -> Result<(), ErrorBody> {
+    let _guard = CONFIG_LOCK.lock().map_err(error)?;
+    let mut config = load();
+    config.primary_display = connector;
+    save(&config)
 }
 
 #[cfg(test)]

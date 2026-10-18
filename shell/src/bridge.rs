@@ -5,6 +5,7 @@
 //! `Request` enum and checked against the surface's capabilities *before*
 //! they reach the dispatcher.
 
+use std::cell::Cell;
 use std::future::Future;
 use std::pin::Pin;
 use std::rc::{Rc, Weak};
@@ -17,6 +18,17 @@ use webkit6::{ScriptMessageReply, UserContentManager};
 use crate::surface::WebSurface;
 
 const HANDLER: &str = "meridian";
+const MAX_PENDING: usize = 16;
+thread_local! {
+    static PENDING: Cell<usize> = const { Cell::new(0) };
+}
+
+struct Pending;
+impl Drop for Pending {
+    fn drop(&mut self) {
+        PENDING.with(|pending| pending.set(pending.get().saturating_sub(1)));
+    }
+}
 
 /// A serialized reply payload (`reply_ok(...)`), or an error.
 pub type ReplyResult = Result<String, ErrorBody>;
@@ -40,8 +52,22 @@ pub fn content_manager() -> UserContentManager {
 }
 
 pub fn attach(ucm: &UserContentManager, surface: Weak<WebSurface>, dispatch: Dispatch) {
+    let pending = Rc::new(Cell::new(0usize));
+    let budget = Rc::new(std::cell::RefCell::new((std::time::Instant::now(), 0u32)));
     ucm.connect_script_message_with_reply_received(Some(HANDLER), move |_, value, reply| {
         let Some(ctx) = value.context() else { return true };
+        let limited = {
+            let mut budget = budget.borrow_mut();
+            if budget.0.elapsed() >= std::time::Duration::from_secs(1) {
+                *budget = (std::time::Instant::now(), 0);
+            }
+            budget.1 = budget.1.saturating_add(1);
+            budget.1 > 256 || pending.get() >= MAX_PENDING || PENDING.with(|n| n.get() >= 128)
+        };
+        if limited {
+            send(reply, &ctx, Err(ErrorBody::new(ErrorCode::Unavailable, "Too many requests; try again shortly.")));
+            return true;
+        }
         let result = match surface.upgrade() {
             Some(surface) => handle(&surface, value, &dispatch),
             None => Err(ErrorBody::new(ErrorCode::Unavailable, "surface destroyed")),
@@ -53,8 +79,13 @@ pub fn attach(ucm: &UserContentManager, surface: Weak<WebSurface>, dispatch: Dis
                 // The reply object stays alive (and the JS promise pending)
                 // until we answer.
                 let reply = reply.clone();
+                pending.set(pending.get() + 1);
+                let pending = pending.clone();
+                PENDING.with(|n| n.set(n.get() + 1));
                 glib::MainContext::default().spawn_local(async move {
+                    let _guard = Pending;
                     let result = future.await;
+                    pending.set(pending.get().saturating_sub(1));
                     send(&reply, &ctx, result);
                 });
             }
@@ -65,7 +96,8 @@ pub fn attach(ucm: &UserContentManager, surface: Weak<WebSurface>, dispatch: Dis
 
 fn send(reply: &ScriptMessageReply, ctx: &javascriptcore::Context, result: ReplyResult) {
     let json = result.unwrap_or_else(|e| {
-        log::warn!("request failed: {:?}: {}", e.code, e.message);
+        // Error messages from system services may contain user input.
+        log::warn!("component=bridge event=request_failed code={:?}", e.code);
         proto::reply_err(&e)
     });
     reply.return_value(&javascriptcore::Value::new_string(ctx, Some(&json)));
@@ -76,17 +108,69 @@ fn handle(surface: &Rc<WebSurface>, value: &javascriptcore::Value, dispatch: &Di
         return Err(ErrorBody::new(ErrorCode::InvalidRequest, "message must be a JSON string"));
     }
     let request = proto::parse_request(&value.to_str())?;
-    authorize(surface, &request)?;
-    log::trace!("{:?} → {request:?}", surface.kind);
+    authorize_kind(surface.kind, &request)?;
+    log::trace!("component=bridge surface={:?} capability={:?}", surface.kind, request.required_capability());
     dispatch(surface, request)
 }
 
-fn authorize(surface: &WebSurface, request: &Request) -> Result<(), ErrorBody> {
+fn authorize_kind(surface: meridian_protocol::SurfaceKind, request: &Request) -> Result<(), ErrorBody> {
     match request.required_capability() {
-        Some(cap) if !surface.kind.has(cap) => Err(ErrorBody::new(
+        Some(cap) if !surface.has(cap) => Err(ErrorBody::new(
             ErrorCode::PermissionDenied,
-            format!("{:?} surface lacks the {cap:?} capability", surface.kind),
+            format!("{surface:?} surface lacks the {cap:?} capability"),
         )),
         _ => Ok(()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use meridian_protocol::SurfaceKind::*;
+    #[test]
+    fn sensitive_requests_are_denied_before_dispatch() {
+        let surfaces = [
+            Wallpaper,
+            Panel,
+            Topbar,
+            Preferences,
+            Finder,
+            Terminal,
+            Notifications,
+            Pulse,
+            Nova,
+            Calendar,
+            Clock,
+            DesktopMenu,
+            Applications,
+            Options,
+            Greeter,
+            Locker,
+        ];
+        for (json, allowed) in [
+            (r#"{"method":"terminal.start"}"#, vec![Terminal]),
+            (r#"{"method":"terminal.write","params":{"id":1,"data":"touch /tmp/never-executed"}}"#, vec![Terminal]),
+            (r#"{"method":"terminal.paste"}"#, vec![Terminal]),
+            (r#"{"method":"settings.users"}"#, vec![Preferences]),
+            (r#"{"method":"desktop.add_file","params":{"path":"/tmp/a"}}"#, vec![Wallpaper, Finder]),
+            (r#"{"method":"desktop.remove","params":{"id":"file:/tmp/a"}}"#, vec![Wallpaper, Finder]),
+            (r#"{"method":"settings.drivers"}"#, vec![Preferences]),
+            (
+                r#"{"method":"files.transfer_start","params":{"path":"/tmp/a","destination":"/tmp","move_file":true}}"#,
+                vec![Finder],
+            ),
+            (r#"{"method":"files.transfer_cancel","params":{"id":1}}"#, vec![Finder]),
+            (r#"{"method":"files.trash","params":{"path":"/tmp/a"}}"#, vec![Finder]),
+            (
+                r#"{"method":"greeter.login","params":{"username":"test","password":"secret","session":"meridian.desktop"}}"#,
+                vec![Greeter],
+            ),
+            (r#"{"method":"locker.unlock","params":{"password":"secret"}}"#, vec![Locker]),
+        ] {
+            let request = proto::parse_request(json).unwrap();
+            for surface in surfaces {
+                assert_eq!(authorize_kind(surface, &request).is_ok(), allowed.contains(&surface), "{surface:?} {json}");
+            }
+        }
     }
 }

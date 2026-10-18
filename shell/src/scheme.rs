@@ -6,6 +6,7 @@
 //! The UI never supplies a filesystem path that is opened as-is: paths are
 //! confined to their root (see [`resolve_under`]).
 
+use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 
 use gtk::prelude::*;
@@ -19,8 +20,12 @@ pub struct Roots {
     pub assets: PathBuf,
 }
 
+type IconBytes = crate::cache::Cache<(PathBuf, u64, std::time::SystemTime), (glib::Bytes, &'static str)>;
+
 pub struct SchemeHandler {
     roots: Roots,
+    icon_paths: std::cell::RefCell<crate::cache::Cache<(String, String), PathBuf>>,
+    icon_bytes: std::cell::RefCell<IconBytes>,
     catalog: Option<std::rc::Rc<std::cell::RefCell<meridian_services::apps::AppCatalog>>>,
 }
 
@@ -40,11 +45,49 @@ impl SchemeHandler {
             })?;
             read_file(&file).map_err(|e| format!("Cannot read lock screen file {path}: {e}"))?;
         }
+        // Split entry points depend on shared modules. Refuse a lock attempt
+        // with an incomplete deployment before requesting compositor ownership.
+        let manifest = resolve_under(&self.roots.ui, "surface-manifest.json")
+            .and_then(|path| read_file(&path))
+            .map_err(|_| "UI surface manifest is missing; rebuild the UI.".to_owned())?;
+        let manifest: std::collections::HashMap<String, Vec<String>> =
+            serde_json::from_slice(manifest.0.as_ref()).map_err(|_| "UI surface manifest is invalid.".to_owned())?;
+        let dependencies = manifest
+            .get("surfaces/locker/locker.js")
+            .filter(|paths| paths.len() <= 128 && paths.iter().any(|path| path == "surfaces/locker/locker.js"))
+            .ok_or_else(|| "Lock screen dependencies are missing from the UI manifest.".to_owned())?;
+        for path in dependencies {
+            resolve_under(&self.roots.ui, path)
+                .and_then(|file| read_file(&file))
+                .map_err(|_| format!("Lock screen dependency {path} is missing; rebuild the UI."))?;
+        }
         Ok(())
     }
 
     pub fn new(roots: Roots) -> Self {
-        SchemeHandler { roots, catalog: None }
+        SchemeHandler {
+            roots,
+            catalog: None,
+            icon_paths: std::cell::RefCell::new(crate::cache::Cache::new(256, 256)),
+            icon_bytes: std::cell::RefCell::new(crate::cache::Cache::new(128, 8 * 1024 * 1024)),
+        }
+    }
+
+    pub fn invalidate_icons(&self) {
+        self.icon_paths.borrow_mut().clear();
+        self.icon_bytes.borrow_mut().clear();
+    }
+
+    fn cached_icon(&self, path: &Path) -> Result<(glib::Bytes, &'static str), glib::Error> {
+        let metadata = path.metadata().map_err(|_| not_found("icon unavailable"))?;
+        let Ok(modified) = metadata.modified() else { return read_icon(path) };
+        let key = (path.to_owned(), metadata.len(), modified);
+        if let Some(value) = self.icon_bytes.borrow_mut().get(&key) {
+            return Ok(value);
+        }
+        let value = read_icon(path)?;
+        self.icon_bytes.borrow_mut().insert(key, value.clone(), value.0.len());
+        Ok(value)
     }
 
     pub fn with_catalog(
@@ -64,7 +107,7 @@ impl SchemeHandler {
                 request.finish(&stream, len, Some(mime));
             }
             Err(e) => {
-                log::warn!("{uri}: {}", e.message());
+                log::warn!("component=scheme event=resource_rejected code={:?}", e.code());
                 let mut e = e;
                 request.finish_error(&mut e);
             }
@@ -101,7 +144,13 @@ impl SchemeHandler {
                     if !mime_type(&path).starts_with("image/") && path.extension().is_none_or(|ext| ext != "xpm") {
                         return Err(forbidden("not an image"));
                     }
-                    return read_icon(&path);
+                    return self.cached_icon(&path);
+                }
+                let display = gtk::gdk::Display::default().ok_or_else(|| not_found("no display"))?;
+                let key = (value.to_owned(), gtk::IconTheme::for_display(&display).theme_name().to_string());
+                let cached_path = self.icon_paths.borrow_mut().get(&key);
+                if let Some(path) = cached_path {
+                    return self.cached_icon(&path);
                 }
                 let theme = gtk::IconTheme::new();
                 let display = gtk::gdk::Display::default().ok_or_else(|| not_found("no display"))?;
@@ -122,7 +171,8 @@ impl SchemeHandler {
                 let paintable =
                     theme.lookup_by_gicon(&icon, 128, 2, gtk::TextDirection::None, gtk::IconLookupFlags::empty());
                 let file = paintable.file().and_then(|f| f.path()).ok_or_else(|| not_found("no app icon"))?;
-                read_icon(&file)
+                self.icon_paths.borrow_mut().insert(key, file.clone(), 1);
+                self.cached_icon(&file)
             }
             // Serve Meridian's fixed icons from the UI's own origin.
             "ui" if path.starts_with("/desktop-icons/") => read_file(&resolve_under(&self.roots.assets, &path)?),
@@ -142,7 +192,7 @@ impl SchemeHandler {
                     gtk::IconLookupFlags::empty(),
                 );
                 let file = paintable.file().and_then(|f| f.path()).ok_or_else(|| not_found("no icon"))?;
-                read_icon(&file)
+                self.cached_icon(&file)
             }
             "assets" => read_file(&resolve_under(&self.roots.assets, &path)?),
             _ => Err(not_found("unknown host")),
@@ -153,7 +203,9 @@ impl SchemeHandler {
 /// Map a URI path onto a file under `root`, refusing anything that could
 /// escape it: parent components, and symlinks pointing outside the root.
 pub fn resolve_under(root: &Path, uri_path: &str) -> Result<PathBuf, glib::Error> {
-    let relative = Path::new(uri_path.trim_start_matches('/'));
+    let decoded =
+        glib::uri_unescape_string(uri_path, None::<&str>).ok_or_else(|| forbidden("invalid path encoding"))?;
+    let relative = Path::new(decoded.trim_start_matches('/'));
     let mut clean = PathBuf::new();
     for component in relative.components() {
         match component {
@@ -168,7 +220,8 @@ pub fn resolve_under(root: &Path, uri_path: &str) -> Result<PathBuf, glib::Error
         return Err(not_found("empty path"));
     }
     let full = root.join(&clean).canonicalize().map_err(|_| not_found("no such file"))?;
-    if !full.starts_with(root) {
+    let root = root.canonicalize().map_err(|_| not_found("missing resource root"))?;
+    if !full.starts_with(&root) {
         return Err(forbidden("path escapes root"));
     }
     Ok(full)
@@ -184,7 +237,17 @@ fn read_icon(path: &Path) -> Result<(glib::Bytes, &'static str), glib::Error> {
 }
 
 fn read_file(path: &Path) -> Result<(glib::Bytes, &'static str), glib::Error> {
-    let data = std::fs::read(path).map_err(|e| not_found(&e.to_string()))?;
+    const LIMIT: u64 = 32 * 1024 * 1024;
+    let file = std::fs::File::open(path).map_err(|_| not_found("cannot open resource"))?;
+    let metadata = file.metadata().map_err(|_| not_found("cannot inspect resource"))?;
+    if !metadata.is_file() || metadata.len() > LIMIT {
+        return Err(forbidden("resource is not a regular file under 32 MiB"));
+    }
+    let mut data = Vec::new();
+    file.take(LIMIT + 1).read_to_end(&mut data).map_err(|_| not_found("cannot read resource"))?;
+    if data.len() as u64 > LIMIT {
+        return Err(forbidden("resource exceeds 32 MiB"));
+    }
     Ok((glib::Bytes::from_owned(data), mime_type(path)))
 }
 
@@ -253,8 +316,17 @@ mod tests {
             std::fs::create_dir_all(file.parent().unwrap()).unwrap();
             std::fs::write(file, "fixture").unwrap();
         }
+        std::fs::write(
+            ui.join("surface-manifest.json"),
+            r#"{"surfaces/locker/locker.js":["surfaces/locker/locker.js","chunks/shared.js"]}"#,
+        )
+        .unwrap();
         let ui = ui.canonicalize().unwrap();
-        assert!(SchemeHandler::new(Roots { ui: ui.clone(), assets: ui }).check_locker().is_ok());
+        let handler = SchemeHandler::new(Roots { ui: ui.clone(), assets: ui.clone() });
+        assert!(handler.check_locker().unwrap_err().contains("chunks/shared.js"));
+        std::fs::create_dir_all(ui.join("chunks")).unwrap();
+        std::fs::write(ui.join("chunks/shared.js"), "fixture").unwrap();
+        assert!(handler.check_locker().is_ok());
     }
 
     #[test]
@@ -274,6 +346,18 @@ mod tests {
         let root = tmp_root();
         assert_eq!(resolve_under(&root, "/home/index.html").unwrap(), root.join("home/index.html"));
         assert_eq!(resolve_under(&root, "/./home/index.html").unwrap(), root.join("home/index.html"));
+    }
+
+    #[test]
+    fn encoded_traversal_and_oversized_resources_are_rejected() {
+        let root = tmp_root();
+        for path in ["/%2e%2e/etc/passwd", "/%2f..%2fetc/passwd", "/home/%2e%2e/%2e%2e/etc/passwd", "/%00", "/%zz"] {
+            assert!(resolve_under(&root, path).is_err(), "{path}");
+        }
+        let path = root.join("oversized.bin");
+        std::fs::File::create(&path).unwrap().set_len(33 * 1024 * 1024).unwrap();
+        assert!(read_file(&path).is_err());
+        std::fs::remove_file(path).unwrap();
     }
 
     #[test]

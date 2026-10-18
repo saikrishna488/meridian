@@ -3,4 +3,4 @@
 /**
  * Identifies a search provider. Closed set: providers are native code.
  */
-export type ProviderId = "apps";
+export type ProviderId = "apps" | "settings" | "calculator";

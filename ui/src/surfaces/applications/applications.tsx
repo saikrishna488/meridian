@@ -59,7 +59,7 @@ function Applications() {
     void request({ method: "dock.list" }).then(items => { if (alive.current && pinRevision.current === mine) setPins(items ?? []); }).catch(report);
     await runQuery("");
   }, () => input.current?.focus(), report);
-  const refresh = useCallbackRef(() => { void runQuery(query).catch(report); });
+  const refresh = useCallbackRef(() => { if (visible) void runQuery(query).catch(report); });
   useEffect(() => {
     alive.current = true;
     const off = on("search.invalidated", refresh);
@@ -68,7 +68,7 @@ function Applications() {
   }, [refresh]);
   useEffect(() => { if (selected >= results.length) setSelected(-1); }, [results.length, selected]);
   useEffect(() => {
-    if (selected >= 0) list.current?.children[selected]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    if (selected >= 0) list.current?.children[selected]?.scrollIntoView({ block: "nearest", behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
   }, [selected]);
   function changeQuery(value: string) { setQuery(value); void runQuery(value).catch(report); }
   function move(delta: number) {
@@ -135,11 +135,11 @@ function Applications() {
           {results.map((result, index) => {
             const key = `${result.provider}:${result.item.id}`;
             return <li key={key} id={`row-${index}`} role="option" aria-selected={selected === index}
-              onContextMenu={event => { event.preventDefault(); setContext({ id: result.item.id, x: event.clientX, y: event.clientY }); }}
-              draggable onDragEnd={() => setDragging(false)} onDragStart={event => { setDragging(true); event.dataTransfer.setData(APP_DRAG, result.item.id); event.dataTransfer.effectAllowed = "copyMove"; }}
+              onContextMenu={event => { event.preventDefault(); if (result.provider === "apps") setContext({ id: result.item.id, x: event.clientX, y: event.clientY }); }}
+              draggable={result.provider === "apps"} onDragEnd={() => setDragging(false)} onDragStart={event => { setDragging(true); event.dataTransfer.setData(APP_DRAG, result.item.id); event.dataTransfer.effectAllowed = "copyMove"; }}
               tabIndex={-1} title={`${result.item.title}${result.item.subtitle ? `\n${result.item.subtitle}` : ""}`}
               className={`row${launching === key ? " launching" : ""}`} onClick={() => { setSelected(index); void activate(index); }}>
-              <AppIcon id={result.item.id} name={result.item.title} icon={result.item.icon} />
+              <AppIcon id={result.provider === "apps" ? result.item.id : undefined} name={result.item.title} icon={result.item.icon} />
               <span className="app-label"><span className="name">{result.item.title}</span>{view === "list" && <span className="app-description">{result.item.subtitle || "Application"}</span>}</span>{view === "list" && <Icon name="forward" width="16" height="16" />}
 
             </li>;

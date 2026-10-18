@@ -13,6 +13,17 @@ use meridian_shell::{greeter, install_css, paths, preflight};
 
 fn main() -> glib::ExitCode {
     meridian_shell::init_logging();
+    let _instance = match meridian_shell::instance::InstanceGuard::acquire("greeter") {
+        Ok(guard) => guard,
+        Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+            log::info!("component=greeter event=duplicate_instance_rejected");
+            return glib::ExitCode::SUCCESS;
+        }
+        Err(error) => {
+            log::error!("component=greeter event=instance_lock_failed error={error}");
+            return glib::ExitCode::FAILURE;
+        }
+    };
     let dev = std::env::var_os("MERIDIAN_DEV").is_some_and(|v| v == "1");
 
     // Not unique: no D-Bus name needed on the login screen.

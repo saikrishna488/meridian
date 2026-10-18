@@ -71,13 +71,23 @@ impl Client {
     pub async fn connect() -> Result<Client, LoginError> {
         let path = std::env::var("GREETD_SOCK")
             .map_err(|_| LoginError::Failed("GREETD_SOCK is not set (not started by greetd?)".into()))?;
-        let address = gio::UnixSocketAddress::new(std::path::Path::new(&path));
-        let conn = gio::SocketClient::new().connect_future(&address).await?;
+        Self::connect_at(std::path::Path::new(&path)).await
+    }
+
+    async fn connect_at(path: &std::path::Path) -> Result<Client, LoginError> {
+        let address = gio::UnixSocketAddress::new(path);
+        let client = gio::SocketClient::new();
+        client.set_timeout(30);
+        let conn = client.connect_future(&address).await?;
+        conn.socket().set_timeout(30);
         Ok(Client { conn })
     }
 
     async fn send(&self, request: &Request<'_>) -> Result<(), LoginError> {
         let body = serde_json::to_vec(request).map_err(|e| LoginError::Failed(e.to_string()))?;
+        if body.len() > MAX_MESSAGE as usize {
+            return Err(LoginError::Failed("Login request is too large.".into()));
+        }
         let mut message = (body.len() as u32).to_ne_bytes().to_vec();
         message.extend_from_slice(&body);
         self.conn
@@ -120,7 +130,11 @@ impl Client {
     ) -> Result<(), LoginError> {
         self.send(&Request::CreateSession { username }).await?;
         let mut answered_password = false;
-        loop {
+        for step in 0..32 {
+            if step == 31 {
+                let _ = self.cancel().await;
+                return Err(LoginError::Failed("Too many authentication prompts.".into()));
+            }
             let response = self.receive().await?;
             match next_step(&response, answered_password) {
                 Step::Done => break,
@@ -158,6 +172,12 @@ impl Client {
     }
 }
 
+impl Drop for Client {
+    fn drop(&mut self) {
+        let _ = self.conn.socket().close();
+    }
+}
+
 enum Answer {
     Password,
     Username,
@@ -192,6 +212,40 @@ fn next_step(response: &Response, answered_password: bool) -> Step {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn interrupted_and_malformed_socket_responses_fail_cleanly() {
+        use std::io::Write;
+        use std::os::unix::net::UnixListener;
+        let root = std::env::temp_dir().join(format!("meridian-greetd-wire-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let context = glib::MainContext::new();
+        for (index, message) in [vec![], vec![1, 0], (MAX_MESSAGE + 1).to_ne_bytes().to_vec(), {
+            let mut bytes = 3u32.to_ne_bytes().to_vec();
+            bytes.extend_from_slice(b"bad");
+            bytes
+        }]
+        .into_iter()
+        .enumerate()
+        {
+            let path = root.join(index.to_string());
+            let listener = UnixListener::bind(&path).unwrap();
+            let thread = std::thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream.write_all(&message).unwrap();
+            });
+            context
+                .with_thread_default(|| {
+                    context.block_on(async {
+                        let client = Client::connect_at(&path).await.unwrap();
+                        assert!(client.receive().await.is_err());
+                    })
+                })
+                .unwrap();
+            thread.join().unwrap();
+        }
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn wire_format_matches_greetd_ipc() {

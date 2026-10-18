@@ -2,7 +2,7 @@
 
 Status: accepted with implementation changes.
 
-> Implementation update: the WebKitGTK/Rust choice remains current. GTK also supplies native window controls and dialogs. Terminal disables WebKit hardware acceleration. The original footprint estimate and alternative-engine comparisons below are historical, not measured guarantees or a current compatibility survey.
+> Implementation update: the WebKitGTK/Rust choice remains current. GTK also supplies native window controls and dialogs. Terminal disables WebKit hardware acceleration. [ADR-0008](0008-component-recovery.md) replaces shared renderer state with isolated surface contexts. The original footprint estimate and alternative-engine comparisons below are historical, not measured guarantees or a current compatibility survey.
 > See [current architecture](../ARCHITECTURE.md).
 
 ## Context

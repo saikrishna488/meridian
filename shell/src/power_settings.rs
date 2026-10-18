@@ -1,5 +1,5 @@
 //! Battery readings and validated screen-lock preferences.
-use gtk::{gio, glib, prelude::*};
+use gtk::glib;
 use meridian_protocol::{BatteryInfo, ErrorBody, ErrorCode, IdleSettings, PowerState};
 use std::path::{Path, PathBuf};
 fn error(e: impl std::fmt::Display) -> ErrorBody {
@@ -73,27 +73,13 @@ fn valid(settings: &IdleSettings) -> bool {
         && settings.blank_after > settings.lock_after
 }
 pub fn idle() -> IdleSettings {
-    std::fs::read(path())
-        .ok()
-        .and_then(|data| serde_json::from_slice(&data).ok())
-        .filter(valid)
-        .unwrap_or_else(defaults)
+    crate::config::read(&path()).filter(valid).unwrap_or_else(defaults)
 }
 pub fn save(settings: IdleSettings) -> Result<IdleSettings, ErrorBody> {
     if !valid(&settings) {
         return Err(error("Choose a supported lock delay and screen-off delay."));
     }
-    let target = path();
-    std::fs::create_dir_all(target.parent().unwrap()).map_err(error)?;
-    gio::File::for_path(target)
-        .replace_contents(
-            &serde_json::to_vec(&settings).map_err(error)?,
-            None,
-            false,
-            gio::FileCreateFlags::PRIVATE | gio::FileCreateFlags::REPLACE_DESTINATION,
-            gio::Cancellable::NONE,
-        )
-        .map_err(error)?;
+    crate::config::save(&path(), &settings)?;
     Ok(settings)
 }
 #[cfg(test)]
