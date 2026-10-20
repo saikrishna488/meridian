@@ -18,7 +18,7 @@ export function Dock() {
   const [layout, setLayout] = useState<string[]>([]);
   const [expanded, setExpanded] = useState(false);
   const [dropping, setDropping] = useState<string | null>(null);
-  const [context, setContext] = useState<Item | null>(null);
+  const [context, setContext] = useState<(Item & { x: number; y: number }) | null>(null);
   const [status, setStatus] = useState("");
   useMenuFocus(contextMenu, !!context, () => setContext(null));
   useEffect(() => {
@@ -113,19 +113,18 @@ export function Dock() {
             title={running.length > 1 ? `${item.name} · ${running.length} windows` : item.name} aria-label={item.name} aria-description={running.length > 1 ? `${running.length} windows. Click to switch to the next window.` : undefined} aria-pressed={item.special ? undefined : active} aria-haspopup={item.special === "applications" ? "dialog" : undefined}
             aria-expanded={item.special === "applications" ? expanded : undefined} data-tooltip={running.length > 1 ? `${item.name} · ${running.length} windows` : item.name}
             draggable={item.special !== "trash"} onDragStart={event => start(event, item)} onDragOver={event => over(event, item.key)} onDrop={event => void drop(event, item)}
-            onContextMenu={event => { event.preventDefault(); if (!item.special) setContext(item); }} onClick={() => click(item)}>
+            onContextMenu={event => { event.preventDefault(); if (!item.special) setContext({ ...item, x: event.clientX, y: event.clientY }); }} onClick={() => click(item)}>
             {item.special === "applications" ? <AppIcon name="Applications" icon="view-app-grid" /> : item.special === "trash" ? <AppIcon name="Trash" icon="user-trash" /> : <AppIcon id={item.app?.id} name={item.name} icon={item.app?.icon} />}
             {running.length > 1 && <span className="dock-window-count" aria-hidden="true">{running.length > 99 ? "99+" : running.length}</span>}
           </button>
         </li>;
       })}
     </ul>
-    {context && <div ref={contextMenu} className="dock-context" role="menu" aria-label={`${context.name} actions`}>
-      <strong>{context.name}</strong>
+    {context && <div ref={contextMenu} className="dock-context" role="menu" aria-label={`${context.name} actions`} style={{ left: Math.max(4, Math.min(context.x - (dock.current?.getBoundingClientRect().left ?? 0), (dock.current?.clientWidth ?? window.innerWidth) - 176)) }}>
       <button role="menuitem" disabled={!windows.some(w => w.name.toLowerCase() === context.name.toLowerCase())} onClick={() => {
         void Promise.all(windows.filter(w => w.name.toLowerCase() === context.name.toLowerCase()).map(w => request({ method: "windows.close", params: { id: w.id } }))).catch(fail); setContext(null);
       }}>Quit</button>
-      <button role="menuitem" disabled={!pins.includes(context.key)} onClick={() => { void request({ method: "dock.pin", params: { id: context.key, pinned: false } }).catch(fail); setContext(null); }}>Remove from dock</button>
+      <button role="menuitem" disabled={!pins.includes(context.key)} onClick={() => { void request({ method: "dock.pin", params: { id: context.key, pinned: false } }).catch(fail); setContext(null); }}>Remove from panel</button>
     </div>}
     {status && <button className="dock-error" role="status" onClick={() => setStatus("")}>{status}</button>}
   </nav>;

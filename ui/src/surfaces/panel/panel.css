@@ -13,11 +13,9 @@ body { height: var(--dock-surface-height); padding: 0; }
 .window.running[aria-pressed="true"]::after { width: 16px; background: var(--action); }
 .dock-trash { margin-left: 5px; padding-left: 10px; border-left: 1px solid #ffffff35; }
 .dock-drop-target, .bar.drop-active { outline: 2px solid #8fbcff; border-radius: 13px; }
-.dock-context { position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 5px 10px; border-radius: inherit; background: #303a4c; box-shadow: var(--shadow-lg); font-size: 12px; }
-.dock-context strong { max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dock-context button, .dock-error { flex: none; border: 0; padding: 8px; border-radius: 8px; background: #ffffff20; color: inherit; cursor: pointer; }
+.dock-context { position: absolute; top: 3px; z-index: 5; display: grid; gap: 2px; width: 168px; padding: 3px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-raised); box-shadow: var(--shadow-lg); font-size: 12px; }
+.dock-context button, .dock-error { min-height: 24px; border: 0; padding: 3px 8px; border-radius: 6px; background: var(--chrome-hover); color: inherit; cursor: pointer; text-align: left; }
 .dock-context button:disabled { opacity: .4; cursor: default; }
-.bar:has(.dock-context) { min-width: min(340px, calc(100vw - 40px)); }
 .dock-error { position: absolute; inset: 0; background: #553336; font-size: 12px; overflow: auto; z-index: 6; }
 [data-theme="light"] .bar { background: rgb(243 246 251 / .96); border-color: #c8d1df; color: #202b3c; box-shadow: 0 6px 12px #17294438, inset 0 1px 0 #fff; }
 [data-theme="light"] .bar button:hover, [data-theme="light"] .window[aria-pressed="true"] { background: #2841641a; }
