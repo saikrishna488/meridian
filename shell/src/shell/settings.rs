@@ -65,6 +65,22 @@ impl Shell {
                 let networks = crate::files::blocking(crate::settings_devices::wifi_networks).await?;
                 proto::reply_ok(&networks).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
             }))),
+            Request::SettingsWifiProfiles => Ok(Reply::Later(Box::pin(async move {
+                let profiles = crate::files::blocking(crate::settings_devices::wifi_profiles).await?;
+                proto::reply_ok(&profiles).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
+            Request::SettingsWifiConfig(choice) => Ok(Reply::Later(Box::pin(async move {
+                let config = crate::files::blocking(move || crate::settings_devices::wifi_config(&choice.uuid)).await?;
+                proto::reply_ok(&config).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
+            Request::SettingsWifiConfigSet(choice) => Ok(Reply::Later(Box::pin(async move {
+                crate::files::blocking(move || crate::settings_devices::wifi_config_set(choice)).await?;
+                proto::reply_ok(&()).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
+            Request::SettingsWifiProfileAction(choice) => Ok(Reply::Later(Box::pin(async move {
+                crate::files::blocking(move || crate::settings_devices::wifi_profile_action(choice)).await?;
+                proto::reply_ok(&()).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
             Request::SettingsWifiConnect(choice) => Ok(Reply::Later(Box::pin(async move {
                 crate::files::blocking(move || crate::settings_devices::wifi_connect(choice)).await?;
                 proto::reply_ok(&()).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))

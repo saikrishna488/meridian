@@ -1,3 +1,4 @@
+import { Button } from "./ui/button";
 import { useEffect, useRef, useState } from "react";
 
 export function ConfirmButton({ id, className, label, action, report, role, disabled = false }: {
@@ -19,6 +20,6 @@ export function ConfirmButton({ id, className, label, action, report, role, disa
     try { await action(); } catch (error) { report(error); }
     finally { setBusy(false); setArmed(false); }
   }
-  return <button id={id} role={role} type="button" className={`${className}${armed ? " armed" : ""}`}
-    disabled={busy || disabled} onClick={() => void click()}>{armed ? `${label}?` : label}</button>;
+  return <Button id={id} role={role} type="button" className={`${className}${armed ? " armed" : ""}`}
+    disabled={busy || disabled} onClick={() => void click()}>{armed ? `${label}?` : label}</Button>;
 }

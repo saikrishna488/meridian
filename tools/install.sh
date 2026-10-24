@@ -69,10 +69,11 @@ install_files() {
         "$PREFIX/bin/meridian-greeter" "$PREFIX/bin/meridian-vault" "$PREFIX/bin/meridian-drift" \
         "$PREFIX/bin/meridian-session" "$SESSION_FILE" /etc/pam.d/meridian-lock \
         "$PREFIX/share/applications/meridian-vault.desktop" "$PREFIX/share/applications/meridian-drift.desktop"
+    rm -f "$PREFIX/bin/meridian-vault" "$PREFIX/share/applications/meridian-vault.desktop"
     step "Installing Meridian to $PREFIX"
     install -Dm755 "$ROOT/target/release/meridian-shell" "$PREFIX/bin/meridian-shell"
     install -Dm755 "$ROOT/target/release/meridian-greeter" "$PREFIX/bin/meridian-greeter"
-    for native_app in vault drift; do
+    for native_app in drift; do
         install -Dm755 "$ROOT/target/release/meridian-$native_app" "$PREFIX/bin/meridian-$native_app"
         install -Dm644 "$ROOT/session/meridian-$native_app.desktop" "$PREFIX/share/applications/meridian-$native_app.desktop"
     done
@@ -98,11 +99,12 @@ install_files() {
     sed "s|^Exec=.*|Exec=$PREFIX/bin/meridian-session|" "$ROOT/session/meridian.desktop" > "$SESSION_FILE"
     chmod 644 "$SESSION_FILE"
 
-    step "Installing the lock screen's PAM service"
-    install -Dm644 "$ROOT/session/meridian-lock.pam" /etc/pam.d/meridian-lock
+    # Remove the legacy custom locker's PAM service; swaylock uses its own
+    # package-provided PAM configuration.
+    rm -f /etc/pam.d/meridian-lock
 
     if command -v restorecon >/dev/null; then
-        restorecon -R "$PREFIX/bin/meridian-"* "$SHARE" "$SESSION_FILE" /etc/pam.d/meridian-lock
+        restorecon -R "$PREFIX/bin/meridian-"* "$SHARE" "$SESSION_FILE"
     fi
     meridian_transaction_commit
     echo "Installed. \"Meridian\" now appears in the login screen's session list."

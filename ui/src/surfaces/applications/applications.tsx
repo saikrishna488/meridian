@@ -118,8 +118,8 @@ function Applications() {
     event.preventDefault();
   });
   return <>
-    <div className={`scrim${dragging ? " dragging" : ""}`} id="scrim" onDragOver={event => { if (event.dataTransfer.types.includes(APP_DRAG)) event.preventDefault(); }} onDrop={event => { const id = event.dataTransfer.getData(APP_DRAG); if (!id) return; event.preventDefault(); setDragging(false); void request({ method: "desktop.add_app", params: { id } }).then(() => dismiss()).catch(report); }} onClick={() => void dismiss().catch(report)} />
-    <section ref={menu} className={`menu${dragging ? " dragging" : ""}${visible ? "" : " hidden"}`} id="menu" role="dialog" aria-label="Applications"
+    <div hidden={!visible} className={`scrim${dragging ? " dragging" : ""}`} id="scrim" onDragOver={event => { if (event.dataTransfer.types.includes(APP_DRAG)) event.preventDefault(); }} onDrop={event => { const id = event.dataTransfer.getData(APP_DRAG); if (!id) return; event.preventDefault(); setDragging(false); void request({ method: "desktop.add_app", params: { id } }).then(() => dismiss()).catch(report); }} onClick={() => void dismiss().catch(report)} />
+    <section ref={menu} inert={!visible} aria-hidden={!visible} className={`menu${dragging ? " dragging" : ""}${visible ? "" : " hidden"}`} id="menu" role="dialog" aria-label="Applications"
       >
       <header className="launcher-heading"><div><span className="launcher-eyebrow">YOUR WORKSPACE</span><h1>Applications</h1></div><button className="close-applications" aria-label="Close applications" onClick={() => void dismiss().catch(report)}><Icon name="close" width="18" height="18" /></button></header>
       <div className="apps-toolbar">

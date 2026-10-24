@@ -1,5 +1,7 @@
 # Alpha 0.3 performance work
 
+> Nova and Vault have since been removed from the project. References below describe the earlier implementation.
+
 Status: implementation and nested desktop evidence; **not a qualified Alpha 0.3 release**. Phase 1 hardware/security qualification remains required. The workspace version remains unchanged until release qualification.
 
 ## Implemented

@@ -82,27 +82,56 @@ export function usePopover(
   return { visible, menu, dismiss };
 }
 
-/** Keep a modal's keyboard focus inside it and restore focus when it closes. */
+// Each WebView has its own focus stack. Only its top dialog handles keys.
+const dialogScopes: HTMLElement[] = [];
+const focusSelector = 'button, input, select, textarea, a[href], [tabindex], [contenteditable="true"]';
+
+/** Keep dialog focus contained, allow its owned listboxes, and restore its trigger. */
 export function useDialogFocus(ref: RefObject<HTMLElement | null>, open: boolean, close: () => void) {
   const dismiss = useCallbackRef(close);
   useEffect(() => {
     const element = ref.current;
     if (!open || !element) return;
     const previous = document.activeElement as HTMLElement | null;
-    const controls = () => Array.from(element.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled):not([aria-hidden="true"]), a[href], [tabindex="0"]'));
-    (element.querySelector<HTMLElement>('[autofocus], [data-autofocus]') ?? controls()[0])?.focus();
+    const originalTabIndex = element.getAttribute("tabindex");
+    if (originalTabIndex === null) element.tabIndex = -1;
+    const childScope = dialogScopes.findIndex(scope => element.contains(scope));
+    if (childScope < 0) dialogScopes.push(element); else dialogScopes.splice(childScope, 0, element);
+    const top = () => dialogScopes.at(-1) === element;
+    const controls = () => Array.from(element.querySelectorAll<HTMLElement>(focusSelector)).filter(item =>
+      item.tabIndex >= 0 && !item.matches(":disabled") && !item.closest('[hidden], [inert], [aria-hidden="true"]') &&
+      getComputedStyle(item).display !== "none" && getComputedStyle(item).visibility !== "hidden");
+    const focus = () => {
+      const items = controls();
+      (items.find(item => item.matches('[autofocus], [data-autofocus]')) ?? items[0] ?? element).focus();
+    };
+    const owns = (target: Node) => element.contains(target) || Array.from(element.querySelectorAll('[aria-controls]')).some(control => {
+      const id = control.getAttribute("aria-controls");
+      return id && document.getElementById(id)?.contains(target);
+    });
+    const focusin = (event: FocusEvent) => { if (top() && event.target instanceof Node && !owns(event.target)) focus(); };
     const keydown = (event: KeyboardEvent) => {
+      if (!top()) return;
       if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); dismiss(); }
       if (event.key === "Tab") {
-        const items = controls(); if (!items.length) { event.preventDefault(); return; }
+        const items = controls();
         const index = items.indexOf(document.activeElement as HTMLElement);
-        if (index < 0 || (!event.shiftKey && index === items.length - 1) || (event.shiftKey && index === 0)) {
-          event.preventDefault(); (event.shiftKey ? items.at(-1) : items[0])?.focus();
+        if (!items.length || index < 0 || (!event.shiftKey && index === items.length - 1) || (event.shiftKey && index === 0)) {
+          event.preventDefault(); (event.shiftKey ? items.at(-1) ?? element : items[0] ?? element).focus();
         }
       }
     };
-    element.addEventListener("keydown", keydown);
-    return () => { element.removeEventListener("keydown", keydown); if (previous?.isConnected) previous.focus(); };
+    if (top()) focus();
+    document.addEventListener("keydown", keydown);
+    document.addEventListener("focusin", focusin);
+    return () => {
+      document.removeEventListener("keydown", keydown);
+      document.removeEventListener("focusin", focusin);
+      const index = dialogScopes.lastIndexOf(element);
+      if (index >= 0) dialogScopes.splice(index, 1);
+      if (originalTabIndex === null) element.removeAttribute("tabindex");
+      if (previous?.isConnected && !previous.matches(":disabled") && !previous.closest('[inert], [hidden]')) previous.focus();
+    };
   }, [ref, open, dismiss]);
 }
 

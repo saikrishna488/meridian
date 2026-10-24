@@ -1,16 +1,18 @@
-.control-center { right: 12px; top: 12px; bottom: auto; width: min(390px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow-y: auto; padding: 22px; border: 1px solid var(--line); border-radius: 22px; transform-origin: top right; color: var(--ink); background: var(--surface-raised); }
+@import url("../../lib/floating-panels.css");
+
+.control-center { right: 12px; top: 12px; bottom: auto; width: min(390px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow-y: auto; padding: 22px; border: 1px solid var(--line); border-radius: var(--radius-lg); transform-origin: top right; color: var(--ink); background: var(--surface-raised); }
 [data-theme="light"] .control-center { background: var(--surface-raised); color: var(--ink); }
 .control-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 22px; }
 .control-heading h1 { font-size: 18px; font-weight: 600; letter-spacing: -.5px; margin: 0; }
 .control-heading button { display: flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink-muted); font-size: 11px; padding: 7px 9px; cursor: pointer; }
 .control-heading button:hover { background: var(--surface-hover); color: var(--ink); }
 .control-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-.control-card { min-width: 0; padding: 14px 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow-card); }
+.control-card { min-width: 0; padding: 14px 10px; border: 1px solid transparent; border-radius: var(--radius-md); background: var(--surface-subtle); box-shadow: none; }
 .control-connection { display: flex; flex-direction: column; align-items: center; gap: 11px; text-align: center; }
 .control-card strong { font-size: 12px; font-weight: 600; }
 .control-card small { display: block; margin-top: 4px; font-size: 11px; color: var(--ink-muted); }
 .control-symbol { display: grid; place-items: center; flex: none; width: 36px; height: 36px; border-radius: 12px; background: var(--surface-subtle); color: var(--ink-muted); }
-.control-symbol.enabled { background: #2563c7; color: white; }
+.control-symbol.enabled { background: var(--button-primary); color: white; }
 .appearance-tile { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: inherit; cursor: pointer; }
 .appearance-tile:hover { background: var(--surface-hover); }
 .appearance-tile[aria-pressed="true"] .control-symbol { color: var(--selection-ink); background: var(--selection); }
@@ -24,12 +26,96 @@
 .slider::-moz-range-thumb { width: 19px; height: 19px; border: 1px solid #0002; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px #0003; }
 .value { min-width: 34px; font-size: 11px; font-variant-numeric: tabular-nums; text-align: right; color: var(--ink-muted); }
 .slider:disabled { opacity: .35; cursor: default; }
-.control-footer { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding-top: 16px; margin-top: 16px; border-top: 1px solid var(--line); }
-.control-footer button, .power-actions button { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 36px; padding: 8px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--ink); font-size: 11px; cursor: pointer; }
-.control-footer button:hover, .power-actions button:hover { background: var(--selection); color: var(--selection-ink); }
-.control-footer kbd { font: 9px var(--font-ui); color: var(--ink-muted); }
-.power-actions { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 2px; }
-.power-actions button.armed { background: var(--selection); color: var(--selection-ink); border-color: var(--focus-ring); }
 .control-center .status:not(:empty) { margin-top: 12px; padding: 0; font-size: 12px; line-height: 1.5; color: var(--danger); }
-@media (max-width: 360px) { .control-center { padding: 16px; } .control-heading button span, .control-footer kbd { display: none; } .control-grid { gap: 6px; } }
+@media (max-width: 360px) { .control-center { padding: 16px; } .control-heading button span { display: none; } .control-grid { gap: 6px; } }
 .control-card-title .sound-settings-link { display:grid; place-items:center; width:26px; height:26px; margin:-5px -5px -5px auto; border:0; border-radius:7px; background:transparent; color:var(--ink-muted); cursor:pointer; }.control-card-title .sound-settings-link:hover { background:var(--selection); color:var(--selection-ink); }
+
+.control-dnd { display:flex; align-items:center; justify-content:space-between; gap:14px; }
+
+/* Meridian high-contrast desktop refresh, 2026-10 */
+:root .menu.control-center {
+  width: min(480px, calc(100vw - 24px));
+  padding: 24px;
+  background: #000;
+  color: #fff;
+  border: 2px solid #fff;
+  border-radius: 16px;
+}
+.control-center .control-grid { gap: 12px; }
+.control-center .control-card { background: #111; border: 1px solid #fff; }
+.control-center .control-heading { margin-bottom: 24px; }
+
+/* Real quick controls remain in place; this only refines their shell. */
+.control-center {
+  background: var(--glass-background-strong, var(--surface-raised));
+  border: 1px solid var(--glass-border, var(--line));
+  border-radius: 22px;
+  box-shadow: var(--shadow-lg);
+  -webkit-backdrop-filter: blur(var(--glass-blur, 0px)) saturate(120%);
+  backdrop-filter: blur(var(--glass-blur, 0px)) saturate(120%);
+}
+:root .control-center .control-card { background: rgb(255 255 255 / .065); border: 1px solid rgb(255 255 255 / .08); }
+.control-center .control-symbol:not(.enabled) { background: rgb(255 255 255 / .08); }
+.control-center .control-symbol.enabled { background: var(--button-primary); color: #fff; }
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
+  .control-center { background: var(--surface-raised); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .control-center .control-card { background: var(--surface-subtle); border-color: var(--line); }
+}
+.control-center .control-heading button,
+.control-center .control-card-title button { color: #fff; border-color: #fff; }
+.control-center .control-heading button:hover,
+.control-center .control-card-title button:hover { background: #123b75; color: #fff; }
+@media (max-width: 420px) {
+  .control-center { width: calc(100vw - 16px); right: 8px; top: 8px; padding: 18px; }
+}
+
+/* Quick Settings layout from the concept artwork: compact 2×2 tiles, then
+   full-width brightness and sound controls. */
+:root .menu.control-center {
+  width:min(356px,calc(100vw - 24px));
+  padding:18px;
+  background:#000;
+  color:var(--ink);
+  border:1px solid var(--glass-border);
+  border-radius:19px;
+  box-shadow:0 18px 54px rgb(0 0 0 / .42),0 3px 12px rgb(0 0 0 / .24);
+  -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(125%);
+  backdrop-filter:blur(var(--glass-blur)) saturate(125%);
+}
+.control-heading { margin-bottom:16px; }
+.control-heading h1 { font-size:15px; letter-spacing:-.2px; }
+.control-heading button { width:auto; min-height:30px; padding:5px 8px; background:transparent; color:var(--ink-muted); border-color:var(--glass-border); }
+.control-heading .settings-shortcut { display:grid; place-items:center; width:30px; min-width:30px; height:30px; min-height:30px; padding:0; }
+.control-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+:root .control-center .control-card { min-height:68px; padding:11px; border:1px solid var(--glass-border); border-radius:13px; background:rgb(17 17 17 / .96); box-shadow:none; }
+.control-center .control-connection { display:grid; grid-template-columns:36px minmax(0,1fr) auto; align-items:center; gap:9px; text-align:left; }
+.control-center .control-connection > div { min-width:0; }
+.control-center .control-connection strong,.control-center .control-dnd strong { font-size:11px; }
+.control-center .control-connection small,.control-center .control-dnd small,.control-center .control-status-tile small { font-size:10px; }
+.control-center .control-symbol { width:34px; height:34px; border-radius:11px; }
+.control-center .control-symbol.enabled { background:#3679e8; color:#fff; }
+.control-center .control-dnd { display:grid; grid-template-columns:36px minmax(0,1fr) auto; align-items:center; gap:9px; }
+.control-center .control-status-tile { display:flex; align-items:center; gap:9px; width:100%; color:var(--ink); text-align:left; cursor:pointer; }
+.control-center .control-status-tile:disabled { cursor:default; opacity:.6; }
+.control-center .control-status-tile > span:last-child { min-width:0; }
+.control-center .control-status-tile strong { display:block; font-size:11px; }
+.control-center .control-status-tile .battery-icon { width:20px; height:18px; }
+.control-center .appearance-tile { display:flex; flex-direction:row; justify-content:flex-start; gap:9px; min-height:54px; text-align:left; }
+.control-center .appearance-tile strong { font-size:11px; }
+.control-center .appearance-tile small { margin:0 0 0 auto; font-size:10px; }
+.control-center .appearance-tile .control-symbol { width:30px; height:30px; }
+.control-center .appearance-hint { display:none; }
+.control-center .control-wide { grid-column:1/-1; min-height:59px; padding:12px; }
+.control-center .control-card-title { margin-bottom:8px; }
+.control-center .slider { height:7px; background:linear-gradient(to right,#79aaff var(--fill),color-mix(in srgb,var(--ink) 18%,transparent) var(--fill)); }
+.control-center .control-heading button:hover,.control-center .control-card-title button:hover { background:var(--surface-hover); color:var(--ink); }
+@media(max-width:360px) {
+  :root .menu.control-center { padding:14px; }
+  .control-center .control-grid { gap:7px; }
+  .control-center .control-card { padding:9px; }
+  .control-center .meridian-toggle { width:36px; }
+}
+@media (prefers-reduced-transparency:reduce),(prefers-contrast:more),(forced-colors:active) {
+  :root .menu.control-center { background:#000; -webkit-backdrop-filter:none; backdrop-filter:none; box-shadow:var(--shadow-lg); }
+  :root .control-center .control-card { background:var(--surface-subtle); border-color:var(--line); }
+}

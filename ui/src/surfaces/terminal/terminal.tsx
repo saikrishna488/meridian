@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { hello, on, request } from "../../lib/bridge";
-import { errorMessage, mount, useWindowKey } from "../../lib/react";
+import { errorMessage, mount, useMenuFocus, useWindowKey } from "../../lib/react";
 import { currentAppearance, useAppearance } from "../../lib/appearance";
 import { Terminal as Emulator } from "../../vendor/xterm";
 import { FitAddon } from "../../vendor/addon-fit";
@@ -17,6 +17,15 @@ function Session({ active, fontSize, cwd, appearance, onExit }: { active: boolea
   const refit = useRef<(() => void) | null>(null);
   const [error, setError] = useState("");
   const [scrolledUp, setScrolledUp] = useState(false);
+  const [context, setContext] = useState<{ x: number; y: number } | null>(null);
+  const contextMenu = useRef<HTMLDivElement>(null);
+  useMenuFocus(contextMenu, !!context, () => setContext(null));
+  useEffect(() => {
+    if (!context) return;
+    const dismiss = (event: PointerEvent) => { if (!contextMenu.current?.contains(event.target as Node)) setContext(null); };
+    document.addEventListener("pointerdown", dismiss);
+    return () => document.removeEventListener("pointerdown", dismiss);
+  }, [context]);
   const exit = useRef(onExit); exit.current = onExit;
   useEffect(() => {
     let alive = true, id: number | null = null, timer: ReturnType<typeof setTimeout> | undefined;
@@ -143,7 +152,13 @@ function Session({ active, fontSize, cwd, appearance, onExit }: { active: boolea
     }
     if (active) refit.current?.();
   }, [active, fontSize, appearance]);
-  return <section className={`terminal-session${active ? " active" : ""}`} role="tabpanel" aria-label="Terminal output" aria-hidden={!active}>{scrolledUp && <button className="terminal-follow" onClick={() => { emulator.current?.scrollToBottom(); emulator.current?.focus(); }}>Jump to latest output</button>}<div className="terminal-screen" ref={container} aria-label="Interactive terminal" />{error && <p className="terminal-error" role="alert">{error}</p>}</section>;
+  return <section className={`terminal-session${active ? " active" : ""}`} role="tabpanel" aria-label="Terminal output" aria-hidden={!active} onContextMenu={event => { event.preventDefault(); event.stopPropagation(); setContext({ x: event.clientX, y: event.clientY }); }}>{scrolledUp && <button className="terminal-follow" onClick={() => { emulator.current?.scrollToBottom(); emulator.current?.focus(); }}>Jump to latest output</button>}<div className="terminal-screen" ref={container} aria-label="Interactive terminal" />{error && <p className="terminal-error" role="alert">{error}</p>}
+    {context && <div ref={contextMenu} className="terminal-context" role="menu" aria-label="Terminal actions" style={{ left: Math.max(8, Math.min(context.x, window.innerWidth - 190)), top: Math.max(8, Math.min(context.y, window.innerHeight - 150)) }}>
+      <button role="menuitem" disabled={!emulator.current?.hasSelection()} onClick={() => { const text = emulator.current?.getSelection(); if (text) void request({ method: "terminal.copy", params: { data: text } }).catch(e => setError(errorMessage(e))); setContext(null); }}>Copy</button>
+      <button role="menuitem" onClick={() => { void request({ method: "terminal.paste" }).then(text => { if (text) emulator.current?.paste(text); }).catch(e => setError(errorMessage(e))); setContext(null); }}>Paste</button>
+      <button role="menuitem" onClick={() => { emulator.current?.selectAll(); emulator.current?.focus(); setContext(null); }}>Select all</button>
+    </div>}
+  </section>;
 }
 function Terminal() {
   const appearance = useAppearance();

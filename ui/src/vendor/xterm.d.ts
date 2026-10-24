@@ -21,6 +21,8 @@ export class Terminal {
   onData(callback: (data: string) => void): { dispose(): void };
   onResize(callback: (size: { cols: number; rows: number }) => void): { dispose(): void };
   attachCustomKeyEventHandler(callback: (event: KeyboardEvent) => boolean): void;
+  hasSelection(): boolean;
   getSelection(): string;
+  selectAll(): void;
   paste(data: string): void;
 }

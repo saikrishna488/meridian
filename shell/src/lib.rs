@@ -26,7 +26,6 @@ mod search;
 mod settings_devices;
 pub mod shell;
 pub mod startup;
-mod store;
 pub mod surface;
 mod terminal;
 mod transfer;

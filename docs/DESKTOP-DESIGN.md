@@ -58,8 +58,10 @@ manager. There is no power timeout editor yet; defaults live in
 - UI build, type checking, and interaction tests cover list-view navigation,
   saved view preference, power confirmation, error recovery, and icon fallback.
 - Protocol tests verify session controls are restricted to desktop controls.
-- `bash tools/tests/power.sh` checks lock confirmation and refusal, standby/wake
-  commands, and lock-before-blank behavior with isolated command fixtures.
+- `bash tools/tests/power.sh` checks the swaylock hand-off, lock refusal when
+  swaylock is missing or fails, standby/wake commands, and lock-before-blank
+  behavior with isolated command fixtures (a swaylock mock stands in for the
+  real lock screen, so the developer's session is never locked).
 - Rust workspace tests, formatting, and shell Clippy checks validate native changes.
 - Visual previews use the actual WebKit engine with deterministic sample data.
   Physical standby, PAM unlock, and suspend/resume need verification in the

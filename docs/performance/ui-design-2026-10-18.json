@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-18",
+  "method": "Sum unique ui/dist files by extension after the same npm production build; exclude source maps. Baseline includes pre-existing wireless working-tree changes.",
+  "before_bytes": {
+    ".js": 724649,
+    ".css": 137643
+  },
+  "after_bytes": {
+    ".js": 725691,
+    ".css": 137458
+  },
+  "delta_bytes": {
+    ".js": 1042,
+    ".css": -185
+  },
+  "runtime_memory_cpu_latency": null,
+  "runtime_limitation": "Preview socket EPERM; private nested D-Bus socket EPERM; Gdk.Display.get_default() is None. No comparable runtime measurement available."
+}

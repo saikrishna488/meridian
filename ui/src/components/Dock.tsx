@@ -7,7 +7,7 @@ import type { WindowInfo } from "../lib/generated/WindowInfo";
 import type { SearchItem } from "../lib/generated/SearchItem";
 export const APP_DRAG = "application/x-meridian-app";
 export const DOCK_DRAG = "application/x-meridian-dock-item";
-const report = (error: unknown) => console.error("meridian dock:", error);
+const report = (error: unknown) => console.error("meridian panel:", error);
 type Item = { key: string; name: string; app?: SearchItem; special?: "applications" | "trash" };
 
 export function Dock() {
@@ -56,7 +56,7 @@ export function Dock() {
     const ai = layout.indexOf(a.key), bi = layout.indexOf(b.key);
     return (ai < 0 ? layout.length + items.indexOf(a) : ai) - (bi < 0 ? layout.length + items.indexOf(b) : bi);
   });
-  const fail = (e: unknown) => { report(e); setStatus(e instanceof Error ? e.message : "Couldn’t update the dock"); };
+  const fail = (e: unknown) => { report(e); setStatus(e instanceof Error ? e.message : "Couldn’t update the panel"); };
   function start(event: DragEvent, item: Item) {
     event.dataTransfer.setData(DOCK_DRAG, item.key);
     if (item.app && !isBuiltinApp(item.app.id)) event.dataTransfer.setData(APP_DRAG, item.app.id);
@@ -101,7 +101,7 @@ export function Dock() {
     const window = running[current < 0 ? 0 : (current + 1) % running.length];
     void (window ? request({ method: "windows.activate", params: { id: window.id } }) : item.app ? request({ method: "search.activate", params: { provider: "apps", item_id: item.app.id } }) : Promise.resolve()).catch(fail);
   }
-  return <nav ref={dock} className={`bar${dropping ? " drop-active" : ""}`} aria-label="Application dock"
+  return <nav ref={dock} className={`bar${dropping ? " drop-active" : ""}`} aria-label="Application panel"
     onDragOver={event => over(event, "end")} onDrop={event => void drop(event)} onDragEnd={() => setDropping(null)}
     onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropping(null); }}
     onKeyDown={event => { if (event.key === "Escape") { setContext(null); setStatus(""); event.stopPropagation(); } }}>

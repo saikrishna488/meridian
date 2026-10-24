@@ -15,7 +15,7 @@
   border-radius: var(--radius-lg);
   /* Nearly opaque: backdrop-filter can't blur other apps' windows, so a
      translucent menu would show sharp content through it. */
-  background: rgb(24 26 36 / 0.97);
+  background: var(--surface-raised);
   box-shadow: var(--shadow-lg);
   outline: none;
   transition:
@@ -42,3 +42,7 @@
 .status:not(:empty) {
   padding-bottom: 12px;
 }
+
+/* Closing native surfaces keep their exit transition but release DOM input. */
+.menu.hidden { pointer-events: none; }
+.scrim[hidden] { display: none; pointer-events: none; }

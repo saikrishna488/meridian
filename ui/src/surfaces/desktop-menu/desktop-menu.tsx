@@ -50,8 +50,8 @@ function DesktopMenu() {
     void dismiss().then(() => request({ method: "popover.toggle", params: { popover } })).catch(report);
   }
   return <>
-    <div className="desktop-scrim" onClick={() => void dismiss().catch(report)} />
-    <section ref={menu} className={`desktop-menu${visible ? "" : " hidden"}${about ? " about" : ""}`}
+    <div hidden={!visible} className="desktop-scrim" onClick={() => void dismiss().catch(report)} />
+    <section ref={menu} inert={!visible} aria-hidden={!visible} className={`desktop-menu${visible ? "" : " hidden"}${about ? " about" : ""}`}
       style={about ? undefined : { left: `min(${x}px, max(8px, calc(100vw - 280px)))` }}
       role={about ? "dialog" : "menu"} aria-modal={about || undefined} aria-label={about ? "About this Meridian" : `${label} menu`}>
       {about ? <>

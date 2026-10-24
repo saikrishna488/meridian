@@ -45,7 +45,7 @@ test("launcher and apps reorder, and dragging to trash only requests confirmatio
   ui.get('[aria-label="Firefox"]').dispatchEvent(new ui.window.MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
   await waitFor(() => ui.get('.dock-context [role="menuitem"]'));
   const actions = [...ui.window.document.querySelectorAll('.dock-context button')];
-  assert.deepEqual(actions.map(b => b.textContent), ["Quit", "Remove from dock"]);
+  assert.deepEqual(actions.map(b => b.textContent), ["Quit", "Remove from panel"]);
   assert.equal(actions[0].disabled, true);
   actions[1].click();
   await waitFor(() => ui.requests.some(r => r.method === "dock.pin" && r.params.pinned === false));
@@ -143,7 +143,7 @@ test("Meridian built-in icons and installed app artwork are preserved", async t 
   const built = { id: "meridian-finder.desktop", title: "Finder", icon: "system-file-manager" };
   const ui = await surface(t, "panel", req => req.method === "search.query" ? { serial: req.params.serial, sections: [{ provider: "apps", items: [app, built] }] } : req.method === "dock.list" ? [app.id, built.id] : defaults(req));
   await waitFor(() => ui.get('[aria-label="Finder"] img'));
-  assert.equal(ui.get('[aria-label="Firefox"] img').src, "meridian://app-icons/firefox.desktop"); assert.ok(ui.get('[aria-label="Firefox"] .system-artwork'));
+  assert.equal(ui.get('[aria-label="Firefox"] img').src.split("?")[0], "meridian://app-icons/firefox.desktop"); assert.ok(ui.get('[aria-label="Firefox"] .system-artwork'));
   const fixed = ui.get('[aria-label="Finder"] img').src;
   assert.equal(ui.get('[aria-label="Finder"] img').src, fixed);
 });
@@ -634,7 +634,8 @@ test("shared dropdown supports keyboard selection and four system fonts", async 
   ui.get('.select-trigger[aria-label="System font"]').click();
   await waitFor(() => ui.get('[role="listbox"]'));
   ui.get('[role="listbox"]').dispatchEvent(new ui.window.KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
-  await waitFor(() => ui.get('[role="option"][aria-selected="true"]').textContent.startsWith("Noto Sans"));
+  await waitFor(() => ui.get('[role="option"][data-highlighted="true"]').textContent.startsWith("Noto Sans"));
+  assert.ok(ui.get('[role="option"][aria-selected="true"]').textContent.startsWith("Inter"));
   ui.get('[role="listbox"]').dispatchEvent(new ui.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
   await waitFor(() => ui.requests.some(r => r.method === "desktop.font_set"));
   assert.deepEqual(ui.requests.find(r => r.method === "desktop.font_set").params, { id: "Noto Sans" });
@@ -677,17 +678,16 @@ test("missing third-party icons try the theme and retain a visible monogram", as
   const ui = await surface(t, "panel", defaults);
   await waitFor(() => ui.get('[aria-label="Firefox"] img'));
   ui.get('[aria-label="Firefox"] img').dispatchEvent(new ui.window.Event("error"));
-  await waitFor(() => ui.get('[aria-label="Firefox"] img')?.src === "meridian://icons/firefox");
+  await waitFor(() => ui.get('[aria-label="Firefox"] img')?.src.split("?")[0] === "meridian://icons/firefox");
   ui.get('[aria-label="Firefox"] img').dispatchEvent(new ui.window.Event("error"));
   await waitFor(() => !ui.get('[aria-label="Firefox"] img'));
   assert.equal(ui.get('[aria-label="Firefox"] .app-icon').textContent, "F");
 });
 
-test("Drift and Vault use dedicated builtin artwork", async t => {
-  const items = [{ id: "meridian-drift.desktop", title: "Drift" }, { id: "meridian-vault.desktop", title: "Vault" }];
+test("Drift uses dedicated builtin artwork", async t => {
+  const items = [{ id: "meridian-drift.desktop", title: "Drift" }];
   const ui = await surface(t, "panel", req => req.method === "search.query" ? { serial: req.params.serial, sections: [{ provider: "apps", items }] } : req.method === "dock.list" ? items.map(app => app.id) : defaults(req));
-  await waitFor(() => ui.get('[aria-label="Vault"] img'));
-  assert.equal(ui.get('[aria-label="Vault"] img').src, "meridian://ui/desktop-icons/meridian/vault.svg");
+  await waitFor(() => ui.get('[aria-label="Drift"] img'));
   assert.equal(ui.get('[aria-label="Drift"] img').src, "meridian://ui/desktop-icons/meridian/browser.svg");
 });
 
@@ -1042,19 +1042,30 @@ test("non-application launcher results activate without app management actions",
   assert.deepEqual(ui.requests.find(req => req.method === 'search.activate').params, { provider: 'settings', item_id: 'wifi' });
 });
 
-test("Do Not Disturb keeps new messages when its reply is delayed and groups by app", async t => {
-  const item = { id: 1, app: 'Mail', summary: 'Message', body: '', time: Date.now(), unread: false, actions: [] };
+test("Control Center DND preserves newer events without reading notification history", async t => {
   let finish;
-  const ui = await surface(t, 'notifications', req => req.method === 'notifications.do_not_disturb'
-    ? new Promise(resolve => { finish = resolve; }) : req.method === 'notifications.read'
-    ? { available: true, do_not_disturb: false, items: [item] } : defaults(req));
-  ui.emit('popover.shown'); await waitFor(() => ui.get('.notification'));
+  const ui = await surface(t, 'options', req => req.method === 'notifications.do_not_disturb'
+    ? new Promise(resolve => { finish = resolve; }) : req.method === 'notifications.get'
+    ? { available: true, do_not_disturb: false, items: [] } : defaults(req));
+  ui.emit('popover.shown');
+  await waitFor(() => !ui.get('[aria-label="Do Not Disturb"]').disabled);
   ui.get('[aria-label="Do Not Disturb"]').click();
   await waitFor(() => finish);
+  ui.emit('notifications.changed', { available: true, do_not_disturb: true, items: [] });
+  finish({ available: true, do_not_disturb: false, items: [] });
+  await waitFor(() => !ui.get('[aria-label="Do Not Disturb"]').disabled);
+  assert.equal(ui.get('[aria-label="Do Not Disturb"]').getAttribute('aria-checked'), 'true');
+  assert.equal(ui.requests.some(req => req.method === 'notifications.read'), false);
+});
+
+test("Notifications groups messages by app without a duplicate DND control", async t => {
+  const item = { id: 1, app: 'Mail', summary: 'Message', body: '', time: Date.now(), unread: false, actions: [] };
+  const ui = await surface(t, 'notifications', req => req.method === 'notifications.read'
+    ? { available: true, do_not_disturb: false, items: [item] } : defaults(req));
+  ui.emit('popover.shown'); await waitFor(() => ui.get('.notification'));
   ui.emit('notifications.changed', { available: true, do_not_disturb: true, items: [item, { ...item, id: 2, app: 'Calendar', summary: 'Meeting' }] });
-  finish({ available: true, do_not_disturb: true, items: [item] });
-  await waitFor(() => ui.get('[aria-label="Do Not Disturb"]').getAttribute('aria-checked') === 'true');
-  assert.equal(ui.window.document.querySelectorAll('.notification-group').length, 2);
+  await waitFor(() => ui.window.document.querySelectorAll('.notification-group').length === 2);
+  assert.equal(ui.get('[aria-label="Do Not Disturb"]'), null);
   assert.ok(ui.get('.notification-list').textContent.includes('Meeting'));
 });
 
@@ -1107,4 +1118,25 @@ test("primary display selection persists and stale brightness replies cannot aff
   await new Promise(resolve => setTimeout(resolve, 25));
   assert.equal(ui.get('#monitor-brightness').value, '80');
   assert.equal(ui.get('#monitor-brightness').disabled, false);
+});
+
+test("Calendar uses one date tab stop and moves focus across month boundaries", async t => {
+  const ui = await surface(t, "utilities", req => req.method === "shell.hello" ? { surface: "calendar", capabilities: [] } : req.method === "calendar.list" ? [] : null);
+  await waitFor(() => ui.get('.month button[tabindex="0"]'));
+  assert.equal(ui.window.document.querySelectorAll('.month button[tabindex="0"]').length, 1);
+  const initial = ui.get('.month button[tabindex="0"]');
+  const date = new Date(initial.dataset.date + 'T12:00:00');
+  const next = new Date(date); next.setDate(date.getDate() + 7);
+  initial.focus();
+  initial.dispatchEvent(new ui.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+  const dateKey = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  await waitFor(() => ui.window.document.activeElement?.dataset.date === dateKey(next));
+  for (let i = 0; i < 5; i++) {
+    next.setDate(next.getDate() + 7);
+    ui.window.document.activeElement.dispatchEvent(new ui.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+    await waitFor(() => ui.window.document.activeElement?.dataset.date === dateKey(next));
+  }
+  assert.equal(ui.window.document.querySelectorAll('.month button[tabindex="0"]').length, 1);
+  assert.equal(ui.get('.month button[aria-pressed="true"]').dataset.date, dateKey(next));
+  assert.ok(!ui.requests.some(r => r.method === 'calendar.save'));
 });

@@ -2,21 +2,16 @@
   color-scheme: light;
   --terminal-bg: #fafafa;
   --terminal-fg: #202530;
-  --terminal-chrome: #eceef2;
-  --terminal-chrome-strong: #e1e5ec;
-  --terminal-border: #d6dce5;
-  --terminal-ui-text: #293348;
-  --terminal-muted: #566475;
+  --terminal-chrome: var(--surface-subtle);
+  --terminal-chrome-strong: var(--selection);
+  --terminal-border: var(--line);
+  --terminal-ui-text: var(--ink);
+  --terminal-muted: var(--ink-muted);
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
   --terminal-bg: #171a20;
   --terminal-fg: #e7edf7;
-  --terminal-chrome: #24272d;
-  --terminal-chrome-strong: #343b46;
-  --terminal-border: #303640;
-  --terminal-ui-text: #d1dbea;
-  --terminal-muted: #9ca9ba;
 }
 html, body { background: var(--terminal-bg); color: var(--terminal-fg); font-family: "DejaVu Sans Mono", monospace; }
 .terminal-app { display:flex; flex-direction:column; height:100%; min-height:0; overflow:hidden; background:var(--terminal-bg); }
@@ -56,3 +51,7 @@ html, body, #root { height:100%; min-height:0; margin:0; overflow:hidden; }
 .terminal-screen .xterm-viewport::-webkit-scrollbar { width: 12px; }
 .terminal-screen .xterm-viewport::-webkit-scrollbar-thumb { background: var(--terminal-muted); border: 3px solid var(--terminal-bg); border-radius: 8px; }
 .terminal-follow { position:absolute; top:4px; right:16px; z-index:5; border: 1px solid var(--terminal-border); border-radius: 4px; background: var(--terminal-chrome-strong); color: var(--terminal-ui-text); cursor: pointer; padding: 2px 6px; font: inherit; }
+.terminal-context { position:fixed; z-index:30; display:grid; width:176px; padding:5px; border:1px solid var(--terminal-border); border-radius:9px; background:var(--terminal-chrome); color:var(--terminal-ui-text); box-shadow:0 8px 24px #0005; font-family:var(--font-ui); }
+.terminal-context button { min-height:32px; padding:6px 9px; border:0; border-radius:5px; background:transparent; color:inherit; text-align:left; cursor:pointer; font:inherit; font-size:12px; }
+.terminal-context button:hover:not(:disabled), .terminal-context button:focus-visible { background:var(--terminal-chrome-strong); outline:0; }
+.terminal-context button:disabled { opacity:.45; cursor:default; }

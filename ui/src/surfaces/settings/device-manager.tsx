@@ -1,6 +1,8 @@
+import { Dialog } from "../../components/ui/dialog";
+import { Button } from "../../components/ui/button";
 import { useEffect, useRef, useState } from "react";
 import { request } from "../../lib/bridge";
-import { errorMessage, useDialogFocus } from "../../lib/react";
+import { errorMessage } from "../../lib/react";
 import { Icon } from "../../components/Icon";
 import type { ManagedDevice } from "../../lib/generated/ManagedDevice";
 const labels: Record<string, string> = { connect: "Connect", disconnect: "Disconnect", on: "Turn On", off: "Turn Off", pause: "Pause Printing", resume: "Resume Printing", eject: "Eject safely", unmount: "Unmount", storage: "Open Disks" };
@@ -13,8 +15,7 @@ export function DeviceManager({ navigate }: { navigate: (page: string) => void }
   const [devices, setDevices] = useState<ManagedDevice[]>([]), [selected, setSelected] = useState("");
   const [query, setQuery] = useState(""), [busy, setBusy] = useState(false), [loaded, setLoaded] = useState(false), [error, setError] = useState(""), [message, setMessage] = useState("");
   const [choice, setChoice] = useState<{ device: ManagedDevice; action: string } | null>(null);
-  const pending = useRef(false), dialog = useRef<HTMLElement>(null);
-  useDialogFocus(dialog, !!choice, () => { if (!busy) setChoice(null); });
+  const pending = useRef(false);
   async function load() {
     if (pending.current) return;
     pending.current = true; setBusy(true); setError(""); setMessage("");
@@ -36,11 +37,11 @@ export function DeviceManager({ navigate }: { navigate: (page: string) => void }
   const groups = [...new Set(matches.map(d => d.category))];
   const device = devices.find(d => d.id === selected && matches.some(m => m.id === d.id)) ?? matches[0];
   return <div className="device-manager">
-    <div className="device-toolbar"><input type="search" aria-label="Search devices" placeholder="Search devices" value={query} onChange={e => setQuery(e.target.value)} /><button aria-label="Refresh devices" title="Refresh" disabled={busy} onClick={() => void load()}><Icon name="refresh" /></button></div>
+    <div className="device-toolbar"><input type="search" aria-label="Search devices" placeholder="Search devices" value={query} onChange={e => setQuery(e.target.value)} /><Button aria-label="Refresh devices" title="Refresh" disabled={busy} onClick={() => void load()}><Icon name="refresh" /></Button></div>
     {message && <p role="status">{message}</p>}
     {error && <p role="alert" className="settings-error">{error}</p>}
-    <div className="device-layout" aria-busy={busy}><nav className="device-tree" aria-label="Devices">{groups.map(group => <details key={group} open><summary>{group}</summary>{matches.filter(d => d.category === group).map(d => <button key={d.id} aria-current={device?.id === d.id ? "true" : undefined} onClick={() => setSelected(d.id)}><DeviceGlyph category={d.category} />{d.name}</button>)}</details>)}{!matches.length && <p role="status">{!loaded && busy ? "Loading…" : "No devices found."}</p>}</nav>
-    <section className="device-properties" aria-label="Device details">{device && <><h3>{device.name}</h3><p className="device-status">{device.status || "Unavailable"}</p><dl>{device.properties.filter(([, value]) => value).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl><div className="settings-actions">{device.actions.map(action => <button key={action} disabled={busy} onClick={() => (["disconnect", "off", "pause", "unmount", "eject"].includes(action) || action.startsWith("eject:")) ? setChoice({ device, action }) : void act(device, action)}>{label(action)}</button>)}{device.category === "Wi-Fi adapters" && <button onClick={() => navigate("Wi-Fi")}>Networks…</button>}{device.category === "Bluetooth" && <button onClick={() => navigate("Bluetooth")}>Pair Devices…</button>}</div></>}</section></div>
-    {choice && <div className="device-dialog-scrim"><section ref={dialog} role="dialog" aria-modal="true" aria-label="Confirm device change" className="device-dialog"><h3>{label(choice.action)}?</h3><p>{choice.device.name}{choice.action === "unmount" ? " will be unmounted. Other partitions may remain mounted; eject the whole device before unplugging." : choice.action.startsWith("eject") ? " will be unmounted. Wait for completion before unplugging. Busy devices will remain connected." : choice.action === "disconnect" ? " will disconnect from the network." : choice.action === "off" ? " and its connected Bluetooth devices will disconnect." : " will stop printing until resumed."}</p><div className="settings-actions"><button disabled={busy} onClick={() => setChoice(null)}>Cancel</button><button disabled={busy} onClick={() => void act(choice.device, choice.action)}>{busy ? "Applying…" : label(choice.action)}</button></div></section></div>}
+    <div className="device-layout" aria-busy={busy}><nav className="device-tree" aria-label="Devices">{groups.map(group => <details key={group} open><summary>{group}</summary>{matches.filter(d => d.category === group).map(d => <Button key={d.id} aria-current={device?.id === d.id ? "true" : undefined} onClick={() => setSelected(d.id)}><DeviceGlyph category={d.category} />{d.name}</Button>)}</details>)}{!matches.length && <p role="status">{!loaded && busy ? "Loading…" : "No devices found."}</p>}</nav>
+    <section className="device-properties" aria-label="Device details">{device && <><h3>{device.name}</h3><p className="device-status">{device.status || "Unavailable"}</p><dl>{device.properties.filter(([, value]) => value).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl><div className="settings-actions">{device.actions.map(action => <Button key={action} disabled={busy} onClick={() => (["disconnect", "off", "pause", "unmount", "eject"].includes(action) || action.startsWith("eject:")) ? setChoice({ device, action }) : void act(device, action)}>{label(action)}</Button>)}{device.category === "Wi-Fi adapters" && <Button onClick={() => navigate("Wi-Fi")}>Networks…</Button>}{device.category === "Bluetooth" && <Button onClick={() => navigate("Bluetooth")}>Pair Devices…</Button>}</div></>}</section></div>
+    {choice && <Dialog open onClose={() => setChoice(null)} busy={busy} scrimClassName="device-dialog-scrim" aria-label="Confirm device change" className="device-dialog"><h3>{label(choice.action)}?</h3><p>{choice.device.name}{choice.action === "unmount" ? " will be unmounted. Other partitions may remain mounted; eject the whole device before unplugging." : choice.action.startsWith("eject") ? " will be unmounted. Wait for completion before unplugging. Busy devices will remain connected." : choice.action === "disconnect" ? " will disconnect from the network." : choice.action === "off" ? " and its connected Bluetooth devices will disconnect." : " will stop printing until resumed."}</p><div className="settings-actions"><Button disabled={busy} onClick={() => setChoice(null)}>Cancel</Button><Button disabled={busy} onClick={() => void act(choice.device, choice.action)}>{busy ? "Applying…" : label(choice.action)}</Button></div></Dialog>}
   </div>;
 }

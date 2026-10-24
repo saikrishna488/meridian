@@ -22,6 +22,7 @@ const paths = {
   monitor: <><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M12 17v4M8 21h8" /></>,
   wifi: <><path d="M2 8a16 16 0 0 1 20 0M5 12a11 11 0 0 1 14 0M8 16a6 6 0 0 1 8 0" /><circle cx="12" cy="20" r="1" fill="currentColor" /></>,
   bluetooth: <path d="m6 7 12 10-6 5V2l6 5L6 17" />,
+  moon: <path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.6 8.6 0 1 0 20.5 14.2Z" />,
   sound: <><path d="M4 9h4l5-4v14l-5-4H4ZM17 8a6 6 0 0 1 0 8M20 5a10 10 0 0 1 0 14" /></>,
   microphone: <><rect x="9" y="2" width="6" height="13" rx="3" /><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8" /></>,
   muted: <><path d="M4 9h4l5-4v14l-5-4H4ZM17 9l5 6m0-6-5 6" /></>,

@@ -129,7 +129,6 @@ impl WebSurface {
                 | SurfaceKind::Preferences
                 | SurfaceKind::Finder
                 | SurfaceKind::Terminal
-                | SurfaceKind::Nova
                 | SurfaceKind::Calendar
                 | SurfaceKind::Clock
                 | SurfaceKind::Pulse
@@ -142,7 +141,6 @@ impl WebSurface {
             SurfaceKind::Preferences
                 | SurfaceKind::Finder
                 | SurfaceKind::Terminal
-                | SurfaceKind::Nova
                 | SurfaceKind::Calendar
                 | SurfaceKind::Clock
                 | SurfaceKind::Pulse
@@ -150,7 +148,6 @@ impl WebSurface {
             let title = match kind {
                 SurfaceKind::Finder => "Orbit",
                 SurfaceKind::Terminal => "Terminal",
-                SurfaceKind::Nova => "Nova",
                 SurfaceKind::Calendar => "Calendar",
                 SurfaceKind::Clock => "Clock",
                 SurfaceKind::Pulse => "Pulse",
@@ -224,14 +221,7 @@ impl WebSurface {
             header.pack_start(&title_label);
             header.set_title_widget(Some(&gtk::Box::new(gtk::Orientation::Horizontal, 0)));
             window.set_titlebar(Some(&header));
-            if matches!(
-                kind,
-                SurfaceKind::Finder
-                    | SurfaceKind::Nova
-                    | SurfaceKind::Calendar
-                    | SurfaceKind::Clock
-                    | SurfaceKind::Pulse
-            ) {
+            if matches!(kind, SurfaceKind::Finder | SurfaceKind::Calendar | SurfaceKind::Clock | SurfaceKind::Pulse) {
                 window.set_default_size(1100, 720);
             } else {
                 window.set_default_size(840, 600);
@@ -453,8 +443,8 @@ impl WebSurface {
     }
 }
 
-/// Dock surface height, including shadow space; keep in sync with the UI token.
-pub const PANEL_HEIGHT: i32 = 88;
+/// Full-width panel height; keep in sync with the UI token.
+pub const PANEL_HEIGHT: i32 = 64;
 
 fn entry_dir(kind: SurfaceKind) -> &'static str {
     match kind {
@@ -467,7 +457,7 @@ fn entry_dir(kind: SurfaceKind) -> &'static str {
         SurfaceKind::Preferences => "surfaces/settings",
         SurfaceKind::Finder => "surfaces/finder",
         SurfaceKind::Terminal => "surfaces/terminal",
-        SurfaceKind::Nova | SurfaceKind::Calendar | SurfaceKind::Clock => "surfaces/utilities",
+        SurfaceKind::Calendar | SurfaceKind::Clock => "surfaces/utilities",
         SurfaceKind::Pulse => "surfaces/pulse",
         SurfaceKind::DesktopMenu => "surfaces/desktop-menu",
         SurfaceKind::Greeter => "surfaces/greeter",
@@ -492,7 +482,6 @@ fn configure_layer(window: &gtk::Window, kind: SurfaceKind, monitor: Option<&gdk
         SurfaceKind::Preferences
         | SurfaceKind::Finder
         | SurfaceKind::Terminal
-        | SurfaceKind::Nova
         | SurfaceKind::Calendar
         | SurfaceKind::Clock
         | SurfaceKind::Pulse => {
@@ -506,7 +495,6 @@ fn configure_layer(window: &gtk::Window, kind: SurfaceKind, monitor: Option<&gdk
         SurfaceKind::Preferences
         | SurfaceKind::Finder
         | SurfaceKind::Terminal
-        | SurfaceKind::Nova
         | SurfaceKind::Calendar
         | SurfaceKind::Clock
         | SurfaceKind::Pulse => {
@@ -546,7 +534,6 @@ fn configure_layer(window: &gtk::Window, kind: SurfaceKind, monitor: Option<&gdk
         SurfaceKind::Preferences
         | SurfaceKind::Finder
         | SurfaceKind::Terminal
-        | SurfaceKind::Nova
         | SurfaceKind::Calendar
         | SurfaceKind::Clock
         | SurfaceKind::Pulse => {

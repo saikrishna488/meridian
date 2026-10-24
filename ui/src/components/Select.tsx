@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type SelectHTMLAttributes } from "react";
 import { createPortal } from "react-dom";
+import { on } from "../lib/bridge";
 
 type Props = SelectHTMLAttributes<HTMLSelectElement>;
 /** Styled listbox with a native select retained for forms and change semantics. */
@@ -12,13 +13,14 @@ export function Select(props: Props) {
   useEffect(() => { if (props.disabled) setOpen(false); }, [props.disabled]);
   function close() { setOpen(false); button.current?.focus(); }
   function show() {
-    if (props.disabled) return;
+    if (props.disabled || !options.some(o => !o.disabled)) return;
     const b = button.current!.getBoundingClientRect();
     const height = Math.min(260, options.length * 34 + 10);
     const below = window.innerHeight - b.bottom - 8;
     const top = below >= Math.min(height, 140) ? b.bottom + 5 : Math.max(8, b.top - height - 5);
     setBounds({ left: Math.max(8, Math.min(b.left, window.innerWidth - Math.max(b.width, 180) - 8)), top, width: Math.max(b.width, 180), maxHeight: Math.max(80, Math.min(260, window.innerHeight - top - 8)) });
-    setCursor(Math.max(0, options.findIndex(o => o.selected && !o.disabled))); setOpen(true);
+    const chosen = options.findIndex(o => o.selected && !o.disabled);
+    setCursor(chosen >= 0 ? chosen : options.findIndex(o => !o.disabled)); setOpen(true);
   }
   function choose(index: number) {
     const option = options[index]; if (!option || option.disabled || !native.current) return;
@@ -32,15 +34,29 @@ export function Select(props: Props) {
     menu.current?.focus();
     const dismiss = (e: Event) => { if (!menu.current?.contains(e.target as Node) && !button.current?.contains(e.target as Node)) setOpen(false); };
     const hide = () => setOpen(false);
-    document.addEventListener("pointerdown", dismiss); window.addEventListener("resize", hide);
-    return () => { document.removeEventListener("pointerdown", dismiss); window.removeEventListener("resize", hide); };
+    const scroll = (event: Event) => { if (event.target instanceof Node && !menu.current?.contains(event.target)) hide(); };
+    const offDismiss = on("popover.dismiss", hide);
+    document.addEventListener("pointerdown", dismiss);
+    window.addEventListener("resize", hide); window.addEventListener("blur", hide);
+    document.addEventListener("visibilitychange", hide); document.addEventListener("scroll", scroll, true);
+    return () => {
+      offDismiss(); document.removeEventListener("pointerdown", dismiss);
+      window.removeEventListener("resize", hide); window.removeEventListener("blur", hide);
+      document.removeEventListener("visibilitychange", hide); document.removeEventListener("scroll", scroll, true);
+    };
   }, [open]);
-  useEffect(() => { if (open) menu.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" }); }, [cursor, open]);
-  const label = props["aria-label"] ?? (props.id ? document.querySelector(`label[for="${props.id}"]`)?.textContent : null) ?? "Choose an option";
+  useEffect(() => { if (open) menu.current?.querySelector('[data-highlighted="true"]')?.scrollIntoView({ block: "nearest" }); }, [cursor, open]);
+  const label = props["aria-label"] ?? Array.from(native.current?.labels ?? []).map(label => {
+    const clone = label.cloneNode(true) as HTMLElement;
+    clone.querySelectorAll(".meridian-select").forEach(control => control.remove());
+    return clone.textContent;
+  }).join(" ").trim();
+  const labelledBy = props["aria-labelledby"];
+  const triggerId = props.id ? `${props.id}-trigger` : `${id}-trigger`;
   return <span className="meridian-select" data-revision={revision}>
     <select {...props} ref={native} className="select-native" tabIndex={-1} aria-hidden="true" onFocus={() => button.current?.focus()} />
-    <button ref={button} type="button" className="select-trigger" role="combobox" aria-label={label} aria-expanded={open} aria-controls={id} aria-haspopup="listbox" disabled={props.disabled} title={props.title} onClick={() => open ? close() : show()} onKeyDown={e => { if (["ArrowDown", "ArrowUp", "Enter", " "].includes(e.key)) { e.preventDefault(); e.stopPropagation(); show(); } }}><span>{selected?.label ?? options[0]?.label ?? "Choose…"}</span><svg viewBox="0 0 12 12" width="12" height="12" fill="none" aria-hidden="true"><path d="m3 4.5 3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
-    {open && createPortal(<div id={id} ref={menu} className="select-menu" role="listbox" aria-label={label} aria-activedescendant={`${id}-${cursor}`} tabIndex={-1} style={bounds} onKeyDown={e => {
+    <button ref={button} type="button" id={triggerId} className="select-trigger" role="combobox" aria-label={labelledBy ? undefined : label || "Choose an option"} aria-labelledby={labelledBy} aria-describedby={props["aria-describedby"]} aria-invalid={props["aria-invalid"]} aria-required={props.required || undefined} aria-expanded={open} aria-controls={id} aria-haspopup="listbox" disabled={props.disabled} title={props.title} onClick={() => open ? close() : show()} onKeyDown={e => { if (["ArrowDown", "ArrowUp", "Enter", " "].includes(e.key)) { e.preventDefault(); e.stopPropagation(); show(); } }}><span>{selected?.label ?? options[0]?.label ?? "Choose…"}</span><svg viewBox="0 0 12 12" width="12" height="12" fill="none" aria-hidden="true"><path d="m3 4.5 3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
+    {open && createPortal(<div id={id} ref={menu} className="select-menu" role="listbox" aria-label={labelledBy ? undefined : label || "Choose an option"} aria-labelledby={labelledBy} aria-activedescendant={`${id}-${cursor}`} tabIndex={-1} style={bounds} onKeyDown={e => {
       e.stopPropagation();
       if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); }
       if (e.key === "Tab") { setOpen(false); button.current?.focus(); }
@@ -49,6 +65,6 @@ export function Select(props: Props) {
         e.preventDefault(); const enabled = options.map((o, i) => o.disabled ? -1 : i).filter(i => i >= 0); const index = enabled.indexOf(cursor);
         setCursor(enabled[e.key === "Home" ? 0 : e.key === "End" ? enabled.length - 1 : (index + (e.key === "ArrowUp" ? enabled.length - 1 : 1)) % enabled.length] ?? 0);
       } else if (e.key.length === 1 && e.key !== " ") { const found = options.findIndex(o => !o.disabled && o.label.toLowerCase().startsWith(e.key.toLowerCase())); if (found >= 0) setCursor(found); }
-    }}>{options.map((option, i) => <div key={option.value} id={`${id}-${i}`} role="option" aria-selected={cursor === i} aria-disabled={option.disabled || undefined} className={option.selected ? "chosen" : ""} onPointerMove={() => !option.disabled && setCursor(i)} onClick={() => choose(i)}><span>{option.label}</span><span aria-hidden="true">{option.selected ? "✓" : ""}</span></div>)}</div>, document.body)}
+    }}>{options.map((option, i) => <div key={option.value} id={`${id}-${i}`} role="option" aria-selected={option.selected} data-highlighted={cursor === i} aria-disabled={option.disabled || undefined} className={option.selected ? "chosen" : ""} onPointerMove={() => !option.disabled && setCursor(i)} onClick={() => choose(i)}><span>{option.label}</span><span aria-hidden="true">{option.selected ? "✓" : ""}</span></div>)}</div>, document.body)}
   </span>;
 }

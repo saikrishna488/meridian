@@ -1,0 +1,9 @@
+/* Shared entry presets. Exit unmount is immediate so transparent overlays cannot
+   intercept native desktop input. No layout, blur or perpetual animation. */
+@keyframes meridian-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes meridian-fade { from { opacity: 0; } to { opacity: 1; } }
+:where(.ui-dialog) { animation: meridian-enter var(--dur-med) var(--ease-out); }
+:where(.ui-tab-panel, .select-menu) { animation: meridian-fade var(--dur-fast) var(--ease-out); }
+@media (prefers-reduced-motion: reduce) {
+  :where(.ui-dialog, .ui-tab-panel, .select-menu) { animation: none; }
+}

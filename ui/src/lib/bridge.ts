@@ -70,8 +70,6 @@ interface ResultMap {
   "notifications.action": import("./generated/NotificationState").NotificationState;
   "calendar.list": import("./generated/CalendarEvent").CalendarEvent[];
   "calendar.save": null;
-  "store.list": { id: string; name: string; category: string; description: string; installed: boolean; available: boolean }[];
-  "store.action": null;
   "pulse.open": null;
   "pulse.snapshot": import("./generated/PulseSnapshot").PulseSnapshot;
   "terminal.open": null;
@@ -106,6 +104,10 @@ interface ResultMap {
   "settings.monitor_brightness": import("./generated/MonitorBrightness").MonitorBrightness;
   "settings.wifi_networks": import("./generated/WifiNetwork").WifiNetwork[];
   "settings.wifi_connect": null;
+  "settings.wifi_profiles": import("./generated/WifiProfile").WifiProfile[];
+  "settings.wifi_config": import("./generated/WifiConfig").WifiConfig;
+  "settings.wifi_config_set": null;
+  "settings.wifi_profile_action": null;
   "settings.bluetooth_devices": import("./generated/BluetoothDevice").BluetoothDevice[];
   "settings.bluetooth_scan": null;
   "settings.bluetooth_action": null;

@@ -1,1 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x2="1" y2="1"><stop stop-color="#8d83ed"/><stop offset="1" stop-color="#4165c8"/></linearGradient></defs><rect width="64" height="64" rx="16" fill="url(#g)"/><circle cx="32" cy="32" r="19" fill="none" stroke="white" stroke-width="3"/><path d="M32 19v14l10 6" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Meridian clock">
+<!-- SPDX-License-Identifier: GPL-3.0-or-later; original Meridian artwork. -->
+<defs>
+ <linearGradient id="surface" x1=".12" y1="0" x2=".82" y2="1"><stop stop-color="#6c88e8"/><stop offset="1" stop-color="#343c9e"/></linearGradient>
+ <linearGradient id="symbol" x1="0" y1="0" x2=".2" y2="1"><stop stop-color="#fff"/><stop offset="1" stop-color="#dce8fb"/></linearGradient>
+ <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#fff" stop-opacity=".36"/><stop offset=".52" stop-color="#fff" stop-opacity=".04"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+ <filter id="shadow" x="-.25" y="-.25" width="1.5" height="1.6"><feGaussianBlur in="SourceAlpha" stdDeviation="2.2"/><feOffset dy="2"/><feComponentTransfer><feFuncA type="linear" slope=".28"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs>
+<rect x="4" y="4" width="88" height="88" rx="25" fill="#101a2b" opacity=".22" transform="translate(0 1)"/>
+<rect x="4" y="3" width="88" height="88" rx="25" fill="url(#surface)"/>
+<path d="M29 4h38c15 0 25 10 25 25v8H4v-8C4 14 14 4 29 4z" fill="url(#gloss)"/>
+<g filter="url(#shadow)"><circle cx="48" cy="49" r="29" fill="#f8faff"/><circle cx="48" cy="49" r="24" fill="url(#symbol)"/><circle cx="48" cy="49" r="20" fill="#f3f6ff"/><g stroke="#8193bd" stroke-width="2" stroke-linecap="round"><path d="M48 32v3M48 63v3M31 49h3M62 49h3M36 37l2 2M58 59l2 2M60 37l-2 2M38 59l-2 2"/></g><path d="M48 36v14l11 7" fill="none" stroke="#293d76" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="48" cy="49" r="3.5" fill="#f09854"/><path d="M31 25a25 25 0 0 1 31-2" fill="none" stroke="#fff" stroke-width="2" opacity=".8"/></g>
+<rect x="4.75" y="3.75" width="86.5" height="86.5" rx="24.5" fill="none" stroke="#fff" stroke-opacity=".48" stroke-width="1.5"/>
+<path d="M29 5h38c14 0 23 9 24 23" fill="none" stroke="#fff" stroke-opacity=".32" stroke-width="2" stroke-linecap="round"/>
+</svg>

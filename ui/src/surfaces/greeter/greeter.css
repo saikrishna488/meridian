@@ -56,7 +56,7 @@ body {
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-xl);
   background: var(--glass-bg);
-  backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  backdrop-filter: none;
   box-shadow: var(--shadow-lg);
 }
 .card.shake {
@@ -174,7 +174,7 @@ body {
 }
 
 /* Authentication remains legible against every wallpaper and desktop theme. */
-.card { background: rgb(20 25 36 / .92); border-color: #ffffff26; border-radius: 12px; color: #f5f7fb; backdrop-filter: blur(20px); }
+.card { background: rgb(20 25 36 / .92); border-color: #ffffff26; border-radius: 12px; color: #f5f7fb; backdrop-filter: none; }
 .field input, .field select { border-color: #ffffff35; border-radius: 6px; background: #ffffff0d; color: #f5f7fb; }
 .field-label { color: #ced5e2; font-size: 10px; font-weight: 500; letter-spacing: .5px; }
 .card .submit { border-radius: 6px; background: #f5f7fb; color: #171b24; box-shadow: none; }

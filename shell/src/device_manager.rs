@@ -1,6 +1,6 @@
 //! Hardware-oriented inventory. Actions are resolved against a fresh inventory.
 use meridian_protocol::{DeviceAction, ErrorBody, ErrorCode, ManagedDevice};
-use std::{fs, path::Path, process::Command, time::Duration};
+use std::{fs, path::Path, time::Duration};
 fn text(path: impl AsRef<Path>) -> String {
     fs::read_to_string(path).unwrap_or_default().trim().into()
 }
@@ -82,7 +82,6 @@ fn sys_devices(sys: &Path) -> Vec<ManagedDevice> {
         if let Ok(sectors) = text(p.join("size")).parse::<u64>() {
             d.properties.push(("Capacity".into(), format!("{:.1} GB", sectors as f64 * 512.0 / 1e9)));
         }
-        d.actions.push("storage".into());
         out.push(d);
     }
     for bus in ["pci", "usb"] {
@@ -323,11 +322,6 @@ pub fn action(choice: DeviceAction) -> Result<(), ErrorBody> {
             let program = if choice.action == "pause" { "/usr/sbin/cupsdisable" } else { "/usr/sbin/cupsenable" };
             crate::settings_devices::run_timeout(&["pkexec", program, name], None, Duration::from_secs(60))?;
         }
-        ("storage", "storage") => {
-            Command::new("meridian-vault")
-                .spawn()
-                .map_err(|_| error("Vault is not installed. Reinstall Meridian to manage storage."))?;
-        }
         _ => return Err(error("Unsupported device action")),
     }
     Ok(())
@@ -348,7 +342,7 @@ mod tests {
         assert!(devices.iter().any(|d| d.category == "Wi-Fi adapters" && d.name == "wlan0"));
         let storage = devices.iter().find(|d| d.category == "Storage").unwrap();
         assert_eq!(storage.name, "Test SSD");
-        assert_eq!(storage.actions, ["storage"]);
+        assert!(storage.actions.is_empty());
         assert!(storage.properties.contains(&("Driver".into(), "sd_mod".into())));
         fs::remove_dir_all(root).unwrap();
     }

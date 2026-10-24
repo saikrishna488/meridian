@@ -7,7 +7,7 @@ trap 'rm -rf "$ROOT"' EXIT
 mkdir -p "$ROOT"/{protocol,services,shell,ui/{src,scripts,dist},assets,session,tools,target/release}
 for file in Cargo.toml Cargo.lock rustfmt.toml ui/package.json ui/package-lock.json ui/tsconfig.json \
     shell/main.rs ui/src/main.ts ui/dist/main.js target/release/meridian-shell target/release/meridian-greeter \
-    target/release/meridian-vault target/release/meridian-drift; do
+    target/release/meridian-drift; do
     printf 'original\n' > "$ROOT/$file"
 done
 reject() {

@@ -51,3 +51,10 @@ session with the deterministic preview bridge:
 [Design changes and screen power behavior](../DESKTOP-DESIGN.md).
 - [Compact application list](refined-launcher-list.png)
 - [Lock screen](refined-lock-screen.png)
+
+## Meridian Design System pass
+
+The 2026-10-18 implementation has no new captures because this execution sandbox
+blocks preview and D-Bus sockets. The images above are earlier evidence. See
+[validation and capture matrix](../UI-DESIGN-VALIDATION.md) and
+[design system](../MERIDIAN-DESIGN-SYSTEM.md).

@@ -6,7 +6,7 @@ ensure_toolchain "$0" "$@"
 source "$ROOT/tools/release-manifest.sh"
 rm -f "$ROOT/target/release/meridian-build.sha256"
 sources_before="$(release_source_manifest)"
-build_all --release --bin meridian-shell --bin meridian-greeter --bin meridian-vault --bin meridian-drift
+build_all --release --bin meridian-shell --bin meridian-greeter --bin meridian-drift
 if [ "$sources_before" != "$(release_source_manifest)" ]; then
     echo "error: source files changed during the build; run tools/build-release.sh again" >&2
     exit 1

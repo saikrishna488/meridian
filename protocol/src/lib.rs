@@ -355,6 +355,9 @@ pub struct WifiNetwork {
     pub signal: u8,
     pub security: String,
     pub connected: bool,
+    pub frequency: u32,
+    pub channel: u32,
+    pub rate: String,
 }
 #[derive(Clone, PartialEq, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
@@ -375,10 +378,46 @@ impl std::fmt::Debug for WifiConnect {
 }
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[ts(export)]
+pub struct WifiProfile {
+    pub uuid: String,
+    pub name: String,
+    pub device: String,
+}
+#[derive(Debug, Clone, PartialEq, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct WifiProfileQuery {
+    pub uuid: String,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct WifiConfig {
+    pub uuid: String,
+    pub autoconnect: bool,
+    pub metered: String,
+    pub method: String,
+    pub addresses: String,
+    pub gateway: String,
+    pub dns: String,
+    pub ignore_auto_dns: bool,
+}
+#[derive(Debug, Clone, PartialEq, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct WifiProfileAction {
+    pub uuid: String,
+    pub action: String,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export)]
 pub struct BluetoothDevice {
     pub path: String,
     pub name: String,
     pub address: String,
+    pub trusted: bool,
+    pub icon: String,
+    pub battery: Option<u8>,
     pub paired: bool,
     pub connected: bool,
 }
@@ -414,7 +453,6 @@ pub enum SurfaceKind {
     Terminal,
     /// Pulse system monitor.
     Pulse,
-    Nova,
     Calendar,
     Clock,
     /// Notification center.
@@ -492,7 +530,6 @@ impl SurfaceKind {
             SurfaceKind::Terminal => &[Capability::Terminal],
             SurfaceKind::Notifications => &[Capability::Notifications, Capability::Popovers],
             SurfaceKind::Pulse => &[Capability::Monitor],
-            SurfaceKind::Nova => &[Capability::AppManagement],
             SurfaceKind::Calendar => &[Capability::Calendar],
             SurfaceKind::Clock => &[],
             SurfaceKind::Panel => &[
@@ -518,6 +555,7 @@ impl SurfaceKind {
                 Capability::AppManagement,
             ],
             SurfaceKind::Options => &[
+                Capability::Notifications,
                 Capability::Popovers,
                 Capability::Settings,
                 Capability::PowerStatus,
@@ -628,14 +666,10 @@ pub enum Request {
     PulseOpen,
     #[serde(rename = "pulse.snapshot")]
     PulseSnapshot,
-    #[serde(rename = "store.list")]
-    StoreList,
     #[serde(rename = "calendar.list")]
     CalendarList,
     #[serde(rename = "calendar.save")]
     CalendarSave(Vec<CalendarEvent>),
-    #[serde(rename = "store.action")]
-    StoreAction(DeviceAction),
     #[serde(rename = "notifications.get")]
     NotificationsGet,
     #[serde(rename = "notifications.read")]
@@ -778,6 +812,14 @@ pub enum Request {
     SettingsMonitorBrightness(MonitorBrightnessRequest),
     #[serde(rename = "settings.wifi_networks")]
     SettingsWifiNetworks,
+    #[serde(rename = "settings.wifi_profiles")]
+    SettingsWifiProfiles,
+    #[serde(rename = "settings.wifi_config")]
+    SettingsWifiConfig(WifiProfileQuery),
+    #[serde(rename = "settings.wifi_config_set")]
+    SettingsWifiConfigSet(WifiConfig),
+    #[serde(rename = "settings.wifi_profile_action")]
+    SettingsWifiProfileAction(WifiProfileAction),
     #[serde(rename = "settings.wifi_connect")]
     SettingsWifiConnect(WifiConnect),
     #[serde(rename = "settings.bluetooth_devices")]
@@ -1061,11 +1103,9 @@ impl Request {
             | Request::PulseOpen
             | Request::TerminalOpen => Some(Capability::Popovers),
             Request::TrashOpen => Some(Capability::Dock),
-            Request::StoreList
-            | Request::StoreAction(_)
-            | Request::AppUninstallPrompt(_)
-            | Request::AppUninstallPlan(_)
-            | Request::AppUninstall(_) => Some(Capability::AppManagement),
+            Request::AppUninstallPrompt(_) | Request::AppUninstallPlan(_) | Request::AppUninstall(_) => {
+                Some(Capability::AppManagement)
+            }
             Request::MenuOpen(_) | Request::SystemInfo => Some(Capability::Popovers),
             Request::DockLayoutGet | Request::DockLayoutSet(_) | Request::DockList | Request::DockPin(_) => {
                 Some(Capability::Dock)
@@ -1100,6 +1140,10 @@ impl Request {
             | Request::SettingsDisplayDecide(_)
             | Request::SettingsMonitorBrightness(_)
             | Request::SettingsWifiNetworks
+            | Request::SettingsWifiProfiles
+            | Request::SettingsWifiConfig(_)
+            | Request::SettingsWifiConfigSet(_)
+            | Request::SettingsWifiProfileAction(_)
             | Request::SettingsWifiConnect(_)
             | Request::SettingsBluetoothDevices
             | Request::SettingsBluetoothScan
@@ -1350,6 +1394,7 @@ mod tests {
         );
         assert!(!SurfaceKind::Preferences.has(Capability::Notifications));
         assert!(SurfaceKind::Topbar.has(Capability::Notifications));
+        assert!(SurfaceKind::Options.has(Capability::Notifications));
     }
 
     #[test]
@@ -1508,6 +1553,21 @@ mod tests {
         assert!(!format!("{request:?}").contains("secret-password"));
         for request in [Request::SettingsDisplays, Request::SettingsWifiNetworks, Request::SettingsBluetoothDevices] {
             assert_eq!(request.required_capability(), Some(Capability::Settings));
+        }
+    }
+
+    #[test]
+    fn wifi_configuration_requests_require_settings_capability() {
+        for json in [
+            r#"{"method":"settings.wifi_profiles"}"#,
+            r#"{"method":"settings.wifi_config","params":{"uuid":"saved-id"}}"#,
+            r#"{"method":"settings.wifi_config_set","params":{"uuid":"saved-id","autoconnect":true,"metered":"unknown","method":"auto","addresses":"","gateway":"","dns":"1.1.1.1","ignore_auto_dns":false}}"#,
+            r#"{"method":"settings.wifi_profile_action","params":{"uuid":"saved-id","action":"forget"}}"#,
+        ] {
+            let request = parse_request(json).unwrap();
+            assert_eq!(request.required_capability(), Some(Capability::Settings));
+            assert!(SurfaceKind::Preferences.has(Capability::Settings));
+            assert!(!SurfaceKind::Finder.has(Capability::Settings));
         }
     }
 

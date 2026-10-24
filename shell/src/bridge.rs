@@ -138,7 +138,6 @@ mod tests {
             Terminal,
             Notifications,
             Pulse,
-            Nova,
             Calendar,
             Clock,
             DesktopMenu,

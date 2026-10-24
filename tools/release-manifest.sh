@@ -17,7 +17,7 @@ release_manifest() {
         cd "$ROOT"
         {
             release_sources
-            printf '%s\0' target/release/meridian-shell target/release/meridian-greeter target/release/meridian-vault target/release/meridian-drift
+            printf '%s\0' target/release/meridian-shell target/release/meridian-greeter target/release/meridian-drift
             find ui/dist -type f -print0
         } | LC_ALL=C sort -z | xargs -0 sha256sum
     )

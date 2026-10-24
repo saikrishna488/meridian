@@ -43,19 +43,20 @@ tools/check.sh          # fmt, clippy, tests, UI type-check
 
 ## Install (Debian)
 
+For a single-file install, build and package the release:
+
 ```sh
-tools/build-release.sh                       # as your user
-sudo tools/install.sh                        # adds "Meridian" to your login screen's session list
-sudo tools/install.sh --try-login-screen     # optional: Meridian's login screen on Ctrl+Alt+F7
-sudo tools/install.sh --enable-login-screen  # optional: make it your login screen (after reboot)
-sudo tools/install.sh --disable-login-screen # undo the above
-sudo tools/install.sh --uninstall
+tools/package-installer.sh                  # builds target/meridian-installer.run
+sudo bash target/meridian-installer.run      # one file installs dependencies and Meridian
 ```
 
-For updates, run `tools/build-release.sh` before `sudo tools/install.sh`, then
-sign out of Meridian and back in. The installer verifies that the release
-binaries and UI match the current sources; it rejects stale or mixed builds.
-Use `tools/install.sh --check-build` to check this without root or installation.
+The generated installer is self-contained and verifies its bundled release.
+For updates, rebuild and package it, run the new file, then sign out of Meridian
+and back in. Developers can still run `sudo tools/install.sh` directly after
+`tools/build-release.sh`. The optional greetd login screen can be trialed with
+`sudo bash target/meridian-installer.run --try-login-screen`, enabled with
+`--enable-login-screen`, disabled with `--disable-login-screen`, or removed with
+`--uninstall`.
 
 | Keys | Action |
 |---|---|
@@ -119,7 +120,7 @@ Open **Meridian → Orbit… / Terminal…**, or search Applications for **Orbit
 
 Orbit browses actual folders, with back/forward navigation, an enclosing-folder button, icon/list views, filtering within the current folder, hidden files, refresh, and a path field. Use **New folder** or a file’s context menu to open, rename, add to the desktop, or move to the system Trash. Rename never overwrites another item. **Applications** lists installed apps with Open, Add to Dock, Add to Desktop, and reviewed Uninstall actions.
 
-Terminal runs your actual interactive shell on a PTY using the locally bundled, MIT-licensed xterm.js renderer. It supports tabs, ANSI colors, shell history and completion, interactive programs, resizing, Ctrl+C to copy selected text (or interrupt when nothing is selected), and Ctrl+V to paste. Ctrl+Shift+C and Ctrl+Shift+V also work. Closing a tab/window ends its shell and foreground job; detached jobs may survive. Development and installed sessions run on the Debian host.
+Terminal runs your actual interactive shell on a PTY using the locally bundled, MIT-licensed xterm.js renderer. It supports tabs, ANSI colors, shell history and completion, interactive programs, resizing, Ctrl+C to copy selected text (or interrupt when nothing is selected), and Ctrl+V to paste. Ctrl+Shift+C and Ctrl+Shift+V also work. Closing a tab/window ends the shell and processes in its terminal session. Development and installed sessions run on the Debian host.
 
 ## Everyday desktop controls
 
@@ -250,17 +251,10 @@ For the native thumbnail roundtrip test, run this from a desktop terminal with
 D-Bus access: `cargo test -p meridian-shell thumbnails_decode_images_and_reject_other_files -- --ignored`.
 Protocol reference: [Desktop Notifications](https://specifications.freedesktop.org/notification/latest/protocol.html).
 
-## Nova, Calendar, and Clock
+## Calendar and Clock
 
-Search Applications for **Nova**, **Calendar**, or **Clock**. They support dock pins,
-desktop shortcuts, and the current appearance. Nova contains 100 curated native
-Linux applications, with search, categories, installed state, and real Debian
-install/uninstall actions. The collection is editorial, not a measured popularity
-ranking. Package availability is checked against your configured repositories;
-no repositories are added. Authentication uses polkit. Installs refuse package
-removals; uninstalls are refused if the simulated transaction removes other
-packages. Personal app data is retained. Recommendations, ratings, and updates
-are prototypes. Catalog reference: https://packages.debian.org/stable/allpackages.
+Search Applications for **Calendar** or **Clock**. They support dock pins,
+desktop shortcuts, and the current appearance.
 
 Calendar stores local events in `~/.config/meridian/calendar.json`; it has month
 navigation, a daily agenda, and add/delete controls. There is no cloud sync or
@@ -275,21 +269,15 @@ system mounts and swap prevent ejection. System directories such as `/boot`, `/h
 non-system mount points such as `/data`, `/media`, and `/mnt` are eligible. Other USB peripherals remain
 inspectable. A busy filesystem reports an error and is not forcibly unmounted.
 
-Preview the apps at `/ui/surfaces/utilities/index.html?app=nova`, `?app=calendar`,
-or `?app=clock`; append `&theme=dark` for dark mode. Package changes are disabled
-in the preview; calendar changes use in-memory sample state.
+Preview the apps at `/ui/surfaces/utilities/index.html?app=calendar`
+or `?app=clock`; append `&theme=dark` for dark mode. Calendar changes use in-memory sample state in the preview.
 
 Screenshots are saved as PNGs in `Screenshots` inside your configured Pictures
 folder (normally `~/Pictures/Screenshots`). A notification shows the saved path.
 The installer includes grim, slurp, and notify-send. The capture helper follows
 [grim's documented region capture](https://github.com/emersion/grim).
 
-### Vault and Drift
-
-Vault is Meridian’s native GTK disk utility. It lists physical drives and their
-volumes, capacity, filesystem, and available space. Open mounted volumes or mount
-and unmount through UDisks; system and boot mounts are protected. Formatting,
-partition editing, encryption setup, and SMART diagnostics are not implemented.
+### Drift
 
 Drift is a native GTK/WebKit browser with DuckDuckGo search, reorderable tabs,
 private windows, local bookmarks, find in page, zoom, and save-as downloads. No
@@ -299,9 +287,8 @@ stored locally. Camera, microphone, and location requests are currently denied.
 Browser history, extensions, password management, and session restore are not yet
 implemented. Keep the distribution’s WebKitGTK security updates installed.
 
-Build and install both with `tools/build-release.sh` and `sudo tools/install.sh`.
-They appear as **Vault** and **Drift** in Applications. Development commands:
-`cargo run -p meridian-shell --bin meridian-vault` and
+Build and install Drift with `tools/build-release.sh` and `sudo tools/install.sh`.
+It appears as **Drift** in Applications. Development command:
 `cargo run -p meridian-shell --bin meridian-drift`.
 Drift shortcuts: Ctrl+T (new tab), Ctrl+W (close tab), Ctrl+L (address),
 Ctrl+F (find), and Ctrl+R (reload).

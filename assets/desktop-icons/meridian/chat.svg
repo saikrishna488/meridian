@@ -1,7 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Meridian chat">
 <!-- SPDX-License-Identifier: GPL-3.0-or-later; original Meridian artwork. -->
-<defs><linearGradient id="surface" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#94bf9d"/><stop offset="1" stop-color="#589373"/></linearGradient></defs>
-<path d="M28 4H68C85 4 92 11 92 28V68C92 85 85 92 68 92H28C11 92 4 85 4 68V28C4 11 11 4 28 4Z" fill="url(#surface)"/>
-<path d="M28 5H68C84 5 91 12 91 28V68C91 84 84 91 68 91H28C12 91 5 84 5 68V28C5 12 12 5 28 5Z" fill="none" stroke="#ffffff30"/>
-<path d="M23 28h50v34H44L30 73V62h-7Z" fill="#fff"/><g fill="#77a68a"><circle cx="36" cy="45" r="3"/><circle cx="48" cy="45" r="3"/><circle cx="60" cy="45" r="3"/></g>
+<defs>
+ <linearGradient id="surface" x1=".12" y1="0" x2=".82" y2="1"><stop stop-color="#62bd89"/><stop offset="1" stop-color="#23724e"/></linearGradient>
+ <linearGradient id="symbol" x1="0" y1="0" x2=".2" y2="1"><stop stop-color="#fff"/><stop offset="1" stop-color="#dce8fb"/></linearGradient>
+ <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#fff" stop-opacity=".36"/><stop offset=".52" stop-color="#fff" stop-opacity=".04"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+ <filter id="shadow" x="-.25" y="-.25" width="1.5" height="1.6"><feGaussianBlur in="SourceAlpha" stdDeviation="2.2"/><feOffset dy="2"/><feComponentTransfer><feFuncA type="linear" slope=".28"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs>
+<rect x="4" y="4" width="88" height="88" rx="25" fill="#101a2b" opacity=".22" transform="translate(0 1)"/>
+<rect x="4" y="3" width="88" height="88" rx="25" fill="url(#surface)"/>
+<path d="M29 4h38c15 0 25 10 25 25v8H4v-8C4 14 14 4 29 4z" fill="url(#gloss)"/>
+<g filter="url(#shadow)"><path d="M28 23h43a8 8 0 0 1 8 8v24a8 8 0 0 1-8 8H49L35 74v-11h-7a8 8 0 0 1-8-8V31a8 8 0 0 1 8-8z" fill="#f9fffb"/><path d="M22 38h25a7 7 0 0 1 7 7v14a7 7 0 0 1-7 7h-8L27 75v-9h-5a7 7 0 0 1-7-7V45a7 7 0 0 1 7-7z" fill="url(#symbol)"/><g fill="#fff"><circle cx="29" cy="52" r="2.5"/><circle cx="38" cy="52" r="2.5"/><circle cx="47" cy="52" r="2.5"/></g><path d="M35 31h25M35 37h18" stroke="#c9ead5" stroke-width="2.5" stroke-linecap="round"/></g>
+<rect x="4.75" y="3.75" width="86.5" height="86.5" rx="24.5" fill="none" stroke="#fff" stroke-opacity=".48" stroke-width="1.5"/>
+<path d="M29 5h38c14 0 23 9 24 23" fill="none" stroke="#fff" stroke-opacity=".32" stroke-width="2" stroke-linecap="round"/>
 </svg>

@@ -190,28 +190,37 @@ impl Pty {
 impl Drop for Pty {
     fn drop(&mut self) {
         if let Some(mut child) = self.child.take() {
-            // Closing a tab ends its foreground job and shell; detached jobs may survive.
-            // SAFETY: the PTY reports its own foreground process group.
-            unsafe {
-                let foreground = libc::tcgetpgrp(self.master.as_raw_fd());
-                if foreground > 0 {
-                    libc::kill(-foreground, libc::SIGHUP);
-                }
-                if child.try_wait().ok().flatten().is_none() {
-                    libc::kill(-(child.id() as i32), libc::SIGHUP);
-                }
-            }
-            // Never wait on the UI thread. Reap even a shell that ignores SIGHUP.
+            let session = child.id() as i32;
+            terminate_session(session, libc::SIGTERM);
+            // Never wait on the UI thread. Reap session jobs even when a
+            // background process is in a different process group.
             std::thread::spawn(move || {
-                for _ in 0..20 {
-                    if child.try_wait().ok().flatten().is_some() {
-                        return;
-                    }
-                    std::thread::sleep(std::time::Duration::from_millis(25));
-                }
-                let _ = child.kill();
+                std::thread::sleep(std::time::Duration::from_millis(400));
+                terminate_session(session, libc::SIGKILL);
                 let _ = child.wait();
             });
+        }
+    }
+}
+
+fn terminate_session(session: i32, signal: i32) {
+    let Ok(entries) = std::fs::read_dir("/proc") else { return };
+    for entry in entries.flatten() {
+        let Ok(pid) = entry.file_name().to_string_lossy().parse::<i32>() else { continue };
+        if pid == std::process::id() as i32 {
+            continue;
+        }
+        let Ok(stat) = std::fs::read_to_string(entry.path().join("stat")) else { continue };
+        let Some(fields) = stat.rsplit_once(')').map(|(_, fields)| fields.split_whitespace().collect::<Vec<_>>())
+        else {
+            continue;
+        };
+        // After the command name: state, parent pid, process group, session id.
+        if fields.get(3).and_then(|value| value.parse::<i32>().ok()) == Some(session) {
+            // SAFETY: signaling a PID discovered in /proc; races only make it fail.
+            unsafe {
+                libc::kill(pid, signal);
+            }
         }
     }
 }

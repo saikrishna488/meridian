@@ -49,8 +49,9 @@ windows to survive a shell crash while labwc remains running.
 
 The compositor provides window placement, focus, Alt+Tab, output composition,
 and XWayland support. Meridian uses layer-shell for desktop surfaces,
-foreign-toplevel management for the window list/activation, output management
-for display configuration, and session-lock for locking.
+foreign-toplevel management for the window list/activation, and output
+management for display configuration. `swaylock` owns session locking and PAM
+authentication.
 
 labwc is the supplied configuration. Other compositors need the corresponding
 protocols; layer-shell support alone does not guarantee full functionality.
@@ -70,7 +71,7 @@ potentially blocking work is also dispatched to worker threads.
 | Topbar | Meridian menu, focused app menu with Quit, system controls and clock | Top-anchored full-width top layer, reserves 32 logical pixels |
 | Applications / Options / DesktopMenu | Launcher and menus | Overlay layer |
 | Preferences / Finder / Terminal | Built-in application windows | Ordinary GTK windows |
-| Locker | Password prompt | Session-lock surface per monitor |
+| Locker | Legacy, unused custom password prompt | Not launched; `swaylock` handles locking |
 | Greeter | Login screen in a separate executable | Overlay in the greeter session |
 
 Panel uses `surfaces/panel`; its 88-pixel surface includes space for the floating dock shadow. Topbar uses `surfaces/topbar`. The launcher opens above the dock; Meridian and application menus, Control Center, and notifications open below the top bar. Quit requests graceful closure through the compositor, allowing applications to prompt for unsaved work.
@@ -157,7 +158,7 @@ activate that window.
 | Built-in backlight | sysfs discovery and logind brightness control |
 | Monitor layout | Wayland output-management test/apply |
 | Suspend/sign out/restart/shutdown | systemd-logind |
-| Lock authentication | PAM via `meridian-lock` |
+| Lock authentication | PAM through `swaylock` |
 | Login | Separate `meridian-greeter` communicating with greetd |
 | App removal | Resolved Flatpak ref or Debian package; dpkg-query identifies ownership and `pkexec apt-get remove` removes packages |
 
@@ -177,7 +178,8 @@ the system Trash. File operations are subject to the user's OS permissions.
 `shell/src/terminal.rs` creates PTYs and starts the user's interactive shell.
 The frontend renders output with bundled xterm.js. Input, bounded output reads,
 resize, and close travel through the typed bridge. Closing a tab ends its shell
-and foreground job; detached jobs can survive. Development sessions run on the Debian host.
+and processes in its terminal session when a tab or window closes. Development
+sessions run on the Debian host.
 
 Preferences use the user's configuration directory, normally
 `~/.config/meridian/`: `desktop.json` stores appearance, wallpaper, and
@@ -202,8 +204,8 @@ by the owning services or authentication helpers.
   still deliberately allow filesystem operations and terminal input.
 - App launches resolve installed catalog IDs. The Terminal intentionally
   executes commands entered by the user through a real shell.
-- The lock uses the compositor's session-lock protocol; PAM verification runs
-  off the GTK main thread.
+- `swaylock` provides the lock surface and PAM authentication outside Meridian's
+  UI process.
 
 These are implementation boundaries, not a claim that the prototype has
 completed a security audit.
@@ -257,8 +259,7 @@ See [Phase 1](PHASE1.md) for current recovery behavior, capability audit, transf
 failure semantics, CI smoke tests and mandatory hardware/endurance release gates.
 The session supervisor restarts only the shell; labwc remains independent.
 Discarded surfaces explicitly destroy their GTK windows. The lock screen retains
-its session-lock window role while a native PAM-backed fallback is available
-during renderer failure. File transfers stage data before no-overwrite publication;
+locking is delegated to swaylock. File transfers stage data before no-overwrite publication;
 cross-device held sources have explicit recovery manifests.
 
 

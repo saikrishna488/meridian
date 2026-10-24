@@ -1,5 +1,7 @@
 # Meridian UI refinement — October 2026
 
+> Nova and Vault have since been removed from the project. References below describe the earlier implementation.
+
 This pass prioritizes consistent desktop interactions and legible application artwork. It builds on the existing working tree without replacing its ongoing desktop features.
 
 ## Improvements

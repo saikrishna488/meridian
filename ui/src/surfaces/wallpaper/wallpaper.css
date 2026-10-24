@@ -1,7 +1,7 @@
 .desktop { position: fixed; inset: 0; outline: none; }
-.desktop-items { position: absolute; top: 20px; bottom: 76px; left: 20px; display: flex; flex-flow: column wrap; align-content: flex-start; gap: 16px 12px; max-width: calc(100vw - 40px); }
-.desktop-item { width: 100px; min-height: 100px; padding: 7px; display: flex; flex-direction: column; align-items: center; gap: 5px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: white; font-size: 11px; cursor: default; }
-.desktop-item > span:last-child { max-width: 100%; overflow-wrap: anywhere; text-shadow: 0 1px 4px #000c; text-align: center; line-height: 1.35; }.desktop-item.selected { background: #c5dcff2b; border-color: #d8e9ff66; }.desktop-item:focus-visible { outline: 2px solid #d8e9ff; }.desktop-file { width: 64px; height: 64px; filter: drop-shadow(0 2px 3px #0004); }
+.desktop-items { position: absolute; top: 20px; bottom: 76px; left: 20px; display: flex; flex-flow: column wrap; align-content: flex-start; gap: var(--space-4) var(--space-3); max-width: calc(100vw - 40px); }
+.desktop-item { width: 100px; min-height: 100px; padding: 7px; display: flex; flex-direction: column; align-items: center; gap: 5px; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--on-wallpaper); font-size: var(--text-xs); cursor: default; }
+.desktop-item > span:last-child { max-width: 100%; overflow-wrap: anywhere; text-shadow: var(--wallpaper-text-shadow); text-align: center; line-height: 1.35; }.desktop-item.selected { background: #c5dcff2b; border-color: #d8e9ff66; }.desktop-item:focus-visible { outline: 2px solid #d8e9ff; }.desktop-file { width: 64px; height: 64px; filter: drop-shadow(0 2px 3px #0004); }
 /* Compact desktop menu with the same light/dark palette as the taskbar. */
 .desktop-context { position: fixed; z-index: 5; display: grid; width: min(240px, calc(100vw - 16px)); max-height: calc(100vh - 16px); overflow-y: auto; padding: 6px; background: #fff; border: 1px solid #d9d9d9; border-radius: 10px; box-shadow: 0 8px 24px #0003; color: #202020; }
 .desktop-context button { display: flex; align-items: center; gap: 12px; min-height: 34px; border: 0; text-align: left; padding: 7px 10px; border-radius: 5px; background: transparent; font-size: 12px; color: inherit; cursor: pointer; }
@@ -21,3 +21,6 @@
 .desktop-drop-indicator span { display: flex; gap: 10px; align-items: center; padding: 12px 18px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-raised); color: var(--ink); font-size: 13px; box-shadow: 0 6px 20px #0003; }
 
 :root[data-theme] .desktop-context { background:var(--surface-raised); color:var(--ink); border-color:var(--line); border-radius:12px; box-shadow:var(--shadow-lg); }:root[data-theme] .desktop-context button { min-height:35px; border-radius:7px; }:root[data-theme] .desktop-context button:hover, :root[data-theme] .desktop-context button:focus-visible { background:var(--selection); color:var(--selection-ink); }:root[data-theme] .desktop-context .context-heading { color:var(--ink-muted); font-size:9px; letter-spacing:.6px; }:root[data-theme] .desktop-context hr { background:var(--line); }.desktop-notice { color:var(--ink); background:var(--surface-raised); border:1px solid var(--line); border-radius:12px; }.desktop-notice button { color:var(--ink-muted); }
+
+.desktop-item:hover { background: rgb(210 228 255 / .12); }
+.desktop-item.selected { background: rgb(210 228 255 / .22); }

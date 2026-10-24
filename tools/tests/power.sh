@@ -1,26 +1,16 @@
 #!/usr/bin/env bash
-# Exercise lock confirmation and idle commands without locking the developer's session.
+# Exercise the swaylock hand-off and idle commands without locking the
+# developer's session: a swaylock mock stands in for the real lock screen.
 set -euo pipefail
 ROOT=$(cd -- "$(dirname -- "$0")/../.." && pwd)
 fixture=$(mktemp -d)
 trap 'rm -rf "$fixture"' EXIT
-mkdir "$fixture/bin"
+mkdir "$fixture/bin" "$fixture/no-swaylock"
 export MERIDIAN_POWER_TEST="$fixture"
-cat > "$fixture/bin/gapplication" <<'MOCK'
+cat > "$fixture/bin/swaylock" <<'MOCK'
 #!/bin/sh
-printf '%s\n' "$*" >> "$MERIDIAN_POWER_TEST/actions"
-MOCK
-cat > "$fixture/bin/gdbus" <<'MOCK'
-#!/bin/sh
-case "$(cat "$MERIDIAN_POWER_TEST/mode")" in
-  locked) echo "((true, signature '', [<true>]),)" ;;
-  unlocked) echo "((true, signature '', [<false>]),)" ;;
-  unavailable) exit 1 ;;
-esac
-MOCK
-cat > "$fixture/bin/sleep" <<'MOCK'
-#!/bin/sh
-exit 0
+printf '%s\n' "$*" >> "$MERIDIAN_POWER_TEST/swaylock-args"
+exit "${MERIDIAN_TEST_SWAYLOCK_EXIT:-0}"
 MOCK
 cat > "$fixture/bin/swayidle" <<'MOCK'
 #!/bin/sh
@@ -37,17 +27,20 @@ printf '%s\n' "$*" >> "$MERIDIAN_POWER_TEST/output-actions"
 MOCK
 chmod +x "$fixture/bin/"*
 export PATH="$fixture/bin:$PATH"
-printf 'locked' > "$fixture/mode"
+
+# Locking is delegated to swaylock with stable flags.
 sh "$ROOT/session/labwc/lock-session"
-[ "$(cat "$fixture/actions")" = 'action org.meridian.Shell lock-session' ]
-printf 'unlocked' > "$fixture/mode"
-if sh "$ROOT/session/labwc/lock-session" 2>/dev/null; then
-    echo 'Unconfirmed lock incorrectly accepted' >&2; exit 1
+[ "$(cat "$fixture/swaylock-args")" = '--daemonize --color 000000' ]
+
+# Without swaylock on PATH the lock is refused rather than reported as held.
+if PATH="$fixture/no-swaylock" /bin/sh "$ROOT/session/labwc/lock-session" >/dev/null 2>&1; then
+    echo 'Lock without swaylock incorrectly accepted' >&2; exit 1
 fi
-printf 'unavailable' > "$fixture/mode"
-if sh "$ROOT/session/labwc/lock-session" 2>/dev/null; then
-    echo 'Unavailable shell incorrectly accepted' >&2; exit 1
+# A lock that fails to start (for example, rejected authentication) is refused.
+if MERIDIAN_TEST_SWAYLOCK_EXIT=1 sh "$ROOT/session/labwc/lock-session" >/dev/null 2>&1; then
+    echo 'Failed lock incorrectly accepted' >&2; exit 1
 fi
+
 sh "$ROOT/session/labwc/idle"
 mapfile -t args < "$fixture/idle-args"
 [ "${args[0]}" = '-w' ]
@@ -58,12 +51,11 @@ mapfile -t args < "$fixture/idle-args"
 [ "${args[11]}" = 'after-resume' ]
 export MERIDIAN_LOCK_HELPER
 MERIDIAN_LOCK_HELPER=$(cat "$fixture/helper")
-printf 'unlocked' > "$fixture/mode"
-if sh -c "${args[6]}" 2>/dev/null; then
+# Display standby waits for a confirmed lock.
+if MERIDIAN_TEST_SWAYLOCK_EXIT=1 sh -c "${args[6]}" 2>/dev/null; then
     echo 'Display blanked without a confirmed lock' >&2; exit 1
 fi
 [ ! -f "$fixture/output-actions" ]
-printf 'locked' > "$fixture/mode"
 sh -c "${args[6]}"
 [ "$(cat "$fixture/output-actions")" = '--off *' ]
 sh -c "${args[8]}"
@@ -77,4 +69,4 @@ for value in '0 0' '60 30' '300 999999' '300; touch /tmp/invalid' '300 330 500';
     mapfile -t args < "$fixture/idle-args"
     [ "${args[2]} ${args[5]}" = '300 330' ]
 done
-echo 'Power controls: confirmed lock, failure paths, screen standby and wake passed.'
+echo 'Power controls: lock hand-off, refusal paths, screen standby and wake passed.'

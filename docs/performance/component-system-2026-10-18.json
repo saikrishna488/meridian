@@ -1,0 +1,101 @@
+{
+  "date": "2026-10-18",
+  "baseline": "Existing working tree, including prior appearance/wireless changes, before this component pass. Same installed dependencies and production build.",
+  "method": "production esbuild bytes; unique JS files exclude maps; per surface transitive static graph",
+  "environment": {
+    "node": "22.22.1",
+    "react": "19.3.0",
+    "react_dom": "19.3.0",
+    "typescript": "5.9.3",
+    "esbuild": "0.28.2",
+    "jsdom": "30.1.2",
+    "gtk": "4.22.4",
+    "webkitgtk": "2.52.6",
+    "gtk4_layer_shell": "1.3.0"
+  },
+  "before": {
+    "method": "production esbuild bytes; unique JS files exclude maps; per surface transitive static graph",
+    "total_js": 725691,
+    "total_css": 137458,
+    "surfaces": {
+      "dist/surfaces/settings/settings.js": 310760,
+      "dist/surfaces/finder/finder.js": 277311,
+      "dist/surfaces/terminal/terminal.js": 532642,
+      "dist/surfaces/pulse/pulse.js": 237317,
+      "dist/surfaces/notifications/notifications.js": 239945,
+      "dist/surfaces/utilities/utilities.js": 251850,
+      "dist/surfaces/panel/panel.js": 237371,
+      "dist/surfaces/topbar/topbar.js": 239315,
+      "dist/surfaces/applications/applications.js": 252779,
+      "dist/surfaces/options/options.js": 241071,
+      "dist/surfaces/greeter/greeter.js": 243562,
+      "dist/surfaces/locker/locker.js": 237691,
+      "dist/surfaces/wallpaper/wallpaper.js": 248797,
+      "dist/surfaces/desktop-menu/desktop-menu.js": 235212
+    }
+  },
+  "after": {
+    "method": "production esbuild bytes; unique JS files exclude maps; per surface transitive static graph",
+    "total_js": 730032,
+    "total_css": 141664,
+    "surfaces": {
+      "dist/surfaces/settings/settings.js": 313937,
+      "dist/surfaces/finder/finder.js": 280249,
+      "dist/surfaces/terminal/terminal.js": 533423,
+      "dist/surfaces/pulse/pulse.js": 238098,
+      "dist/surfaces/notifications/notifications.js": 240762,
+      "dist/surfaces/utilities/utilities.js": 255774,
+      "dist/surfaces/panel/panel.js": 238152,
+      "dist/surfaces/topbar/topbar.js": 240096,
+      "dist/surfaces/applications/applications.js": 254810,
+      "dist/surfaces/options/options.js": 242514,
+      "dist/surfaces/greeter/greeter.js": 245521,
+      "dist/surfaces/locker/locker.js": 238472,
+      "dist/surfaces/wallpaper/wallpaper.js": 249578,
+      "dist/surfaces/desktop-menu/desktop-menu.js": 236407
+    }
+  },
+  "delta": {
+    "total_js": 4341,
+    "total_css": 4206,
+    "surfaces": {
+      "dist/surfaces/settings/settings.js": 3177,
+      "dist/surfaces/finder/finder.js": 2938,
+      "dist/surfaces/terminal/terminal.js": 781,
+      "dist/surfaces/pulse/pulse.js": 781,
+      "dist/surfaces/notifications/notifications.js": 817,
+      "dist/surfaces/utilities/utilities.js": 3924,
+      "dist/surfaces/panel/panel.js": 781,
+      "dist/surfaces/topbar/topbar.js": 781,
+      "dist/surfaces/applications/applications.js": 2031,
+      "dist/surfaces/options/options.js": 1443,
+      "dist/surfaces/greeter/greeter.js": 1959,
+      "dist/surfaces/locker/locker.js": 781,
+      "dist/surfaces/wallpaper/wallpaper.js": 781,
+      "dist/surfaces/desktop-menu/desktop-menu.js": 1195
+    }
+  },
+  "runtime": {
+    "initial_render_ms": null,
+    "menu_open_ms": null,
+    "cpu_percent": null,
+    "shell_tree_pss_kib": null,
+    "webkit_renderer_pss_kib": null,
+    "react_commit_count": null,
+    "react_commit_duration_ms": null
+  },
+  "runtime_limitation": "Gdk.Display.get_default() returned None; private dbus-run-session failed to bind a socket with EPERM. Native Wayland smoke suite cannot start; no runtime or visual qualification is claimed.",
+  "dependencies_added": [],
+  "library_integration": "Base UI and Motion not installed: npm registry EAI_AGAIN; neither cached. No copied upstream source.",
+  "checks": {
+    "baseline_npm_test": "passed: three existing test files",
+    "final_npm_test": "passed: production TypeScript/build plus four test files (8 shared-component, 2 light/dark contrast, 71 desktop-feature, 30 surface cases)",
+    "git_diff_check": "passed",
+    "project_check": "release integrity, screenshot workflow, power/session/supervisor, install rollback, profile parser, rustfmt and clippy passed; workspace tests stopped at greetd::tests::interrupted_and_malformed_socket_responses_fail_cleanly (socket bind EPERM). Generated-types committed gate not reached; pre-existing generated files are dirty.",
+    "qualified_workspace_tests": "passed with only the socket-bound greetd case explicitly skipped: 211 passed, 4 ignored, 1 filtered out",
+    "native_wayland": "build passed; private D-Bus socket bind EPERM prevented native run",
+    "native_renderer_recovery": "not run; isolated native session unavailable",
+    "appearance": "light/dark contrast assertions passed; rendered visual checks not run",
+    "reduced_motion": "CSS presets explicitly disable animation under prefers-reduced-motion; native rendered check not run"
+  }
+}

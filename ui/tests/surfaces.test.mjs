@@ -101,7 +101,7 @@ test("applications ignore stale search replies and Escape clears the query befor
   await waitFor(() => ui.requests.some(request => request.method === "popover.close"));
 });
 
-test("Control Center displays availability and updates settings alongside power controls", async t => {
+test("Control Center displays availability and updates settings without duplicate session shortcuts", async t => {
   const state = { wifi: true, bluetooth: null, brightness: 65, volume: 30 };
   const ui = await surface(t, "options", request => request.method === "settings.get" ? state : null);
   ui.emit("popover.shown");
@@ -117,9 +117,9 @@ test("Control Center displays availability and updates settings alongside power 
   ui.type("#volume", "42");
   await waitFor(() => ui.requests.some(request => request.method === "settings.set_volume"));
   assert.deepEqual(ui.requests.find(request => request.method === "settings.set_volume").params, { percent: 42 });
-  assert.ok(ui.get("#lock"));
-  assert.ok(ui.get("#sleep"));
-  assert.ok(ui.get("#sign-out"));
+  assert.equal(ui.get(".control-footer"), null);
+  for (const id of ["lock", "sleep", "restart", "shutdown", "sign-out"]) assert.equal(ui.get(`#${id}`), null);
+  assert.equal(ui.get("#menu").textContent.includes("Personalize"), false);
   assert.equal(ui.requests.some(request => request.method === "session.sign_out"), false);
 });
 
@@ -320,23 +320,6 @@ test("General shows system details and checks GitHub only on request", async t =
   await waitFor(() => ui.requests.some(r => r.method === "settings.open_releases"));
 });
 
-test("Nova confirms package changes and reports failure without claiming installation", async t => {
-  const ui = await surface(t, "utilities", request => {
-    if (request.method === "shell.hello") return { surface: "nova", capabilities: [] };
-    if (request.method === "store.list") return [{id:"vlc",name:"VLC",category:"Media",description:"Video player",installed:false,available:true},{id:"missing",name:"Missing",category:"Media",description:"Unavailable",installed:false,available:false}];
-    if (request.method === "store.action") return {error:{code:"failed",message:"Authentication cancelled"}};
-    return null;
-  });
-  await waitFor(() => ui.get(".app-grid button"));
-  assert.equal(ui.window.document.querySelectorAll(".app-grid button")[1].disabled,true);
-  ui.get(".app-grid button").click();
-  await waitFor(() => ui.get('[role="dialog"]'));
-  assert.equal(ui.requests.filter(r => r.method === "store.action").length,0);
-  ui.window.document.querySelectorAll(".dialog button")[1].click();
-  await waitFor(() => ui.get('[role="alert"]')?.textContent === "Authentication cancelled");
-  assert.deepEqual(ui.requests.find(r => r.method === "store.action").params,{id:"vlc",action:"install"});
-  assert.equal(ui.get(".app-grid button").textContent,"Install");
-});
 
 test("Calendar loads saved events and persists deletion through the host", async t => {
   const today = new Date();
@@ -385,12 +368,11 @@ test("launcher list view retains descriptions and launches the keyboard selectio
   assert.equal(ui.requests.find(req => req.method === "search.activate").params.item_id, "browser");
 });
 
-test("Control Center requires confirmation for destructive power actions and recovers from failures", async t => {
-  const ui = await surface(t, "options", req => req.method === "settings.get"
-    ? { wifi: true, bluetooth: true, brightness: 50, volume: 40 }
-    : req.method.startsWith("session.") ? { error: { code: "failed", message: "Power action unavailable" } } : null);
+test("Meridian menu requires confirmation for destructive power actions and recovers from failures", async t => {
+  const ui = await surface(t, "desktop-menu", req => req.method.startsWith("session.")
+    ? { error: { code: "failed", message: "Power action unavailable" } } : null);
   ui.emit("popover.shown");
-  await waitFor(() => !ui.get("#menu").classList.contains("hidden"));
+  await waitFor(() => !ui.get(".desktop-menu").classList.contains("hidden"));
   for (const [id, method] of [["restart", "session.restart"], ["shutdown", "session.shutdown"], ["sign-out", "session.sign_out"]]) {
     ui.get(`#${id}`).click();
     await waitFor(() => ui.get(`#${id}`).textContent.endsWith("?"));
@@ -398,7 +380,7 @@ test("Control Center requires confirmation for destructive power actions and rec
     ui.get(`#${id}`).click();
     await waitFor(() => ui.requests.some(req => req.method === method));
     await waitFor(() => !ui.get(`#${id}`).disabled);
-    assert.equal(ui.get("#status").textContent, "Power action unavailable");
+    assert.equal(ui.get('[role="alert"]').textContent, "Power action unavailable");
   }
   for (const id of ["lock", "sleep"]) {
     ui.get(`#${id}`).click();
@@ -433,7 +415,7 @@ test("dock context offers only quit and remove, including unpinned running apps"
   ui.get('[aria-label="Terminal"]').dispatchEvent(new ui.window.MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
   await waitFor(() => ui.get('.dock-context'));
   const buttons = [...ui.window.document.querySelectorAll('.dock-context button')];
-  assert.deepEqual(buttons.map(b => b.textContent), ["Quit", "Remove from dock"]);
+  assert.deepEqual(buttons.map(b => b.textContent), ["Quit", "Remove from panel"]);
   assert.equal(buttons[1].disabled, true);
   buttons[0].click();
   await waitFor(() => ui.requests.some(r => r.method === "windows.close"));
@@ -451,4 +433,111 @@ test("Control Center becomes interactive while an optional service is slow", asy
   assert.equal(ui.get("#wifi").disabled, true);
   complete({ wifi: true, bluetooth: null, brightness: null, volume: null });
   await waitFor(() => !ui.get("#wifi").disabled);
+});
+
+const wirelessState = { wifi: true, bluetooth: true, brightness: 50, volume: 40 };
+const savedWifi = { uuid: "12345678-1234-1234-1234-123456789abc", name: "Studio", device: "wlan0" };
+const wifiConfig = { uuid: savedWifi.uuid, autoconnect: true, metered: "unknown", method: "manual", addresses: "192.168.1.20/24", gateway: "192.168.1.1", dns: "1.1.1.1", ignore_auto_dns: true };
+function buttonWithText(ui, text, root = ui.window.document) { return [...root.querySelectorAll("button")].find(b => b.textContent === text); }
+
+test("Wi-Fi exposes access point details and edits saved configuration without reconnecting", async t => {
+  const network = { ssid: "Studio", bssid: "AA:BB:CC:DD:EE:FF", device: "wlan0", signal: 85, security: "WPA3", connected: true, frequency: 5180, channel: 36, rate: "540 Mbit/s" };
+  const ui = await surface(t, "settings", r => r.method === "settings.get" ? wirelessState : r.method === "settings.wifi_networks" ? [network] : r.method === "settings.wifi_profiles" ? [savedWifi] : r.method === "settings.wifi_config" ? wifiConfig : null);
+  ui.get('nav [aria-label="Wi-Fi"]').click();
+  await waitFor(() => ui.get('[aria-label="Configure Studio"]') && !ui.get('[aria-label="Configure Studio"]').disabled);
+  ui.get('[aria-label="Details for Studio on AA:BB:CC:DD:EE:FF"]').click();
+  await waitFor(() => ui.get(".wireless-properties"));
+  assert.match(ui.get(".wireless-properties").textContent, /5180 MHz · Channel 36/);
+  assert.match(ui.get(".wireless-properties").textContent, /AA:BB:CC:DD:EE:FF/);
+  ui.get('[aria-label="Configure Studio"]').click();
+  await waitFor(() => ui.get('[aria-label="DNS servers"]'));
+  assert.equal(ui.get('[aria-label="IPv4 addresses"]').value, "192.168.1.20/24");
+  ui.get('#wifi-autoconnect').click();
+  ui.type('[aria-label="DNS servers"]', "9.9.9.9, 1.1.1.1");
+  ui.get('[role="dialog"]').dispatchEvent(new ui.window.Event("submit", { bubbles: true, cancelable: true }));
+  await waitFor(() => ui.requests.some(r => r.method === "settings.wifi_config_set"));
+  assert.deepEqual(ui.requests.find(r => r.method === "settings.wifi_config_set").params, { ...wifiConfig, autoconnect: false, dns: "9.9.9.9, 1.1.1.1" });
+  assert.equal(ui.requests.some(r => r.method === "settings.wifi_profile_action"), false);
+  await waitFor(() => !ui.get('[role="dialog"]'));
+  assert.match(ui.get('[role="status"]').textContent, /Reconnect/);
+});
+
+test("Wi-Fi preserves edits on save failure and requires confirmation before forgetting", async t => {
+  const ui = await surface(t, "settings", r => r.method === "settings.get" ? wirelessState : r.method === "settings.wifi_profiles" ? [savedWifi] : r.method === "settings.wifi_config" ? wifiConfig : r.method === "settings.wifi_config_set" ? { error: { code: "failed", message: "Permission denied" } } : null);
+  ui.get('nav [aria-label="Wi-Fi"]').click();
+  await waitFor(() => ui.get('[aria-label="Configure Studio"]') && !ui.get('[aria-label="Configure Studio"]').disabled);
+  ui.get('[aria-label="Configure Studio"]').click();
+  await waitFor(() => ui.get('[aria-label="DNS servers"]'));
+  ui.type('[aria-label="DNS servers"]', "8.8.8.8");
+  ui.get('[role="dialog"]').dispatchEvent(new ui.window.Event("submit", { bubbles: true, cancelable: true }));
+  await waitFor(() => ui.get('[role="dialog"] [role="alert"]'));
+  assert.equal(ui.get('[aria-label="DNS servers"]').value, "8.8.8.8");
+  assert.match(ui.get('[role="alert"]').textContent, /Permission denied/);
+  await waitFor(() => !buttonWithText(ui, "Forget network…").disabled);
+  buttonWithText(ui, "Forget network…").click();
+  await waitFor(() => ui.get('[aria-label="Forget Studio"]'));
+  assert.equal(ui.requests.some(r => r.method === "settings.wifi_profile_action"), false);
+  buttonWithText(ui, "Cancel", ui.get('[role="dialog"]')).click();
+  await waitFor(() => ui.get('[aria-label="DNS servers"]'));
+  assert.equal(ui.get('[aria-label="DNS servers"]').value, "8.8.8.8");
+  buttonWithText(ui, "Forget network…").click();
+  await waitFor(() => ui.get('[aria-label="Forget Studio"]'));
+  buttonWithText(ui, "Forget", ui.get('[role="dialog"]')).click();
+  await waitFor(() => ui.requests.some(r => r.method === "settings.wifi_profile_action"));
+  assert.deepEqual(ui.requests.find(r => r.method === "settings.wifi_profile_action").params, { uuid: savedWifi.uuid, action: "forget" });
+});
+
+test("Bluetooth groups paired devices, shows battery and address, and supports trust and confirmed removal", async t => {
+  const paired = { path: "/org/bluez/hci0/dev_AA_BB", name: "Studio headphones", address: "AA:BB:CC:DD:EE:FF", paired: true, connected: true, trusted: false, icon: "audio-headphones", battery: 74 };
+  const nearby = { ...paired, path: "/org/bluez/hci0/dev_CC_DD", name: "Keyboard", paired: false, connected: false, icon: "input-keyboard", battery: null };
+  const ui = await surface(t, "settings", r => r.method === "settings.get" ? wirelessState : r.method === "settings.bluetooth_devices" ? [paired, nearby] : null);
+  ui.get('nav [aria-label="Bluetooth"]').click();
+  await waitFor(() => ui.window.document.querySelectorAll(".wireless-item").length === 2 && !buttonWithText(ui, "Pair").disabled);
+  assert.match(ui.window.document.querySelectorAll(".wireless-list")[0].textContent, /Studio headphones/);
+  assert.match(ui.window.document.querySelectorAll(".wireless-list")[1].textContent, /Keyboard/);
+  ui.get('[aria-label="Details for Studio headphones"]').click();
+  await waitFor(() => ui.get('[aria-label="Trust Studio headphones"]'));
+  assert.match(ui.get(".wireless-properties").textContent, /AA:BB:CC:DD:EE:FF/);
+  assert.match(ui.get(".wireless-properties").textContent, /74%/);
+  ui.get('[aria-label="Trust Studio headphones"]').click();
+  await waitFor(() => ui.requests.some(r => r.method === "settings.bluetooth_action"));
+  assert.deepEqual(ui.requests.find(r => r.method === "settings.bluetooth_action").params, { path: paired.path, action: "trust" });
+  await waitFor(() => !buttonWithText(ui, "Forget device…").disabled);
+  buttonWithText(ui, "Forget device…").click();
+  await waitFor(() => ui.get('[role="dialog"]'));
+  assert.equal(ui.requests.some(r => r.params?.action === "forget"), false);
+  buttonWithText(ui, "Forget", ui.get('[role="dialog"]')).click();
+  await waitFor(() => ui.requests.some(r => r.params?.action === "forget"));
+  assert.deepEqual(ui.requests.find(r => r.params?.action === "forget").params, { path: paired.path, action: "forget" });
+});
+
+test("turning Wi-Fi off hides stale nearby results while saved configurations remain available", async t => {
+  const ui = await surface(t, "settings", r => r.method === "settings.get" ? wirelessState : r.method === "settings.wifi_profiles" ? [savedWifi] : r.method === "settings.wifi_networks" ? [{ ssid: "Studio", bssid: "AA:BB:CC:DD:EE:FF", device: "wlan0", signal: 80, security: "WPA2", connected: true }] : null);
+  ui.get('nav [aria-label="Wi-Fi"]').click();
+  await waitFor(() => ui.get(".wireless-item"));
+  ui.emit("settings.changed", { ...wirelessState, wifi: false });
+  await waitFor(() => !ui.get(".wireless-item"));
+  assert.ok(ui.get('[aria-label="Configure Studio"]'));
+  assert.equal(buttonWithText(ui, "Scan again").disabled, true);
+  assert.match(ui.get(".wireless-empty").textContent, /Wi-Fi is off/);
+});
+
+test("hidden native menus release DOM input while preserving the host close handshake", async t => {
+  for (const name of ["applications", "options", "notifications", "desktop-menu"]) {
+    const ui = await surface(t, name, request => request.method === "notifications.read"
+      ? { available: true, items: [], do_not_disturb: false }
+      : request.method === "search.query" ? searchResult(request.params.serial, []) : null);
+    const menu = ui.get('section[role="dialog"], section[role="menu"]');
+    assert.ok(menu, name);
+    assert.equal(menu.hasAttribute("inert"), true, `${name}: initially inert`);
+    const scrim = ui.get('.scrim, .desktop-scrim');
+    assert.equal(scrim.hidden, true, `${name}: initially no pointer scrim`);
+    ui.emit("popover.shown");
+    await waitFor(() => !menu.hasAttribute("inert"), `${name}: menu did not become interactive`);
+    assert.equal(scrim.hidden, false);
+    ui.emit("popover.dismiss");
+    await waitFor(() => menu.hasAttribute("inert"));
+    assert.equal(scrim.hidden, true, `${name}: scrim released during close`);
+    await waitFor(() => ui.requests.some(request => request.method === "popover.close"));
+  }
 });

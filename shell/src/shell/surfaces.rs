@@ -5,7 +5,6 @@ impl Shell {
     pub(super) fn open_utility(&self, kind: SurfaceKind) {
         let mut state = self.state.borrow_mut();
         let slot = match kind {
-            SurfaceKind::Nova => &mut state.nova,
             SurfaceKind::Calendar => &mut state.calendar,
             _ => &mut state.clock,
         };

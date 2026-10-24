@@ -71,7 +71,6 @@ struct State {
     finder_refresh_timer: Option<glib::SourceId>,
     terminal: Option<Rc<WebSurface>>,
     pulse: Option<Rc<WebSurface>>,
-    nova: Option<Rc<WebSurface>>,
     calendar: Option<Rc<WebSurface>>,
     clock: Option<Rc<WebSurface>>,
     wallpapers: Vec<(gdk::Monitor, Rc<WebSurface>)>,
@@ -140,6 +139,7 @@ impl Shell {
                 let event = Event::NotificationsChanged(state);
                 shell.send_panel(&event);
                 shell.send_to_popover(Popover::Notifications, &event);
+                shell.send_to_popover(Popover::Options, &event);
             }
         }));
 
@@ -152,15 +152,8 @@ impl Shell {
             }
         });
         let weak = Rc::downgrade(&shell);
-        shell.locker.connect_locked(move |_| {
-            if let Some(shell) = weak.upgrade() {
-                shell.set_lock_action_state(true);
-            }
-        });
-        let weak = Rc::downgrade(&shell);
         shell.locker.connect_unlocked(move |_| {
             if let Some(shell) = weak.upgrade() {
-                shell.set_lock_action_state(false);
                 let surfaces = std::mem::take(&mut shell.state.borrow_mut().lock_surfaces);
                 drop(surfaces); // gtk4-session-lock destroys its assigned windows.
             }
@@ -169,7 +162,6 @@ impl Shell {
         shell.locker.connect_failed(move |_| {
             log::error!("could not lock the session (unsupported compositor, or already locked elsewhere)");
             if let Some(shell) = weak.upgrade() {
-                shell.set_lock_action_state(false);
                 let surfaces = std::mem::take(&mut shell.state.borrow_mut().lock_surfaces);
                 drop(surfaces); // gtk4-session-lock owns failed-lock teardown too.
             }
@@ -189,7 +181,7 @@ impl Shell {
                         shell.state.borrow_mut().catalog_refresh_timer.take();
                         *shell.catalog.borrow_mut() = AppCatalog::load(host);
                         shell.env.invalidate_icons();
-                        shell.send_to_popover(Popover::Applications, &Event::SearchInvalidated);
+                        shell.send_app_catalog_invalidated();
                     }
                 });
                 shell.state.borrow_mut().catalog_refresh_timer = Some(timer);
@@ -400,7 +392,6 @@ impl Shell {
                         "meridian-settings.desktop" => "Settings",
                         "meridian-finder.desktop" => "Orbit",
                         "meridian-terminal.desktop" => "Meridian Terminal",
-                        "meridian-nova.desktop" => "Nova",
                         "meridian-calendar.desktop" => "Calendar",
                         "meridian-clock.desktop" => "Clock",
                         "meridian-pulse.desktop" => "Pulse",
@@ -475,7 +466,6 @@ impl Shell {
                         "meridian-settings.desktop" => self.open_preferences(),
                         "meridian-finder.desktop" => self.open_finder(),
                         "meridian-terminal.desktop" => self.open_terminal(),
-                        "meridian-nova.desktop" => self.open_utility(SurfaceKind::Nova),
                         "meridian-calendar.desktop" => self.open_utility(SurfaceKind::Calendar),
                         "meridian-clock.desktop" => self.open_utility(SurfaceKind::Clock),
                         "meridian-pulse.desktop" => self.open_pulse(),
@@ -523,14 +513,6 @@ impl Shell {
                 crate::calendar::save(&events)?;
                 serialize(ok())
             }
-            Request::StoreList => Ok(Reply::Later(Box::pin(async move {
-                let data = crate::files::blocking(crate::store::list).await?;
-                proto::reply_ok(&data).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
-            }))),
-            Request::StoreAction(choice) => Ok(Reply::Later(Box::pin(async move {
-                crate::store::action(choice).await?;
-                ok().map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
-            }))),
             Request::PulseOpen => {
                 self.open_pulse();
                 serialize(ok())
@@ -765,7 +747,6 @@ impl Shell {
                         "meridian-settings.desktop",
                         "meridian-finder.desktop",
                         "meridian-terminal.desktop",
-                        "meridian-nova.desktop",
                         "meridian-calendar.desktop",
                         "meridian-clock.desktop",
                         "meridian-pulse.desktop",
@@ -793,12 +774,6 @@ impl Shell {
                 results.sections.extend(crate::search::sections(&q.query, &self.search_preferences.borrow()));
                 let query = q.query.trim().to_lowercase();
                 let builtins = [
-                    (
-                        "meridian-nova.desktop",
-                        "Nova",
-                        "Meridian nova app store software install",
-                        "system-software-install",
-                    ),
                     ("meridian-calendar.desktop", "Calendar", "Meridian calendar events dates", "x-office-calendar"),
                     ("meridian-clock.desktop", "Clock", "Meridian clock timer stopwatch", "preferences-system-time"),
                     (
@@ -865,7 +840,6 @@ impl Shell {
                     return serialize(ok());
                 }
                 for (id, kind) in [
-                    ("meridian-nova.desktop", SurfaceKind::Nova),
                     ("meridian-calendar.desktop", SurfaceKind::Calendar),
                     ("meridian-clock.desktop", SurfaceKind::Clock),
                 ] {
@@ -938,6 +912,10 @@ impl Shell {
             | Request::SettingsDisplayDecide(_)
             | Request::SettingsMonitorBrightness(_)
             | Request::SettingsWifiNetworks
+            | Request::SettingsWifiProfiles
+            | Request::SettingsWifiConfig(_)
+            | Request::SettingsWifiConfigSet(_)
+            | Request::SettingsWifiProfileAction(_)
             | Request::SettingsWifiConnect(_)
             | Request::SettingsBluetoothDevices
             | Request::SettingsBluetoothScan
@@ -1022,37 +1000,23 @@ impl Shell {
     /// surfaces. Closing the Options menu first avoids resuming into a
     /// dropdown that has nothing left open behind it.
     fn lock_session(&self) -> Result<(), ErrorBody> {
-        if self.locker.is_locked() {
-            return Ok(());
-        }
-        crate::lock_auth::check_setup()?;
-        self.env.check_locker().map_err(|message| ErrorBody::new(ErrorCode::Unavailable, message))?;
-        if !self.locker.lock() {
-            return Err(ErrorBody::new(ErrorCode::Failed, "could not lock the screen"));
-        }
+        let child = std::process::Command::new("swaylock")
+            .args(["--daemonize", "--color", "000000"])
+            .spawn()
+            .map_err(|e| ErrorBody::new(ErrorCode::Unavailable, format!("Could not start swaylock: {e}")))?;
+        std::thread::spawn(move || {
+            let mut child = child;
+            let _ = child.wait();
+        });
         for popover in POPOVERS {
             self.dismiss_popover(popover);
         }
         Ok(())
     }
 
-    // The state exported through org.gtk.Actions is also consumed by the
-    // idle helper. Only ::locked may mark the lock as confirmed.
-    fn set_lock_action_state(&self, locked: bool) {
-        if let Some(action) = self.app.lookup_action("lock-session").and_downcast::<gio::SimpleAction>() {
-            action.set_state(&locked.to_variant());
-        }
-    }
-
     async fn lock_session_confirmed(&self) -> Result<(), ErrorBody> {
         self.lock_session()?;
-        for _ in 0..80 {
-            if self.locker.is_locked() {
-                return Ok(());
-            }
-            glib::timeout_future(Duration::from_millis(50)).await;
-        }
-        Err(ErrorBody::new(ErrorCode::Failed, "The compositor did not confirm the screen lock; sleep was cancelled"))
+        Ok(())
     }
 
     fn accepts_unlock(&self, surface: &Rc<WebSurface>) -> bool {
@@ -1083,7 +1047,6 @@ impl Shell {
             &surfaces.finder,
             &surfaces.terminal,
             &surfaces.pulse,
-            &surfaces.nova,
             &surfaces.calendar,
             &surfaces.clock,
             &surfaces.panel,
@@ -1199,6 +1162,25 @@ impl Shell {
                 active: w.active,
             })
             .collect()
+    }
+
+    fn send_app_catalog_invalidated(&self) {
+        let surfaces = {
+            let state = self.state.borrow();
+            state
+                .popovers
+                .values()
+                .cloned()
+                .chain(state.panel.iter().cloned())
+                .chain(state.topbar.iter().cloned())
+                .chain(state.preferences.iter().cloned())
+                .chain(state.finder.iter().cloned())
+                .chain(state.wallpapers.iter().map(|(_, surface)| surface.clone()))
+                .collect::<Vec<_>>()
+        };
+        for surface in surfaces {
+            surface.send(&Event::SearchInvalidated);
+        }
     }
 
     fn send_panel(&self, event: &Event) {
@@ -1447,11 +1429,7 @@ impl Shell {
             }),
         ];
         for (name, handler) in actions {
-            let action = if name == "lock-session" {
-                gio::SimpleAction::new_stateful(name, None, &false.to_variant())
-            } else {
-                gio::SimpleAction::new(name, None)
-            };
+            let action = gio::SimpleAction::new(name, None);
             let weak = self.weak_self.clone();
             action.connect_activate(move |_, _| {
                 if let Some(shell) = weak.upgrade() {

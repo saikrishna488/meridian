@@ -1,5 +1,7 @@
 # Meridian 0.2 stability qualification
 
+> Nova and Vault have since been removed from the project. References below describe the earlier implementation.
+
 Status: engineering candidate; **not yet qualified as Stable Alpha**. Do not tag
 0.2 or declare Phase 1 complete until the hardware and endurance gates below have
 recorded results. Automated tests are evidence for their particular fixtures,

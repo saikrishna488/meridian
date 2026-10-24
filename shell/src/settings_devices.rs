@@ -2,7 +2,7 @@
 use gtk::{gio, glib};
 use meridian_protocol::{
     BluetoothAction, BluetoothDevice, DisplayConfig, DisplayDecision, DisplayTrial, ErrorBody, ErrorCode,
-    MonitorBrightness, MonitorBrightnessRequest, WifiConnect, WifiNetwork,
+    MonitorBrightness, MonitorBrightnessRequest, WifiConfig, WifiConnect, WifiNetwork, WifiProfile, WifiProfileAction,
 };
 use std::io::{Read, Write};
 use std::process::{Command, Stdio};
@@ -178,7 +178,7 @@ pub fn wifi_networks() -> Result<Vec<WifiNetwork>, ErrorBody> {
             "--escape",
             "yes",
             "--fields",
-            "IN-USE,SSID,BSSID,SIGNAL,SECURITY,DEVICE",
+            "IN-USE,SSID,BSSID,SIGNAL,SECURITY,DEVICE,FREQ,CHAN,RATE",
             "device",
             "wifi",
             "list",
@@ -191,7 +191,7 @@ pub fn wifi_networks() -> Result<Vec<WifiNetwork>, ErrorBody> {
         .lines()
         .filter_map(|line| {
             let f = fields(line);
-            if f.len() != 6 || f[1].is_empty() {
+            if f.len() != 9 || f[1].is_empty() {
                 return None;
             }
             Some(WifiNetwork {
@@ -201,6 +201,9 @@ pub fn wifi_networks() -> Result<Vec<WifiNetwork>, ErrorBody> {
                 signal: f[3].parse().unwrap_or(0),
                 security: f[4].clone(),
                 device: f[5].clone(),
+                frequency: f[6].split_whitespace().next().and_then(|v| v.parse().ok()).unwrap_or(0),
+                channel: f[7].parse().unwrap_or(0),
+                rate: f[8].clone(),
             })
         })
         .collect();
@@ -226,6 +229,138 @@ pub fn wifi_connect(choice: WifiConnect) -> Result<(), ErrorBody> {
         &["nmcli", "--ask", "--wait", "30", "device", "wifi", "connect", &choice.bssid, "ifname", &choice.device],
         Some(&password),
     )?;
+    Ok(())
+}
+pub fn wifi_profiles() -> Result<Vec<WifiProfile>, ErrorBody> {
+    let output =
+        run(&["nmcli", "--terse", "--escape", "yes", "--fields", "UUID,NAME,TYPE,DEVICE", "connection", "show"], None)?;
+    let mut profiles: Vec<_> = output
+        .lines()
+        .filter_map(|line| {
+            let f = fields(line);
+            (f.len() == 4 && f[2] == "802-11-wireless").then(|| WifiProfile {
+                uuid: f[0].clone(),
+                name: f[1].clone(),
+                device: if f[3] == "--" { String::new() } else { f[3].clone() },
+            })
+        })
+        .collect();
+    profiles.sort_by_key(|p| (p.device.is_empty(), p.name.to_lowercase()));
+    Ok(profiles)
+}
+fn check_wifi_profile(uuid: &str) -> Result<(), ErrorBody> {
+    if uuid.len() != 36 || !uuid.chars().all(|c| c.is_ascii_hexdigit() || c == '-') {
+        return Err(error("Invalid connection identifier"));
+    }
+    if !wifi_profiles()?.iter().any(|p| p.uuid == uuid) {
+        return Err(error("Saved Wi-Fi network is no longer available"));
+    }
+    Ok(())
+}
+pub fn wifi_config(uuid: &str) -> Result<WifiConfig, ErrorBody> {
+    check_wifi_profile(uuid)?;
+    let output = run(
+        &[
+            "nmcli",
+            "--terse",
+            "--escape",
+            "yes",
+            "--fields",
+            "connection.autoconnect,connection.metered,ipv4.method,ipv4.addresses,ipv4.gateway,ipv4.dns,ipv4.ignore-auto-dns",
+            "connection",
+            "show",
+            "uuid",
+            uuid,
+        ],
+        None,
+    )?;
+    let mut values = std::collections::HashMap::new();
+    for line in output.lines() {
+        let f = fields(line);
+        if f.len() == 2 {
+            values.insert(f[0].clone(), if f[1] == "--" { String::new() } else { f[1].clone() });
+        }
+    }
+    let get = |key: &str| values.get(key).cloned().unwrap_or_default();
+    Ok(WifiConfig {
+        uuid: uuid.into(),
+        autoconnect: get("connection.autoconnect") == "yes",
+        metered: get("connection.metered"),
+        method: get("ipv4.method"),
+        addresses: get("ipv4.addresses"),
+        gateway: get("ipv4.gateway"),
+        dns: get("ipv4.dns"),
+        ignore_auto_dns: get("ipv4.ignore-auto-dns") == "yes",
+    })
+}
+fn validate_wifi_config(config: &WifiConfig) -> Result<(), ErrorBody> {
+    if !["auto", "manual"].contains(&config.method.as_str())
+        || !["yes", "no", "unknown"].contains(&config.metered.as_str())
+    {
+        return Err(error("Choose a supported IPv4 and metered connection mode"));
+    }
+    let ipv4 = |value: &str| value.parse::<std::net::Ipv4Addr>().is_ok();
+    if config.addresses.len() > 2048 || config.dns.len() > 2048 || config.gateway.len() > 64 {
+        return Err(error("Network configuration is too long"));
+    }
+    if !config.gateway.is_empty() && !ipv4(&config.gateway) {
+        return Err(error("Enter a valid IPv4 gateway"));
+    }
+    if !config.dns.is_empty() && !config.dns.split(',').all(|v| ipv4(v.trim())) {
+        return Err(error("Enter IPv4 DNS addresses separated by commas"));
+    }
+    if config.method == "manual" && config.addresses.trim().is_empty() {
+        return Err(error("Manual IPv4 requires an address with a prefix, such as 192.168.1.20/24"));
+    }
+    if !config.addresses.is_empty()
+        && !config.addresses.split(',').all(|v| {
+            v.trim().split_once('/').is_some_and(|(ip, prefix)| ipv4(ip) && prefix.parse::<u8>().is_ok_and(|p| p <= 32))
+        })
+    {
+        return Err(error("Enter IPv4 addresses with prefixes separated by commas"));
+    }
+    Ok(())
+}
+pub fn wifi_config_set(config: WifiConfig) -> Result<(), ErrorBody> {
+    validate_wifi_config(&config)?;
+    check_wifi_profile(&config.uuid)?;
+    run(
+        &[
+            "nmcli",
+            "--wait",
+            "15",
+            "connection",
+            "modify",
+            "uuid",
+            &config.uuid,
+            "connection.autoconnect",
+            if config.autoconnect { "yes" } else { "no" },
+            "connection.metered",
+            &config.metered,
+            "ipv4.method",
+            &config.method,
+            "ipv4.addresses",
+            &config.addresses,
+            "ipv4.gateway",
+            &config.gateway,
+            "ipv4.dns",
+            &config.dns,
+            "ipv4.ignore-auto-dns",
+            if config.ignore_auto_dns { "yes" } else { "no" },
+        ],
+        None,
+    )?;
+    Ok(())
+}
+pub fn wifi_profile_action(choice: WifiProfileAction) -> Result<(), ErrorBody> {
+    let verb = match choice.action.as_str() {
+        "connect" => "up",
+        "disconnect" => "down",
+        "forget" => "delete",
+        _ => return Err(error("Unknown Wi-Fi profile action")),
+    };
+    check_wifi_profile(&choice.uuid)?;
+    run(&["nmcli", "--wait", "30", "connection", verb, "uuid", &choice.uuid], None)?;
     Ok(())
 }
 fn mac(s: &str) -> bool {
@@ -269,6 +404,10 @@ pub async fn bluetooth_devices() -> Result<Vec<BluetoothDevice>, ErrorBody> {
                 path: object.child_value(0).str().unwrap_or_default().into(),
                 name: prop::<String>(&properties, "Alias").unwrap_or_else(|| "Bluetooth device".into()),
                 address: prop::<String>(&properties, "Address").unwrap_or_default(),
+                trusted: prop::<bool>(&properties, "Trusted").unwrap_or(false),
+                icon: prop::<String>(&properties, "Icon").unwrap_or_default(),
+                battery: interface(&object, "org.bluez.Battery1")
+                    .and_then(|battery| prop::<u8>(&battery, "Percentage")),
                 paired: prop::<bool>(&properties, "Paired").unwrap_or(false),
                 connected: prop::<bool>(&properties, "Connected").unwrap_or(false),
             });
@@ -321,9 +460,45 @@ pub async fn bluetooth_action(choice: BluetoothAction, parent: Option<gtk::Windo
         "connect" => "Connect",
         "disconnect" => "Disconnect",
         "pair" => "Pair",
+        "trust" | "untrust" | "forget" => "",
         _ => return Err(error("Unknown Bluetooth action")),
     };
     let bus = gio::bus_get_future(gio::BusType::System).await.map_err(error)?;
+    if choice.action == "trust" || choice.action == "untrust" {
+        use glib::variant::ToVariant;
+        bus.call_future(
+            Some("org.bluez"),
+            &device.path,
+            "org.freedesktop.DBus.Properties",
+            "Set",
+            Some(&("org.bluez.Device1", "Trusted", (choice.action == "trust").to_variant()).to_variant()),
+            None,
+            gio::DBusCallFlags::NONE,
+            10000,
+        )
+        .await
+        .map_err(error)?;
+        return Ok(());
+    }
+    if choice.action == "forget" {
+        use glib::variant::ToVariant;
+        let adapter =
+            device.path.rsplit_once('/').map(|(path, _)| path).ok_or_else(|| error("Invalid Bluetooth adapter"))?;
+        let path = glib::variant::ObjectPath::try_from(device.path.as_str()).map_err(error)?;
+        bus.call_future(
+            Some("org.bluez"),
+            adapter,
+            "org.bluez.Adapter1",
+            "RemoveDevice",
+            Some(&(path,).to_variant()),
+            None,
+            gio::DBusCallFlags::NONE,
+            10000,
+        )
+        .await
+        .map_err(error)?;
+        return Ok(());
+    }
     if choice.action == "pair" {
         return crate::bluetooth_agent::pair(&bus, &device.path, &device.name, parent.as_ref()).await;
     }
@@ -438,6 +613,32 @@ mod tests {
     fn command_runner_keeps_secrets_on_stdin_and_drains_large_output() {
         let result = run(&["/usr/bin/python3", "-c", "import sys; secret=sys.stdin.readline().strip(); assert secret=='test-secret'; assert secret not in sys.argv; sys.stdout.write('x'*200000)"], Some("test-secret\n")).unwrap();
         assert_eq!(result.len(), 200000);
+    }
+    #[test]
+    fn wifi_configuration_validates_addresses_before_modifying_profiles() {
+        let mut config = WifiConfig {
+            uuid: "12345678-1234-1234-1234-123456789abc".into(),
+            autoconnect: true,
+            metered: "unknown".into(),
+            method: "manual".into(),
+            addresses: "192.168.1.20/24, 10.0.0.2/8".into(),
+            gateway: "192.168.1.1".into(),
+            dns: "1.1.1.1, 8.8.8.8".into(),
+            ignore_auto_dns: true,
+        };
+        assert!(validate_wifi_config(&config).is_ok());
+        for address in ["", "192.168.1.20", "192.168.1.20/33", "999.0.0.1/24", "--help"] {
+            config.addresses = address.into();
+            assert!(validate_wifi_config(&config).is_err(), "{address}");
+        }
+        config.method = "auto".into();
+        config.addresses.clear();
+        assert!(validate_wifi_config(&config).is_ok());
+        config.dns = "1.1.1.1,invalid".into();
+        assert!(validate_wifi_config(&config).is_err());
+        config.dns.clear();
+        config.gateway = "bad-gateway".into();
+        assert!(validate_wifi_config(&config).is_err());
     }
     #[test]
     fn parses_nmcli_escaped_fields_and_rejects_invalid_addresses() {
