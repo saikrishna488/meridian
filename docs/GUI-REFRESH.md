@@ -1,5 +1,10 @@
 # Desktop GUI refresh
 
+> Historical implementation notes. Later releases made Meridian dark-only and
+> removed the embedded Orbit and terminal surfaces from the production UI
+> bundle. Current file browsing and interactive shell sessions use GNOME Files
+> and Kitty. See the [current README](../README.md) for shipped behavior.
+
 This pass brings Settings, Orbit, Applications, and Notifications onto the same
 light/dark palette, with calmer surfaces, consistent focus outlines, readable
 headings, and grouped navigation. Native window controls remain in GTK.

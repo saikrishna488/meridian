@@ -1,5 +1,10 @@
 # First-use GUI plan
 
+> Historical design and validation record. The Finder/Orbit, embedded Terminal,
+> and light/dark theme references below describe an earlier UI revision, not
+> the current production bundle. See the [README](../README.md) and
+> [architecture](ARCHITECTURE.md) for current behavior.
+
 Design direction: a calm Windows-style desktop, plain white/near-black launcher,
 clear blue selection states, consistent line icons, and readable light/dark modes.
 Keep all existing file semantics and Debian setup work.

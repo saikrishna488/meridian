@@ -2,6 +2,11 @@
 
 > Nova and Vault have since been removed from the project. References below describe the earlier implementation.
 
+> This is a performance record for an earlier build. The current package
+> delegates file browsing and terminal sessions to GNOME Files and Kitty; Orbit
+> and embedded Terminal measurements below refer to legacy source and prior
+> integration coverage. Current feature claims are in the [README](../README.md).
+
 Status: implementation and nested desktop evidence; **not a qualified Alpha 0.3 release**. Phase 1 hardware/security qualification remains required. The workspace version remains unchanged until release qualification.
 
 ## Implemented

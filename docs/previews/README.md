@@ -1,60 +1,49 @@
-# GUI previews
+# Historical UI captures
 
-## Current GUI refresh
+**These screenshots are from earlier Meridian revisions and are not current
+product screenshots.** The current UI is dark-only, the production launcher
+opens GNOME Files and Kitty instead of the old embedded Orbit and terminal
+surfaces, and the current desktop chrome has changed since these captures.
+Do not use the images below to judge the appearance or application list in the
+current package.
 
-Native captures from an isolated headless labwc session, with sample desktop
-files and a private XDG configuration/session bus:
+Current-build screenshots have not yet been captured. The latest design pass
+records why visual captures could not be produced in its execution environment
+in [UI design validation](../UI-DESIGN-VALIDATION.md). Once a desktop capture
+environment is available, use the read-only preview bridge for app surfaces and
+a native labwc session for the composed desktop. Follow the capture matrix in
+that validation note so sample data and capture conditions are clear.
+
+## Earlier native desktop captures
+
+These show the previous desktop layout and, in some cases, the previous light
+appearance:
 
 - [Desktop and taskbar](modern-native-desktop.png)
 - [Settings with native window controls](modern-native-settings.png)
+- [Earlier Settings window](native-settings.png)
+- [Earlier Finder window](native-finder.png)
+- [Earlier launcher above the taskbar](native-launcher.png)
 
-WebKit previews with deterministic sample data (hardware and file changes stay
-in the preview fixtures):
+## Earlier browser and component previews
 
-- Settings Home: [light](modern-settings-light.png) · [dark](modern-settings-dark.png)
-- Applications: [light](modern-launcher-light.png) · [dark](modern-launcher-dark.png)
-- Orbit: [light](modern-orbit-light.png) · [dark](modern-orbit-dark.png)
-- [Startup Apps](modern-startup-light.png)
-- [Sound and microphone settings](modern-sound-light.png)
-- [Power, battery, and screen locking](modern-power-dark.png)
-- [Trash and file restoration](modern-trash-light.png)
-- [Notification center](modern-notifications-light.png)
+These deterministic previews use sample data. Their light/dark variants and
+old Orbit/Finder app design are retained as history, not as current feature
+claims:
 
-[Design, supported features, and verification](../GUI-REFRESH.md).
+- Settings Home: [earlier light](modern-settings-light.png) · [earlier dark](modern-settings-dark.png)
+- Applications launcher: [earlier light](modern-launcher-light.png) · [earlier dark](modern-launcher-dark.png)
+- Old Orbit file manager: [earlier light](modern-orbit-light.png) · [earlier dark](modern-orbit-dark.png)
+- Startup Apps: [earlier preview](modern-startup-light.png)
+- Sound: [earlier preview](modern-sound-light.png)
+- Power and lock: [earlier preview](modern-power-dark.png)
+- Trash: [earlier preview](modern-trash-light.png)
+- Notifications: [earlier preview](modern-notifications-light.png)
+- Control Center: [earlier light](refined-controls-light.png) · [earlier dark](refined-controls-dark.png)
+- Launcher refinements: [earlier light](refined-launcher-light.png) · [earlier dark](refined-launcher-dark.png) · [list view](refined-launcher-list.png)
+- Lock screen: [earlier preview](refined-lock-screen.png)
 
-## Earlier captures
-
-Native Wayland captures from a private headless labwc session (isolated XDG
-configuration and session bus):
-
-- [Settings with native window controls](native-settings.png)
-- [Finder with native window controls](native-finder.png)
-- [Launcher above the taskbar](native-launcher.png)
-
-Read-only browser previews with deterministic sample data:
-
-- [Light desktop](desktop-light.png) · [Dark desktop](desktop-dark.png)
-- [Light Settings Home](settings-light.png) · [Dark Settings Home](settings-dark.png)
-
-Screenshots are review artifacts, not promises of hardware/service availability.
-The preview bridge only changes its in-memory fixtures. Production still uses
-the native capability-checked bridge. To open the local preview, build `ui/`
-and run `node tools/preview-ui.mjs` from the repository root.
-
-October desktop refinement, captured in WebKit inside an isolated headless labwc
-session with the deterministic preview bridge:
-
-- [Settings Home, light](refined-settings-light.png) · [dark](refined-settings-dark.png)
-- [Applications, light](refined-launcher-light.png) · [dark](refined-launcher-dark.png)
-- [Control Center and power actions, light](refined-controls-light.png) · [dark](refined-controls-dark.png)
-
-[Design changes and screen power behavior](../DESKTOP-DESIGN.md).
-- [Compact application list](refined-launcher-list.png)
-- [Lock screen](refined-lock-screen.png)
-
-## Meridian Design System pass
-
-The 2026-10-18 implementation has no new captures because this execution sandbox
-blocks preview and D-Bus sockets. The images above are earlier evidence. See
-[validation and capture matrix](../UI-DESIGN-VALIDATION.md) and
-[design system](../MERIDIAN-DESIGN-SYSTEM.md).
+The preview bridge changes only in-memory fixtures. It does not exercise real
+hardware, system services, package management, or file mutations. For current
+project status and implementation details, see the [README](../../README.md),
+[architecture](../ARCHITECTURE.md), and [qualification notes](../PHASE3.md).

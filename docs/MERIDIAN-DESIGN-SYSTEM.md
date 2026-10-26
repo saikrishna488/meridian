@@ -1,10 +1,13 @@
 # Meridian Design System
 
-> Nova and Vault have since been removed from the project. References below describe the earlier implementation.
+> This design-system audit is dated 2026-10-18. The current package is dark-only;
+> the older Orbit and embedded Terminal surfaces described in this audit are
+> not in the production UI bundle. See the [current README](../README.md).
 
-The source of truth is `ui/src/lib/tokens.css`. Existing `data-theme` attributes,
-appearance events, saved settings and font preferences remain the theme API.
-Light is the default; dark overrides semantic colors. There is no new theme store.
+The source of truth for shared tokens is `ui/src/lib/tokens.css`. The current
+appearance hook fixes Meridian's own surfaces to dark mode; users can choose a
+system font in Settings. Older light-theme token definitions and audit notes
+remain in the source history, but light mode is not exposed by the current UI.
 
 ## Visual language
 
@@ -50,14 +53,10 @@ Authentication cards remain dark for wallpaper contrast in both appearances.
 - Settings: one semantic palette behind compatibility aliases, shared row sizing,
   grouped surfaces, primary actions and switch styling. Existing wireless work is
   preserved.
-- Orbit: compact toolbar/navigation and shared geometry. Tabs, previews, progress,
-  file selection, dialogs, cache bounds and filesystem actions are retained.
-- Terminal: shared tab chrome; ANSI colors, renderer metrics, PTY lifecycle and
-  scrolling behavior are retained.
 - Pulse: shared theme aliases instead of a separate local palette. Graph data,
   process sorting and visibility-aware sampling are retained.
-- Nova: theme-aware responsive app cards, explicit Installed labels and shared
-  keyboard-accessible category dropdown; package confirmation remains mandatory.
+- Applications: installed-app search, dock pinning, desktop shortcuts and a
+  shared confirmation dialog for supported package removal.
 - Calendar: theme-aware date and agenda surfaces; arrow keys move by day/week,
   Home/End move within a week, and focus follows across month boundaries. Date
   labels expose event counts; a single date is in the Tab order.

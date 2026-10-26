@@ -1,4 +1,9 @@
-# Device Manager, Users, General, and terminal scrolling
+# System management and session notes
+
+Meridian's production session launches Kitty for terminal work. The embedded
+PTY terminal and its scrollback UI described in older development notes are
+not part of the current UI bundle; terminal behavior and shortcuts are provided
+by Kitty.
 
 Settings includes three additional categories:
 
@@ -31,13 +36,6 @@ in the Settings surface. A GNOME PolicyKit authentication agent starts with labw
 the installer includes it, AccountsService, kmod, OpenSSL, curl and CA certificates.
 Existing sessions need a sign-out/sign-in after installation to start that agent.
 
-Terminal handles normal-buffer wheel units directly, including fractional
-trackpad movement. It retains xterm handling for alternate-screen and mouse-aware
-programs. Shift+PageUp/PageDown scroll history; Shift+Home/End go to the beginning
-or end. A Jump to latest output button appears while reading scrollback. The
-scrollbar has a visible draggable thumb, and unchanged resize events no longer
-resize the emulator.
-
 ## Apply changes from an existing Meridian session
 
 Save work first, then run:
@@ -60,9 +58,8 @@ Verify with **Super+I**:
    details and exercise the relevant controls using nonessential devices.
 3. **Users:** use a temporary standard account to exercise creation, password reset,
    lock/unlock and deletion. Verify the delete dialog says home files are kept.
-4. **Terminal:** run `seq 1 300`, scroll up with wheel/touchpad and Shift+PageUp,
-   then select Jump to latest output or press Shift+End. Test scrollbar dragging,
-   resizing, and normal scrolling in a pager such as `less`.
+4. **Kitty:** use Super+Enter to open the installed terminal and confirm it
+   starts as an independent application in the Meridian session.
 
 A read-only browser preview is also available without installing or signing out:
 
@@ -77,9 +74,9 @@ fixture bridge. Update results and system information are sample data.
 
 Rust tests cover driver inventory merging/input validation, account input
 validation and update response/version handling. UI interaction tests cover
-confirmation, protected rows, password matching, manual update checks, wheel
-normalization and history navigation. The build includes TypeScript checking;
+management confirmations, protected account rows, password matching, and manual
+update checks. The build includes TypeScript checking;
 Clippy and formatting checks cover native changes. This environment blocks local
 HTTP listeners and browser startup, so visual checks and real PolicyKit,
-AccountsService mutations, module changes and WebKitGTK hardware scrolling must
+AccountsService mutations, module changes, and Kitty launch behavior must
 be verified in the installed desktop. Tests do not alter real users or drivers.

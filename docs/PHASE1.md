@@ -2,6 +2,11 @@
 
 > Nova and Vault have since been removed from the project. References below describe the earlier implementation.
 
+> This is a qualification record for an earlier build. The current package
+> delegates file browsing and terminal sessions to GNOME Files and Kitty; its
+> embedded Finder/Terminal references below describe legacy source and prior
+> integration coverage. Current feature claims are in the [README](../README.md).
+
 Status: engineering candidate; **not yet qualified as Stable Alpha**. Do not tag
 0.2 or declare Phase 1 complete until the hardware and endurance gates below have
 recorded results. Automated tests are evidence for their particular fixtures,

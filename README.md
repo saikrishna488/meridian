@@ -1,294 +1,116 @@
 # Meridian
 
-A Linux desktop shell with a Windows-style bottom panel, searchable application
-launcher, Control Center, desktop shortcuts, and native Settings windows.
+Meridian is a Linux desktop session for Debian testing and compatible
+derivatives. It combines the labwc Wayland compositor with a Rust/GTK shell and
+a React interface rendered by WebKitGTK.
 
-Meridian runs on labwc/Wayland and existing Linux services. Its native host is
-written in Rust; React, TypeScript, HTML, and CSS provide the interface inside
-WebKitGTK. GTK4 hosts the web surfaces and native window controls.
+**Project status:** installable prototype, not yet ready to be a user's sole
+daily-use desktop. Stability, hardware, installation, accessibility, and
+extended-use qualification remain open. The project tracks those gaps in
+[Phase 1](docs/PHASE1.md), [Phase 2](docs/PHASE2.md), and
+[Phase 3](docs/PHASE3.md).
 
-**Status:** installable desktop session prototype; not yet ready to be a user's sole daily-use desktop. It targets Debian testing and compatible derivatives, and still has open stability, hardware, installation, and workflow qualification. The [0.2 stability qualification](docs/PHASE1.md) tracks automated coverage and the remaining hardware release gates. [0.3 performance work](docs/PHASE2.md) records optimization changes, measurements and qualification gaps. [0.8 workflow work](docs/PHASE3.md) tracks the initial desktop improvements and remaining Public Beta work. Wallpaper, appearance, networking, Bluetooth,
-display configuration, file operations, and terminal sessions are implemented.
-Some settings remain placeholders, and Sharing is a UI-only prototype.
-See [the architecture](docs/ARCHITECTURE.md) for implementation details and limits.
+## What works today
+
+- A desktop with configurable wallpapers, desktop files and shortcuts, an
+  application launcher, a reorderable dock, a top bar, window switching, and
+  common window controls.
+- Settings for Wi-Fi, Bluetooth, displays, sound, startup apps, installed apps,
+  local users, devices, power and screen locking, search providers, wallpaper,
+  and system information. Meridian's own interface is dark-only; Appearance
+  lets you choose a system font.
+- Control Center for connectivity, volume, brightness, Do Not Disturb, lock,
+  sleep, restart, shutdown, and sign out.
+- Applications management with reviewed uninstall plans for supported Debian,
+  Flatpak, and Snap packages. Privileged removals can request authentication.
+- Notification history and Pulse system monitoring. Meridian's Calendar and
+  Clock entries launch the installed GNOME Calendar and GNOME Clocks apps.
+- GNOME Files for file browsing and Kitty for interactive terminal sessions.
+  They are separate applications launched from Meridian.
+
+System sharing is not implemented. Hardware controls depend on services such
+as NetworkManager, BlueZ, PipeWire/WirePlumber, and systemd-logind, plus the
+drivers available on the computer. See the
+[architecture and implementation limits](docs/ARCHITECTURE.md) and
+[Settings management notes](docs/SETTINGS-MANAGEMENT.md).
 
 ## Screenshots
 
-Meridian running on Wayland, with Settings and the bottom taskbar:
+![Dusk, one of Meridian's bundled desktop wallpapers](assets/wallpapers/meridian-dusk.svg)
 
-![Meridian desktop running native Settings over Dusk wallpaper with the bottom taskbar](docs/previews/modern-native-settings.png)
+This is current bundled wallpaper artwork, not a desktop screenshot. The images
+in [`docs/previews`](docs/previews/) are historical captures from earlier UI
+revisions. Some show a light theme and old Orbit/Terminal app surfaces; they do
+not represent the current package. Current-build screenshots still need to be
+captured in a working desktop session.
 
-| Applications | Settings in dark mode |
-| --- | --- |
-| [![Applications launcher with search and an app grid](docs/previews/modern-launcher-light.png)](docs/previews/modern-launcher-light.png) | [![Settings Home in dark mode with appearance, wallpaper, and device preferences](docs/previews/modern-settings-dark.png)](docs/previews/modern-settings-dark.png) |
-| **Orbit file manager** | **Sound settings** |
-| [![Orbit file manager with folder breadcrumbs, sidebar navigation, and file types](docs/previews/modern-orbit-light.png)](docs/previews/modern-orbit-light.png) | [![Sound settings with output and microphone selection, volume, and mute controls](docs/previews/modern-sound-light.png)](docs/previews/modern-sound-light.png) |
+## Build requirements
 
-The desktop capture uses an isolated native session; the gallery previews use
-sample data. Click an image to view it at full size, or see [more screenshots and capture details](docs/previews/README.md).
+The current checkout needs Rust 1.92 or newer, GTK 4.18 or newer, WebKitGTK
+2.52 or newer, gtk4-layer-shell 1.2 or newer, and Node.js 22.22.2 or newer.
+Development and CI target Debian testing; Debian derivatives need matching
+versions. The development setup script installs the required host packages.
 
-## Debian requirements
+## Try it in a development session
 
-The current checkout needs Rust >= 1.92, GTK >= 4.18, WebKitGTK >= 2.52, gtk4-layer-shell >= 1.2, and Node >= 22.22.2. Development and CI target Debian testing with matching packages; Debian derivatives with those versions also work. Older stable releases need compatible backports; the scripts do not change your APT sources. Development dependencies are installed directly on the host.
-
-## Try it
+On Debian testing with the required GTK, WebKitGTK, labwc, Rust, and Node
+versions:
 
 ```sh
-tools/dev-env.sh        # one-time: install Debian development packages on the host
-tools/dev-session.sh    # build and run Meridian in a nested window
-tools/dev-greeter.sh    # try the login screen in a window (fake login, password "meridian")
-tools/check.sh          # fmt, clippy, tests, UI type-check
+tools/dev-env.sh
+tools/dev-session.sh
 ```
 
-## Install (Debian)
+This runs Meridian in a nested compositor window. To try the login screen with
+a fake greeter, use `tools/dev-greeter.sh`; its test password is `meridian`.
+For development checks, run `tools/check.sh`.
 
-Build a Debian package, then install it with APT:
+## Install on Debian
+
+Build and install the Debian package:
 
 ```sh
 tools/build-deb.sh --output /tmp/meridian.deb
 sudo apt install /tmp/meridian.deb
 ```
 
-The package contains the compiled shell, UI, assets, and session files; APT installs
-its runtime dependencies. For updates, rebuild and install the package, then sign
-out of Meridian and back in. Remove it with `sudo apt remove meridian-desktop`.
-Developers can alternatively use `tools/build-release.sh` followed by
-`sudo tools/install.sh` for an installation outside APT. Use the same installation
-method for updates and removal. See [installation details](tools/INSTALLER.md),
-including the optional greetd login-screen controls.
+Select **Meridian** at the login screen. After installing an update, sign out
+and back in to load the updated session. Remove the package with
+`sudo apt remove meridian-desktop`. See [installation details](tools/INSTALLER.md)
+for the source installation method and optional greetd configuration.
+
+## Keyboard shortcuts
 
 | Keys | Action |
-|---|---|
-| Super / Super+Space | Applications menu (type to search, ↑ ↓, Enter, Esc) |
-| Super+C | Control Center |
-| Super+E | GNOME Files |
-| Super+I | Settings |
-| Super+Enter | Terminal |
-| Super+L | Lock |
-| Print Screen | Save a screenshot of the desktop |
-| Super+Shift+S / Shift+Print Screen | Select an area to screenshot (Esc cancels) |
-| Window menu → window | focus that window |
-| Super+Q | close the focused window |
-| Alt+Tab | switch windows |
-| Super+Down / Super+Up | minimize / maximize or restore |
-| Super+Left / Super+Right | snap window left / right |
-| Alt+Space | window actions menu |
-| Super+Shift+Q / Ctrl+Alt+Backspace | log out |
+| --- | --- |
+| Super or Super+Space | Open Applications |
+| Super+C | Open Control Center |
+| Super+E | Open GNOME Files |
+| Super+I | Open Settings |
+| Super+Enter | Open Kitty |
+| Super+L | Lock the session |
+| Print Screen | Capture the desktop |
+| Super+Shift+S or Shift+Print Screen | Select a screenshot area |
+| Alt+Tab | Switch windows |
+| Super+Q | Close the focused window |
+| Super+Down / Super+Up | Minimize / maximize or restore |
+| Super+Left / Super+Right | Snap the window |
+| Alt+Space | Open window actions |
+| Super+Shift+Q or Ctrl+Alt+Backspace | Sign out |
 
-In the nested dev session the host desktop usually grabs Super, so use
-**Ctrl+Alt+H** (Applications), **Ctrl+Alt+C** (Options), and **Ctrl+Alt+L**
-(Lock), or use the dock and Control Center.
+In the nested development session, use Ctrl+Alt+H for Applications,
+Ctrl+Alt+C for Control Center, and Ctrl+Alt+L to lock.
 
-Documentation: [architecture](docs/ARCHITECTURE.md) ·
-[development](docs/DEVELOPMENT.md) · [decision records](docs/adr/)
+## Documentation
+
+- [Architecture and current limits](docs/ARCHITECTURE.md)
+- [Development guide](docs/DEVELOPMENT.md)
+- [Settings management](docs/SETTINGS-MANAGEMENT.md)
+- [Phase 1 stability qualification](docs/PHASE1.md)
+- [Phase 2 performance qualification](docs/PHASE2.md)
+- [Phase 3 workflow work and remaining gaps](docs/PHASE3.md)
+- [Historical UI captures](docs/previews/README.md)
 
 ## License
 
 Meridian is free software under the [GNU GPL, version 3 or later](LICENSE).
-
-## Dock, Settings, and desktop icons
-
-Drag panel items (including the Applications launcher and Trash) to reorder them. The layout is saved in `~/.config/meridian/dock-layout.json`. The panel stays visible while Applications is open and hides for fullscreen applications. New configurations no longer pin Meridian Terminal or Orbit; legacy entries are ignored.
-
-Click Trash to open the file manager's trash. Drag an installed app onto Trash, or right-click an app and choose **Uninstall…**, to review and confirm removal. Meridian resolves the desktop entry to an exact Flatpak app ref or its Debian package. Flatpak removal keeps saved app data. Debian package removal uses `pkexec apt-get`, may require authentication, and can remove dependent packages; this is described in the confirmation. Unmanaged launchers show an unsupported-package error rather than deleting a shortcut. Uninstalling multiple apps at once is prevented.
-
-Open **Meridian → Settings…**, or find **Settings** in Applications. Wallpaper,
-dark appearance, Wi-Fi, Bluetooth, and display settings are available.
-**Startup Apps** manages applications that open at sign-in. **Sound** selects
-speakers and microphones, sets their levels, and controls mute. **Power & Lock**
-shows battery status and saves automatic lock/display-standby timing for your
-next sign-in. Meridian release checks are available in **General**; installation
-and distribution updates remain manual. Sharing is a UI prototype and does not
-enable sharing services.
-
-Installed apps use their desktop-entry artwork in consistent rounded tiles.
-Settings, the launcher, Control Center, and Trash use fixed
-Meridian SVG artwork. See [desktop icons](assets/desktop-icons/README.md).
-
-**Settings → Wallpaper** includes Dusk, Tide, Alpine, and Aurora, original GPL-licensed SVG wallpapers. A native picker accepts custom PNG/JPEG/WebP images up to 20 MB and saves a copy, so moving the original image does not break the wallpaper. Your choice and desktop shortcuts are saved in `~/.config/meridian/desktop.json`.
-
-The desktop shows files and folders in your XDG Desktop folder (normally `~/Desktop`) and updates when that folder changes. Dragging files from Orbit or another file manager onto the desktop moves them into that folder; existing names are never overwritten. Orbit also offers **Move to Desktop**. **Move to Trash** sends a real desktop file to the system Trash. Old saved shortcuts remain shortcuts and can be removed without touching their original files.
-
-Drag apps from Applications onto the taskbar to pin them, or right-click an app and select **Add to Dock**. Apps can also be added to the desktop as application shortcuts. Right-click the desktop to sort items, move files here, open Orbit/Applications, or change wallpaper.
-
-Sleep, Restart, Shut Down, Lock, and Sign out are in the **Meridian** menu and **Control Center**. Restart, Shut Down, and Sign out require a second click to confirm. Control Center keeps connectivity, appearance, brightness, and volume controls.
-
-## Files and Terminal
-
-Meridian uses GNOME Files for folders and Kitty as its official terminal. The embedded Orbit file manager and Meridian Terminal surfaces are not shipped. The bundled labwc theme supplies original controls for compositor-decorated windows; third-party apps that draw their own titlebars control their own decorations.
-
-GNOME Files remains responsible for folder browsing and file operations. Kitty provides the interactive shell, tabs, history, completion, and terminal rendering.
-
-## Everyday desktop controls
-
-- **Startup Apps:** add an installed application or enable/disable a login entry.
-  Changes apply at your next sign-in and affect only your account. Meridian
-  follows XDG autostart directory precedence and desktop filters; nested
-  development sessions skip autostart.
-- **Sound:** select default output and input devices, adjust each level, and mute
-  speakers or microphones. Device discovery needs PipeWire (`pw-dump`) and
-  WirePlumber (`wpctl`). **Add virtual output** creates a temporary software
-  playback device; select it to route audio to a recording or streaming app.
-  Virtual output support needs PipeWire's PulseAudio service (`pactl`). Use
-  **Refresh devices** after connecting hardware.
-  Applications with their own device selection can keep that choice.
-- **Power & Lock:** see laptop battery charge and external power, then choose
-  the idle lock delay (1–30 minutes) and display-standby delay after locking.
-  Timing changes take effect at the next sign-in. Lock confirmation remains
-  required before display standby and sleep.
-- **Orbit:** use folder breadcrumbs, saved sort/view preferences, and **Alt+Enter**
-  for read-only file properties. **Ctrl+Shift+N** creates a folder and **Alt+Up**
-  opens the parent folder. The **Trash** sidebar and taskbar icon open Orbit's
-  Trash browser; select an item and choose **Restore** to return it to its original
-  folder. Existing destination files are preserved. Trash browsing needs GVfs;
-  the original folder must still exist.
-- **Taskbar:** click the clock to open Calendar or the battery to open Power &
-  Lock. The launcher’s **Pinned** view follows taskbar favorites.
-
-[GUI design, behavior, and verification](docs/GUI-REFRESH.md).
-
-## Multimedia codecs
-
-The Debian installer installs GStreamer base/good/bad/ugly plugins, the FFmpeg bridge, and FFmpeg from your configured APT repositories. No third-party codec repository is enabled. Flatpak players carry their own runtime codecs.
-
-Optional multimedia codecs can be installed separately from a source checkout with `sudo tools/install-codecs.sh`.
-
-## Appearance
-
-Meridian uses one dark appearance. Settings → Appearance controls typography; GTK and KDE integration is kept dark as well. Apps with their own theme override can keep that override, and external file-manager drops are accepted through GTK.
-
-Every Meridian window uses the shared dark appearance hook (`ui/src/lib/appearance.ts`) so native controls and app styles keep the same setting. Applications outside Meridian may keep their own appearance setting.
-
-## Displays and connectivity
-
-Settings includes multiple displays (resolution, refresh rate, scaling, rotation and position), hardware brightness, Wi-Fi discovery and joining, and Bluetooth discovery, pairing and connections. Monitor changes are tested by the compositor and revert after 15 seconds unless kept; kept layouts are saved for the next session. Wi-Fi passwords go to nmcli over stdin and are redacted from bridge logs. Bluetooth pairing uses a temporary Meridian agent with PIN/passkey confirmation prompts.
-
-## Menu bar and Control Center
-
-The bottom taskbar places the Meridian menu on the left, pinned and running apps in the middle, and Control Center and the clock on the right. Menus open above the taskbar.
-
-Control Center groups connectivity, appearance, display and sound into rounded cards. Sign out is in the Meridian menu and requires confirmation. UI switches share the accessible Toggle component and UI type uses the free Inter family; GTK and Qt desktop defaults also use Inter, while terminal cells use a monospace face. Sharing is an interactive UI prototype and does not start sharing services. External monitor brightness uses the monitor’s hardware controls.
-
-## GUI development and previews
-
-Settings opens to a Home page with useful preferences and keyboard shortcuts. Orbit supports arrow keys, F2, F5, Ctrl+F, Ctrl+L and Alt+Left/Right. Terminal supports Ctrl+Shift+T/W and Ctrl+PageUp/PageDown for sessions.
-
-For a read-only UI preview without starting a desktop session:
-
-```sh
-npm run build --prefix ui
-node tools/preview-ui.mjs
-```
-
-Open `http://127.0.0.1:4173`. The preview uses in-memory sample data and never runs native file, login or hardware operations. Replace `settings` in `/ui/surfaces/settings/index.html` with `finder`, `applications`, `options`, `terminal`, `wallpaper`, `greeter` or `locker`; add `?theme=dark` for dark mode. [GUI plan and verification](docs/GUI-POLISH.md) · [Visual previews](docs/previews/README.md).
-
-## System management and updates
-
-Settings includes **General** (system details and a manual GitHub release check),
-**Device Manager** (adapters, printers, storage and driver details),
-and **Users** (local accounts, roles, passwords, login locks and deletion while
-keeping home files). Terminal supports wheel/touchpad scrollback, Shift+PageUp /
-PageDown, Shift+Home / End, and Jump to latest output.
-
-See [management features, limits and installation from a running session](docs/SETTINGS-MANAGEMENT.md).
-
-## Pulse
-
-Open **Meridian → Pulse…**, or search for **Pulse** in Applications. Pulse is a
-simple system monitor with two tabs:
-
-- **Overview:** CPU, memory, GPU, storage and network cards with 60-second graphs.
-  Storage shows device capacity and read/write rates; network shows download and
-  upload rates for each interface.
-- **Processes:** search by name or PID and sort by CPU, memory, name or PID.
-
-Metrics refresh every two seconds while the window is visible. Closing the window
-stops polling. CPU percentages use total machine capacity, and process memory is
-resident RAM. Pulse reads Linux `/proc` and `/sys` without elevated privileges.
-GPU usage and VRAM appear when the driver exposes those counters; unsupported
-readings are marked unavailable. Processes that exit or cannot be read are skipped.
-
-Read-only visual preview: build the UI, run `node tools/preview-ui.mjs`, and open
-`http://127.0.0.1:4173/ui/surfaces/pulse/index.html` (add `?theme=dark` for dark mode).
-The preview uses sample metrics.
-
-## Desktop controls
-
-The top bar holds Meridian's menu, the focused application's name and Quit menu,
-Control Center, notifications, battery status, and clock. The centered bottom dock
-holds pinned and running apps, with a separator before Trash. Dock context menus
-offer Quit and Remove from dock.
-Notification Center receives desktop messages through the standard
-`org.freedesktop.Notifications` session service, shows unread state, supports app
-actions, and lets you dismiss messages or clear history. History stays in memory
-for the current session (up to 100 messages). Meridian does not replace an existing
-notification daemon; the center reports when another service owns the bus name.
-From a running Meridian session, try `notify-send "Meridian" "Hello"`.
-
-**Settings → Appearance → Font** offers Inter, Noto Sans, DejaVu Sans and Liberation
-Sans. The saved choice updates Meridian, GTK and KDE font preferences. The Debian
-setup installs these font families. Apps with their own font preferences may keep
-their own selection.
-
-**Settings → Device Manager** groups Wi-Fi/network adapters, Bluetooth adapters,
-printer queues, storage, USB and PCI devices. Select a device to see its driver and
-properties on the right. Controls connect/disconnect a NetworkManager interface,
-power a BlueZ adapter, pause/resume a CUPS queue (authenticated), or open the selected
-disk in GNOME Disks. Missing services leave hardware inspectable without pretending
-controls are available. Storage drivers are shown for inspection; partition and
-filesystem changes stay in GNOME Disks. No kernel module is unloaded here.
-
-**Orbit** is the renamed file browser; existing shortcuts and dock IDs still work.
-Images get small, lazy-loaded thumbnails. Right-click for Copy, Cut, Copy To, Move
-To, Rename, Delete, bookmarks, Terminal and Set as Wallpaper (PNG/JPEG/WebP).
-Delete uses the system Trash. Ctrl+C/X/V copy/cut/paste inside Orbit; Ctrl+D bookmarks
-the current folder. Bookmarks persist in `~/.config/meridian/orbit-bookmarks.json`.
-Transfers never overwrite a name collision. If a directory copy fails, the source
-is preserved and the destination may contain a partial copy. Directory moves across
-filesystems can be refused by GIO; copy first, verify, and then delete the source.
-
-For the native thumbnail roundtrip test, run this from a desktop terminal with
-D-Bus access: `cargo test -p meridian-shell thumbnails_decode_images_and_reject_other_files -- --ignored`.
-Protocol reference: [Desktop Notifications](https://specifications.freedesktop.org/notification/latest/protocol.html).
-
-## Calendar and Clock
-
-Search Applications for **Calendar** or **Clock**. They support dock pins,
-desktop shortcuts, and the current appearance.
-
-Calendar stores local events in `~/.config/meridian/calendar.json`; it has month
-navigation, a daily agenda, and add/delete controls. There is no cloud sync or
-reminder service. Clock includes local time, a stopwatch with laps, and a timer
-with a visual completion message. Keep the window open; there is no background
-alarm or sound.
-
-Device Manager shows hardware icons. USB storage has **Eject safely**, which
-unmounts child volumes before powering off through UDisks. Mounted non-system
-partitions have **Unmount**. Actions are revalidated against current inventory;
-system mounts and swap prevent ejection. System directories such as `/boot`, `/home`, `/usr`, and `/var` are protected;
-non-system mount points such as `/data`, `/media`, and `/mnt` are eligible. Other USB peripherals remain
-inspectable. A busy filesystem reports an error and is not forcibly unmounted.
-
-Preview the apps at `/ui/surfaces/utilities/index.html?app=calendar`
-or `?app=clock`; append `&theme=dark` for dark mode. Calendar changes use in-memory sample state in the preview.
-
-Screenshots are saved as PNGs in `Screenshots` inside your configured Pictures
-folder (normally `~/Pictures/Screenshots`). A notification shows the saved path.
-The installer includes grim, slurp, and notify-send. The capture helper follows
-[grim's documented region capture](https://github.com/emersion/grim).
-
-## Desktop design and screen power
-
-The launcher includes grid/list views with descriptions and keyboard guidance.
-Settings Home shows your current wallpaper and direct personalization actions.
-Core desktop surfaces use consistent light/dark colors and selection states.
-
-Control Center includes **Lock screen**, **Sleep**, **Restart**, **Shut Down**, and
-**Sign out**. Restart, shutdown, and sign out need a second click to confirm.
-Sleep waits for the native screen lock before suspending.
-
-The installed session automatically locks after **5 minutes** of inactivity and
-puts displays in standby after **5 minutes 30 seconds**. Input restores display
-power while the session stays locked. This uses `swayidle` and `wlopm`, now included
-in runtime packages. Rebuild, reinstall, and sign out/in to enable it on an existing
-installation. See [design changes and verification](docs/DESKTOP-DESIGN.md).

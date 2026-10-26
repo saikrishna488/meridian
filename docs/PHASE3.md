@@ -4,6 +4,12 @@ Status: **initial core workflow implementation; Phase 3 is incomplete**. This is
 not a Public Beta release. The package version remains unchanged. The Phase 1
 security/hardware gates and Phase 2 performance gates remain prerequisites.
 
+> This milestone records an earlier implementation. The Orbit/Finder and
+> embedded PTY Terminal interfaces described below remain in legacy source but
+> are excluded from the current production UI bundle. The shipped session
+> launches GNOME Files and Kitty instead. See the current
+> [README](../README.md) and [architecture](ARCHITECTURE.md).
+
 ## Implemented workflows
 
 ### System Settings

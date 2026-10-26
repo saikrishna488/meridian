@@ -1,5 +1,10 @@
 # UI design validation — 2026-10-18
 
+> Historical validation record for the October 18 design pass. Later code
+> changes made the UI dark-only and removed Finder/terminal surfaces from the
+> production bundle. The current screenshot checklist is at the end of this
+> document; earlier capture references above are not current feature claims.
+
 > Nova and Vault have since been removed from the project. References below describe the earlier implementation.
 
 See [reference audit](UI-REFERENCE-ANALYSIS.md) and
@@ -75,25 +80,24 @@ or absence of layout regressions is made.
 ## Remaining visual and hardware qualification
 
 On an unrestricted desktop, build with `npm run build --prefix ui`, then run
-`node tools/preview-ui.mjs`. Use the existing read-only fixtures; do not change
-real hardware or files for screenshot staging. Preview paths below are relative
-to `http://127.0.0.1:4173`; append `?theme=light` and `?theme=dark` to each.
+`node tools/preview-ui.mjs`. Use the read-only fixtures; do not change real
+hardware or files for screenshot staging. Preview paths below are relative to
+`http://127.0.0.1:4173`. Capture the current dark appearance; do not present the
+historical light/dark variants below as current.
 
 | Capture | Preview path |
 | --- | --- |
-| Desktop | `/ui/surfaces/wallpaper/index.html` plus panel and topbar; use native capture for the composed desktop |
-| Dock | `/ui/surfaces/panel/index.html` |
-| Top bar | `/ui/surfaces/topbar/index.html` |
+| Desktop | Native labwc capture with Wallpaper, Panel, and Topbar composed |
 | Launcher | `/ui/surfaces/applications/index.html` |
 | Control Center | `/ui/surfaces/options/index.html` |
-| Settings | `/ui/surfaces/settings/index.html` |
-| Orbit | `/ui/surfaces/finder/index.html` |
-| Terminal | `/ui/surfaces/terminal/index.html` |
+| Settings Home and categories | `/ui/surfaces/settings/index.html` |
 | Pulse | `/ui/surfaces/pulse/index.html` |
-| Nova | `/ui/surfaces/utilities/index.html?app=nova&theme=light` (replace theme as needed) |
-| Calendar | `/ui/surfaces/utilities/index.html?app=calendar&theme=light` |
-| Clock | `/ui/surfaces/utilities/index.html?app=clock&theme=light` |
+| Calendar | `/ui/surfaces/utilities/index.html?app=calendar` |
+| Clock | `/ui/surfaces/utilities/index.html?app=clock` |
 | Notifications | `/ui/surfaces/notifications/index.html` |
+
+GNOME Files and Kitty are separate host applications; capture them only as
+external windows in a native desktop session, not as Meridian web surfaces.
 
 Capture 1280×800, 720px and 420px widths; check long filenames, app descriptions,
 empty/unavailable states, focus, selected dates, overflow, high contrast and

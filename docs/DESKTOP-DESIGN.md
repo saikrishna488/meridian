@@ -1,5 +1,10 @@
 # Desktop design refinement
 
+> Historical design notes. This document describes an earlier light/dark UI
+> and embedded Orbit surface. The current session is dark-only and launches
+> GNOME Files and Kitty for file browsing and terminal work. See the
+> [README](../README.md) for current features.
+
 The desktop now uses a shared neutral palette, consistent selection states,
 rounded controls, and restrained blue accents. Light and dark appearances cover
 the launcher, taskbar, Control Center, notification cards, Orbit navigation, and

@@ -2,6 +2,11 @@
 
 > Drift, Nova, and Vault have since been removed from the project. References below describe the earlier implementation.
 
+> This is a historical UI refinement and validation record. The current
+> production UI is dark-only and launches GNOME Files and Kitty as separate
+> applications; Finder and Terminal artwork references below belong to older
+> embedded surfaces. See the [current README](../README.md).
+
 This pass prioritizes consistent desktop interactions and legible application artwork. It builds on the existing working tree without replacing its ongoing desktop features.
 
 ## Improvements

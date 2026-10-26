@@ -20,32 +20,39 @@ The services crate is linked into the shell; there is no separate
 and communicate with labwc directly, or through XWayland for X11 applications.
 
 Meridian provides a usable desktop session, but it is still a prototype. Some
-Settings are placeholders, Sharing is a UI prototype, and hardware behavior
-depends on the Linux services and devices available on the machine. The project
+planned Settings and system-management areas are not implemented, and hardware
+behavior depends on the Linux services and devices available on the machine. The project
 has not completed its stability, hardware, clean-install, rollback, and extended
 daily-use qualification; see [Phase 1](PHASE1.md) and [Phase 3](PHASE3.md).
 
 ## 2. Current desktop
 
-- **Menu bar:** Meridian menu, active application name, File/Edit/View/Window/Help,
-  Control Center, and clock. These are Meridian menus, not imported application
-  menus; Edit commands are currently disabled.
-- **Dock:** icon-based launcher, pinned/running applications, and Trash.
-  Items can be reordered. Opening Applications or a fullscreen window hides
-  the desktop dock.
-- **Applications:** searchable installed applications, icons, launch and
-  window activation actions, pinning, shortcuts, and reviewed removal.
-- **Desktop:** bundled/custom wallpapers, application shortcuts, and live XDG Desktop folder contents.
-  Removing a shortcut preserves its target.
-- **Control Center:** connectivity, appearance, brightness, and volume controls.
-- **Settings:** working wallpaper, light/dark appearance, Wi-Fi, Bluetooth,
-  and display configuration. Sharing is a UI prototype; some other categories
-  and controls remain placeholders.
-- **Finder:** real filesystem browsing, navigation, filtering, folder creation,
-  rename, Trash, and an Applications view.
-- **Terminal:** xterm.js connected to real interactive shells through PTYs.
-- **Session actions:** Lock, Sleep, Restart, Shut Down, and Sign out are in
-  the Meridian menu. Restart, Shut Down, and Sign out require confirmation.
+- **Top bar and dock:** Meridian menu, focused-window actions, Control Center,
+  notifications, battery and clock; a centered, reorderable dock holds the
+  launcher, pinned and running apps, and Trash.
+- **Applications:** installed-app search and launch, running-window activation,
+  dock pinning, desktop shortcuts, and reviewed uninstall plans for supported
+  package managers.
+- **Desktop:** bundled or custom wallpaper, application shortcuts, live files
+  from the XDG Desktop folder, context actions, and no-overwrite file drops.
+- **Settings:** dark-only appearance and font selection; wallpaper, startup
+  apps, applications, search, Wi-Fi, Bluetooth, displays, sound, power and
+  lock, general system information, device management, and local users.
+- **Control Center and notifications:** connectivity, display brightness,
+  volume, Do Not Disturb, session power actions, and in-memory notification
+  history. Meridian consumes the standard notification D-Bus service; it does
+  not provide a toast daemon.
+- **Utilities:** Pulse reads system and process metrics. Meridian's Calendar
+  and Clock entries launch the installed GNOME Calendar and GNOME Clocks apps.
+- **External desktop apps:** GNOME Files handles file browsing and Kitty
+  provides the interactive terminal. They are launched as independent host
+  applications; the older embedded Finder and terminal interfaces are not in
+  the production UI bundle.
+- **Session actions:** lock, sleep, restart, shutdown, and sign out. Automatic
+  lock and display standby use `swayidle`, `swaylock`, and `wlopm`.
+
+System sharing is not implemented. Some settings and device actions depend on
+the services and hardware present on the host.
 
 See the [README](../README.md) for shortcuts and usage.
 
@@ -78,8 +85,8 @@ potentially blocking work is also dispatched to worker threads.
 | Wallpaper | Background and shortcuts | Background layer, every output |
 | Panel | Centered dock: launcher, pinned/running apps, and separated Trash | Bottom-anchored transparent top layer, reserves 88 logical pixels |
 | Topbar | Meridian menu, focused app menu with Quit, system controls and clock | Top-anchored full-width top layer, reserves 32 logical pixels |
-| Applications / Options / DesktopMenu | Launcher and menus | Overlay layer |
-| Preferences / Finder / Terminal | Built-in application windows | Ordinary GTK windows |
+| Applications / Options / DesktopMenu / Notifications | Launcher, Control Center, menus, notification history | Overlay layer |
+| Preferences / Pulse | Settings and Meridian's system monitor | Ordinary GTK windows |
 | Locker | Legacy, unused custom password prompt | Not launched; `swaylock` handles locking |
 | Greeter | Login screen in a separate executable | Overlay in the greeter session |
 
@@ -100,17 +107,14 @@ renderer failure can recover independently. GTK also supplies native window
 controls, file pickers, and other integration; the interface is not exclusively
 web pixels. See [ADR-0008](adr/0008-component-recovery.md).
 
-Hardware acceleration is requested for most WebViews. Terminal explicitly
-disables it to avoid stale text rendering when maximized. Actual rendering,
+Hardware acceleration is requested for most WebViews. Actual rendering,
 frame pacing, and memory usage depend on WebKit, drivers, hardware, and workload;
 the repository does not establish a fixed memory budget or zero-idle-CPU result.
-Terminal polls bounded output chunks, and the clock also schedules updates.
+Pulse and Clock pause periodic updates when their windows are hidden.
 
-Appearance is saved by the host and propagated through `desktop.changed`.
-The shared appearance hook applies document theme/color-scheme state.
-GTK preferences, desktop color-scheme settings, and an available KDE palette
-tool are also updated. External applications can retain their own overrides.
-Terminal text remains black on white while its surrounding UI follows appearance.
+Meridian's UI is dark-only. The selected system font is saved by the host and
+applied to Meridian, GTK, and supported desktop font settings. External apps
+can use their own appearance and font preferences.
 
 ## 6. JavaScript–Rust protocol
 
@@ -146,10 +150,11 @@ and monitors application changes. Installed sessions launch through GIO;
 Optional container development can resolve host entries and launch through
 `flatpak-spawn --host gio launch`.
 
-Search runs in Rust through the apps provider. The fuzzy scorer considers
-names, keywords, generic names, and descriptions. Results carry a serial so
-the UI can discard stale responses. Built-in Settings, Finder, and Terminal
-entries are handled by the shell. Additional search providers remain future work.
+Search runs in Rust through installed-app and Settings-page providers, with an
+optional bounded arithmetic calculator. The fuzzy scorer considers names,
+keywords, generic names, and descriptions. Results carry a serial so the UI can
+discard stale responses. Additional providers, including recent files, remain
+future work.
 
 Window information comes from a separate Wayland connection integrated with
 the GLib loop. Application identifiers are matched to catalog entries for
@@ -166,10 +171,15 @@ activate that window.
 | Volume | WirePlumber's `wpctl`, with rapid slider updates coalesced |
 | Built-in backlight | sysfs discovery and logind brightness control |
 | Monitor layout | Wayland output-management test/apply |
+| Sound | PipeWire/WirePlumber tools, including a temporary virtual output when supported |
+| Notification history | `org.freedesktop.Notifications`; in-memory session history, no toast service |
+| Local accounts | AccountsService and PolicyKit-mediated administrative actions |
+| Printers and storage | CUPS controls, UDisks actions, GNOME Disks for partition/filesystem work |
+| Idle lock and display standby | `swayidle`, `swaylock`, and `wlopm` |
 | Suspend/sign out/restart/shutdown | systemd-logind |
 | Lock authentication | PAM through `swaylock` |
 | Login | Separate `meridian-greeter` communicating with greetd |
-| App removal | Resolved Flatpak ref or Debian package; dpkg-query identifies ownership and `pkexec apt-get remove` removes packages |
+| App removal | Exact Flatpak ref, Snap name, or dpkg-owned desktop entry; privileged removals use `pkexec` |
 
 Monitor changes revert after 15 seconds unless kept. Accepted layouts are saved
 for later sessions. External monitor brightness currently directs users to the
@@ -178,17 +188,18 @@ monitor's hardware controls; DDC/CI control is not implemented.
 Some operations live in `shell/src/settings_devices.rs` and
 `shell/src/bluetooth_agent.rs`, rather than the services crate.
 
-## 9. Finder, Terminal, and persistence
+## 9. Files, applications, and persistence
 
-Finder's bridge requests reach `shell/src/files.rs`, which operates on the
-user's real filesystem. Rename avoids overwriting another item; deletion uses
-the system Trash. File operations are subject to the user's OS permissions.
+The production launcher opens GNOME Files for directory browsing and Kitty for
+terminal sessions. Meridian's own desktop file operations use GIO: desktop
+items are watched for external changes, drops and transfers avoid overwriting
+existing names, and deleting real files uses the system Trash. File operations
+run with the signed-in user's permissions.
 
-`shell/src/terminal.rs` creates PTYs and starts the user's interactive shell.
-The frontend renders output with bundled xterm.js. Input, bounded output reads,
-resize, and close travel through the typed bridge. Closing a tab ends its shell
-and processes in its terminal session when a tab or window closes. Development
-sessions run on the Debian host.
+The older Finder and PTY terminal implementations remain in the source tree for
+integration coverage and compatibility, but their React surfaces are excluded
+from the production UI build. The current session delegates interactive shell
+behavior to Kitty.
 
 Preferences use the user's configuration directory, normally
 `~/.config/meridian/`: `desktop.json` stores appearance, wallpaper, and
@@ -202,17 +213,18 @@ The shell runs as the logged-in user. Privileged system operations are mediated
 by the owning services or authentication helpers.
 
 - Requests must deserialize into the closed protocol and pass capability checks.
-  Finder has file-operation capabilities; Terminal has terminal capabilities;
-  Greeter has login and Locker has unlock capabilities.
+  Settings, app management, notifications, Calendar, desktop files, Greeter, and
+  Locker have scoped capabilities. Legacy Finder and PTY terminal capabilities
+  do not put those UI surfaces in the current production bundle.
 - Web content uses local `meridian://` resources. Navigation and permission
   requests are restricted, and the WebKit network session is ephemeral.
   The exact repository link is opened externally by the host.
 - UI/assets paths are confined to their roots. Additional routes serve the
   chosen custom wallpaper, catalog-resolved app icons, and theme icons.
 - Direct browser file access is disabled. Authorized native bridge requests
-  still deliberately allow filesystem operations and terminal input.
-- App launches resolve installed catalog IDs. The Terminal intentionally
-  executes commands entered by the user through a real shell.
+  deliberately allow the desktop's scoped file operations.
+- App launches resolve installed catalog IDs. The terminal shortcut launches
+  the installed Kitty terminal application.
 - `swaylock` provides the lock surface and PAM authentication outside Meridian's
   UI process.
 
@@ -229,15 +241,17 @@ of graphics, hardware, PAM, or compositor behavior.
 
 ## 12. Current limits and future work
 
-Sharing is a UI prototype and does not start services. Settings categories such
-as Sound and Privacy & Security contain placeholders, although Control Center
-already provides working volume controls. Global menu items do not integrate
-with arbitrary applications' menus.
+System sharing is not implemented. Some planned Settings controls remain
+unfinished or depend on host services and hardware. Meridian's top-bar
+menus are shell menus; they do not import or control arbitrary applications'
+menu bars. Meridian does not provide its own package repository, automatic
+distribution upgrades, notification toast daemon, or desktop ISO.
 
-A separate services daemon, native PipeWire integration, notification server,
-idle locking, DDC/CI brightness, additional search providers, a custom
+A separate services daemon, direct PipeWire APIs, notification toasts,
+external-monitor DDC/CI brightness, additional search providers, a custom
 compositor, and an ISO/SDK remain future directions from the older roadmap.
-They are not prerequisites for describing the features already implemented.
+The current session already uses `swayidle` for idle locking and the standard
+notification D-Bus API for history.
 
 ## 13. Repository layout
 
@@ -246,10 +260,10 @@ They are not prerequisites for describing the features already implemented.
 | `protocol/src/lib.rs` | Message types, capabilities, validation, JSON replies, generated TS |
 | `services/src/` | App catalog/search, window tracking, settings, output management |
 | `shell/src/shell.rs` | Shared shell state, authorization/lock gating and request routing |
-| `shell/src/shell/` | Feature handlers (Settings/Terminal) and lazy surface construction |
+| `shell/src/shell/` | Feature handlers and lazy surface construction |
 | `shell/src/surface.rs` | GTK/WebKit windows, layer placement, rendering settings |
 | `shell/src/bridge.rs`, `scheme.rs` | Message transport and local resource loading |
-| `shell/src/files.rs`, `terminal.rs`, `desktop.rs` | Built-in app operations and desktop persistence |
+| `shell/src/files.rs`, `desktop.rs`, `calendar.rs`, `pulse.rs` | File operations, desktop persistence, calendar data and metrics |
 | `shell/src/settings_devices.rs`, `bluetooth_agent.rs` | Device configuration and pairing |
 | `shell/src/greeter.rs`, `greetd.rs`, `lock_auth.rs`, `power.rs` | Login, lock, and session actions |
 | `ui/src/surfaces/` | React interfaces for each surface |
@@ -267,8 +281,8 @@ Desktop file drops use GIO moves without overwrite and preserve source files on 
 See [Phase 1](PHASE1.md) for current recovery behavior, capability audit, transfer
 failure semantics, CI smoke tests and mandatory hardware/endurance release gates.
 The session supervisor restarts only the shell; labwc remains independent.
-Discarded surfaces explicitly destroy their GTK windows. The lock screen retains
-locking is delegated to swaylock. File transfers stage data before no-overwrite publication;
+Discarded surfaces explicitly destroy their GTK windows. Locking is delegated
+to swaylock. File transfers stage data before no-overwrite publication;
 cross-device held sources have explicit recovery manifests.
 
 
@@ -285,9 +299,10 @@ for measurement boundaries and remaining hardware qualification.
 Settings search uses a native allowlist of typed preferences pages. Calculator
 search parses bounded arithmetic and recomputes answers before clipboard writes;
 neither provider can execute arbitrary input. Search preferences are cached by
-`Shell` and stored with the versioned configuration helper. Orbit tabs share one
-surface and one active directory listing. Preview content is bounded plain text
-or generated image data, never navigable HTML. The primary-output preference is
-stored in desktop configuration and only controls Meridian's surfaces. Notification
-Do Not Disturb stores a boolean preference; notification bodies remain session-only.
-See [Phase 3](PHASE3.md) for workflow coverage and remaining beta work.
+`Shell` and stored with the versioned configuration helper. File preview and
+tabbed Orbit behavior documented in older milestone notes refers to retained
+legacy source and is not included in the production UI bundle. The primary-output
+preference is stored in desktop configuration and only controls Meridian's
+surfaces. Notification Do Not Disturb stores a boolean preference; notification
+bodies remain session-only. See [Phase 3](PHASE3.md) for completed workflow
+work and remaining beta qualification.
