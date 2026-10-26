@@ -12,6 +12,17 @@
 .notification-list { flex:1 1 auto; overscroll-behavior:contain; }
 .notification-meta > span { min-width:0; }
 .notification-empty { flex-shrink:0; }
+@media (max-height: 420px) {
+  .notification-center { padding: 12px; gap: 8px; }
+  .notification-center .notification-heading { gap: 6px; flex-wrap: wrap; }
+  .notification-empty { margin: 4px 0; gap: 6px; }
+  .notification-empty > span { width: 40px; height: 40px; border-radius: 12px; }
+  .notification-empty { flex-shrink: 1; min-height: 0; overflow: auto; }
+}
+@media (max-width: 360px) {
+  .notification-center .notification-heading h1 { font-size: 17px; }
+  .notification-center .notification-clear { padding: 5px 7px; }
+}
 
 /* Meridian high-contrast desktop refresh, 2026-10 */
 :root .menu.notification-center {

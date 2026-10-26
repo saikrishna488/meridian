@@ -17,6 +17,8 @@ html, body { background: var(--terminal-bg); color: var(--terminal-fg); font-fam
 .terminal-app { display:flex; flex-direction:column; height:100%; min-height:0; overflow:hidden; background:var(--terminal-bg); }
 .terminal-tabs { display:flex; align-items:center; min-height:40px; padding:0 12px; background:var(--terminal-chrome); border-bottom:1px solid var(--terminal-border); gap:6px; flex-shrink:0; color:var(--terminal-ui-text); }
 .terminal-tabs [role="tablist"] { display:flex; gap:5px; min-width:0; overflow:auto; }
+.terminal-tabs [role="tablist"] { flex:1 1 auto; }
+.terminal-tools { flex:none; }
 .terminal-tab { display:flex; align-items:center; }
 .terminal-tabs button { border:0; border-radius:7px; background:transparent; color:var(--terminal-muted); padding:7px 9px; font-size:11px; white-space:nowrap; cursor:pointer; }
 .terminal-tabs button:hover, .terminal-tabs button[aria-selected="true"] { background:var(--terminal-chrome-strong); color:var(--terminal-ui-text); }
@@ -51,7 +53,7 @@ html, body, #root { height:100%; min-height:0; margin:0; overflow:hidden; }
 .terminal-screen .xterm-viewport::-webkit-scrollbar { width: 12px; }
 .terminal-screen .xterm-viewport::-webkit-scrollbar-thumb { background: var(--terminal-muted); border: 3px solid var(--terminal-bg); border-radius: 8px; }
 .terminal-follow { position:absolute; top:4px; right:16px; z-index:5; border: 1px solid var(--terminal-border); border-radius: 4px; background: var(--terminal-chrome-strong); color: var(--terminal-ui-text); cursor: pointer; padding: 2px 6px; font: inherit; }
-.terminal-context { position:fixed; z-index:30; display:grid; width:176px; padding:5px; border:1px solid var(--terminal-border); border-radius:9px; background:var(--terminal-chrome); color:var(--terminal-ui-text); box-shadow:0 8px 24px #0005; font-family:var(--font-ui); }
+.terminal-context { position:fixed; z-index:30; display:grid; width:176px; max-height:calc(100vh - 16px); overflow-y:auto; padding:5px; border:1px solid var(--terminal-border); border-radius:9px; background:var(--terminal-chrome); color:var(--terminal-ui-text); box-shadow:0 8px 24px #0005; font-family:var(--font-ui); }
 .terminal-context button { min-height:32px; padding:6px 9px; border:0; border-radius:5px; background:transparent; color:inherit; text-align:left; cursor:pointer; font:inherit; font-size:12px; }
 .terminal-context button:hover:not(:disabled), .terminal-context button:focus-visible { background:var(--terminal-chrome-strong); outline:0; }
 .terminal-context button:disabled { opacity:.45; cursor:default; }

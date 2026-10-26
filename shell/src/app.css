@@ -1,5 +1,5 @@
-window.meridian-app { background: @theme_bg_color; color: @theme_fg_color; }
-.meridian-app headerbar { min-height: 46px; box-shadow: inset 0 -1px alpha(@theme_fg_color, .12); }
+window.meridian-app { background: #000000; color: #ffffff; border: 2px solid #ffffff; }
+.meridian-app headerbar { min-height: 46px; background: #000000; color: #ffffff; border-bottom: 1px solid #ffffff; box-shadow: none; }
 .meridian-app button { border-radius: 8px; min-height: 28px; box-shadow: none; }
 .meridian-app button:hover { background: #087cf0; color: white; }
 .meridian-app entry { border-radius: 10px; min-height: 32px; }

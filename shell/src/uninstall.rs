@@ -41,6 +41,28 @@ fn valid_package(value: &str) -> bool {
         && value.bytes().all(|c| c.is_ascii_alphanumeric() || b"._+:-".contains(&c))
 }
 
+fn valid_snap(value: &str) -> bool {
+    !value.is_empty()
+        && !value.starts_with('-')
+        && value.len() <= snap_name_limit()
+        && value.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-')
+}
+
+const fn snap_name_limit() -> usize {
+    40
+}
+
+fn unique_debian_owner(output: &str) -> Option<String> {
+    let mut owners = std::collections::BTreeSet::new();
+    for line in output.lines() {
+        let Some((package, _)) = line.split_once(": ") else { continue };
+        if valid_package(package) {
+            owners.insert(package.to_owned());
+        }
+    }
+    (owners.len() == 1).then(|| owners.into_iter().next().unwrap())
+}
+
 pub async fn plan(app: &App) -> Result<UninstallPlan, ErrorBody> {
     let source = app.source.as_ref().ok_or_else(|| error("This app is not managed by a supported package manager"))?;
     let desktop = gio::glib::KeyFile::new();
@@ -63,26 +85,36 @@ pub async fn plan(app: &App) -> Result<UninstallPlan, ErrorBody> {
             return Err(error("Could not resolve the installed Flatpak application"));
         }
         (format!("flatpak:{scope}:{reference}"), "Removes the application. Your saved app data will be kept.".into())
+    } else if let Ok(name) = desktop
+        .string("Desktop Entry", "X-SnapInstanceName")
+        .or_else(|_| desktop.string("Desktop Entry", "X-SnapAppName"))
+    {
+        if !valid_snap(&name) {
+            return Err(error("Invalid Snap application name"));
+        }
+        run(&["snap", "info", &name]).await?;
+        (
+            format!("snap:{name}"),
+            format!("Removes the Snap package {name} and its application data. Authentication may be required."),
+        )
     } else {
         let path = source
             .strip_prefix("/run/host")
             .map(|p| std::path::Path::new("/").join(p))
             .unwrap_or_else(|_| source.clone());
         let path = path.to_str().ok_or_else(|| error("Invalid desktop file path"))?;
-        let owner = run(&["dpkg-query", "--search", path]).await?;
-        let package = owner
-            .trim()
-            .rsplit_once(": ")
-            .map(|(package, _)| package.to_owned())
-            .ok_or_else(|| error("Could not identify the Debian package"))?;
-        if !valid_package(&package) {
-            return Err(error("Could not identify a unique Debian package"));
-        }
+        // Local launchers (including AppImage shortcuts) are not owned by dpkg.
+        // Keep dpkg-query's diagnostic out of the confirmation UI: it commonly
+        // includes a confusing "no path found" message for these entries.
+        let owner = run(&["dpkg-query", "--search", "--", path]).await.map_err(|_| {
+            error("This application is not installed by a supported package manager, so Meridian cannot uninstall it.")
+        })?;
+        let package = unique_debian_owner(&owner).ok_or_else(|| {
+            error("This application is not installed by a supported package manager, so Meridian cannot uninstall it.")
+        })?;
         (
             format!("deb:{package}"),
-            format!(
-                "Removes the {package} package and any packages that depend on it. Authentication may be required."
-            ),
+            format!("Purges the {package} package and removes unused dependencies. Authentication may be required."),
         )
     };
     Ok(UninstallPlan { id: app.id.clone(), name: app.name.clone(), target, detail })
@@ -109,7 +141,15 @@ pub async fn uninstall(app: &App, expected: &str) -> Result<(), ErrorBody> {
         let (scope, reference) = target.split_once(':').ok_or_else(|| error("Invalid uninstall target"))?;
         run(&["flatpak", "uninstall", scope, "--noninteractive", "--app", reference]).await?;
     } else if let Some(package) = expected.strip_prefix("deb:") {
-        run(&["pkexec", "apt-get", "remove", "--yes", "--", package]).await?;
+        if !valid_package(package) {
+            return Err(error("Invalid Debian package name"));
+        }
+        run(&["pkexec", "apt-get", "purge", "--yes", "--auto-remove", "--", package]).await?;
+    } else if let Some(name) = expected.strip_prefix("snap:") {
+        if !valid_snap(name) {
+            return Err(error("Invalid Snap application name"));
+        }
+        run(&["pkexec", "snap", "remove", "--purge", name]).await?;
     } else {
         return Err(error("Unsupported uninstall target"));
     }
@@ -127,5 +167,32 @@ mod tests {
         for value in ["", "--all", "a;b", "$(id)", "a b", "a\nb", "a/b"] {
             assert!(!valid_package(value));
         }
+    }
+
+    #[test]
+    fn debian_owner_must_be_unique() {
+        assert_eq!(
+            unique_debian_owner("firefox:amd64: /usr/share/applications/firefox.desktop\n"),
+            Some("firefox:amd64".into())
+        );
+        assert_eq!(
+            unique_debian_owner(
+                "firefox: /usr/share/applications/firefox.desktop\nfirefox: /usr/share/icons/firefox.svg\n"
+            ),
+            Some("firefox".into())
+        );
+        assert_eq!(
+            unique_debian_owner("one: /usr/share/applications/a.desktop\ntwo: /usr/share/applications/a.desktop\n"),
+            None
+        );
+    }
+
+    #[test]
+    fn snap_names_are_constrained_to_package_names() {
+        assert!(valid_snap("firefox"));
+        assert!(valid_snap("my-app-2"));
+        assert!(!valid_snap(""));
+        assert!(!valid_snap("my_app"));
+        assert!(!valid_snap("--bad"));
     }
 }

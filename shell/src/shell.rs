@@ -84,7 +84,7 @@ impl Shell {
     pub fn start(app: &gtk::Application, roots: Roots, dev: bool) -> Rc<Shell> {
         let desktop = crate::desktop::get();
         if let Some(settings) = gtk::Settings::default() {
-            settings.set_gtk_application_prefer_dark_theme(desktop.appearance == "dark");
+            settings.set_gtk_application_prefer_dark_theme(true);
             settings.set_gtk_font_name(Some(&format!("{} 11", desktop.font)));
         }
         glib::spawn_future_local(async {
@@ -341,7 +341,7 @@ impl Shell {
                     let state = crate::files::blocking(move || crate::desktop::set_appearance(&choice.id)).await?;
                     if let Some(shell) = weak.upgrade() {
                         if let Some(settings) = gtk::Settings::default() {
-                            settings.set_gtk_application_prefer_dark_theme(state.appearance == "dark");
+                        settings.set_gtk_application_prefer_dark_theme(true);
                         }
                         shell.desktop_changed(&state);
                     }
@@ -390,10 +390,8 @@ impl Shell {
                 } else {
                     let name = match app.id.as_str() {
                         "meridian-settings.desktop" => "Settings",
-                        "meridian-finder.desktop" => "Orbit",
+                        "meridian-finder.desktop" => "File Manager",
                         "meridian-terminal.desktop" => "Meridian Terminal",
-                        "meridian-calendar.desktop" => "Calendar",
-                        "meridian-clock.desktop" => "Clock",
                         "meridian-pulse.desktop" => "Pulse",
                         _ => return Err(ErrorBody::new(ErrorCode::NotFound, "Unknown application")),
                     };
@@ -454,10 +452,7 @@ impl Shell {
                 let item = crate::desktop::item(&app.id)?;
                 if item.kind != "app" {
                     if std::path::Path::new(&item.target).is_dir() {
-                        self.open_finder();
-                        if let Some(surface) = &self.state.borrow().finder {
-                            surface.send(&Event::FinderLocation(proto::FilePath { path: item.target }));
-                        }
+                        crate::files::open_directory(&item.target)?;
                     } else {
                         crate::files::open(&item.target)?;
                     }
@@ -466,8 +461,10 @@ impl Shell {
                         "meridian-settings.desktop" => self.open_preferences(),
                         "meridian-finder.desktop" => self.open_finder(),
                         "meridian-terminal.desktop" => self.open_terminal(),
-                        "meridian-calendar.desktop" => self.open_utility(SurfaceKind::Calendar),
-                        "meridian-clock.desktop" => self.open_utility(SurfaceKind::Clock),
+                        "meridian-calendar.desktop" => self.catalog.borrow().launch("org.gnome.Calendar.desktop", None)
+                            .map_err(|e| ErrorBody::new(ErrorCode::Failed, format!("{e:?}")))?,
+                        "meridian-clock.desktop" => self.catalog.borrow().launch("org.gnome.clocks.desktop", None)
+                            .map_err(|e| ErrorBody::new(ErrorCode::Failed, format!("{e:?}")))?,
                         "meridian-pulse.desktop" => self.open_pulse(),
                         id => self
                             .catalog
@@ -479,8 +476,17 @@ impl Shell {
                 serialize(ok())
             }
             Request::MenuOpen(menu) => {
-                if !["Meridian", "File", "Edit", "View", "Window", "Help", "Application"].contains(&menu.menu.as_str())
-                {
+                if ![
+                    "Meridian",
+                    "File",
+                    "Edit",
+                    "View",
+                    "Window",
+                    "Help",
+                    "Application",
+                    "DockItem",
+                ]
+                .contains(&menu.menu.as_str()) {
                     return Err(ErrorBody::new(ErrorCode::InvalidRequest, "unknown desktop menu"));
                 }
                 self.open_popover(Popover::DesktopMenu);
@@ -661,10 +667,7 @@ impl Shell {
                 serialize(ok())
             }
             Request::TrashOpen => {
-                self.open_finder();
-                if let Some(surface) = &self.state.borrow().finder {
-                    surface.send(&Event::FinderLocation(proto::FilePath { path: "@trash".into() }));
-                }
+                crate::files::open_trash()?;
                 serialize(ok())
             }
             Request::AppUninstallPrompt(app) => {
@@ -745,10 +748,6 @@ impl Shell {
                 if pin.pinned
                     && ![
                         "meridian-settings.desktop",
-                        "meridian-finder.desktop",
-                        "meridian-terminal.desktop",
-                        "meridian-calendar.desktop",
-                        "meridian-clock.desktop",
                         "meridian-pulse.desktop",
                     ]
                     .contains(&pin.id.as_str())
@@ -774,8 +773,6 @@ impl Shell {
                 results.sections.extend(crate::search::sections(&q.query, &self.search_preferences.borrow()));
                 let query = q.query.trim().to_lowercase();
                 let builtins = [
-                    ("meridian-calendar.desktop", "Calendar", "Meridian calendar events dates", "x-office-calendar"),
-                    ("meridian-clock.desktop", "Clock", "Meridian clock timer stopwatch", "preferences-system-time"),
                     (
                         "meridian-pulse.desktop",
                         "Pulse",
@@ -783,18 +780,15 @@ impl Shell {
                         "utilities-system-monitor",
                     ),
                     ("meridian-settings.desktop", "Settings", "Meridian settings preferences", "preferences-system"),
-                    ("meridian-finder.desktop", "Orbit", "Meridian orbit finder files folders", "system-file-manager"),
-                    (
-                        "meridian-terminal.desktop",
-                        "Meridian Terminal",
-                        "Meridian terminal console command",
-                        "utilities-terminal",
-                    ),
                 ];
                 let items = builtins
                     .into_iter()
-                    .filter(|(_, _, keywords, _)| keywords.to_lowercase().contains(&query))
-                    .map(|(id, name, _, icon)| proto::SearchItem {
+                    .filter_map(|(id, name, keywords, icon)| {
+                        let tokens: Vec<_> = query.split_whitespace().map(meridian_services::search::fuzzy::fold_token).collect();
+                        let candidate = meridian_services::search::fuzzy::Prepared::new(&format!("{name} {keywords}"));
+                        tokens.iter().all(|token| meridian_services::search::fuzzy::fuzzy(token, &candidate).is_some()).then_some((id, name, icon))
+                    })
+                    .map(|(id, name, icon)| proto::SearchItem {
                         id: id.into(),
                         title: name.into(),
                         subtitle: Some(if name.starts_with("Meridian ") {
@@ -839,14 +833,15 @@ impl Shell {
                         .set_text(&result);
                     return serialize(ok());
                 }
-                for (id, kind) in [
-                    ("meridian-calendar.desktop", SurfaceKind::Calendar),
-                    ("meridian-clock.desktop", SurfaceKind::Clock),
-                ] {
-                    if a.item_id == id {
-                        self.open_utility(kind);
-                        return serialize(ok());
-                    }
+                if a.item_id == "meridian-calendar.desktop" {
+                    self.catalog.borrow().launch("org.gnome.Calendar.desktop", None)
+                        .map_err(|e| ErrorBody::new(ErrorCode::Failed, format!("{e:?}")))?;
+                    return serialize(ok());
+                }
+                if a.item_id == "meridian-clock.desktop" {
+                    self.catalog.borrow().launch("org.gnome.clocks.desktop", None)
+                        .map_err(|e| ErrorBody::new(ErrorCode::Failed, format!("{e:?}")))?;
+                    return serialize(ok());
                 }
                 if a.item_id == "meridian-pulse.desktop" {
                     self.open_pulse();
@@ -1147,8 +1142,8 @@ impl Shell {
                 id: w.id,
                 name: if matches!(w.title.as_str(), "Terminal" | "Meridian Terminal") {
                     "Meridian Terminal".into()
-                } else if matches!(w.title.as_str(), "Orbit" | "Meridian Finder") {
-                    "Orbit".into()
+                } else if matches!(w.title.as_str(), "Orbit" | "File Manager" | "Meridian Finder") {
+                    "File Manager".into()
                 } else if matches!(w.title.as_str(), "Settings" | "Meridian Settings") {
                     "Settings".into()
                 } else {
@@ -1222,7 +1217,14 @@ impl Shell {
     fn open_popover(&self, popover: Popover) {
         let surface = self.ensure_popover(popover);
         for other in POPOVERS.into_iter().filter(|&p| p != popover) {
-            self.dismiss_popover(other);
+            // Menus share the overlay layer. Hide the existing overlay before
+            // mapping the desktop menu so a full-screen Applications or
+            // Control Center surface cannot remain above its context menu.
+            if popover == Popover::DesktopMenu {
+                self.hide_popover(other);
+            } else {
+                self.dismiss_popover(other);
+            }
         }
         self.cancel_dismiss_timer(popover);
         // M0: menus open on the primary output, where the bar is.
@@ -1482,7 +1484,7 @@ fn read_dock() -> Vec<String> {
     std::fs::read(dock_path())
         .ok()
         .and_then(|data| serde_json::from_slice(&data).ok())
-        .unwrap_or_else(|| vec!["meridian-terminal.desktop".into(), "meridian-finder.desktop".into()])
+        .unwrap_or_else(|| vec!["meridian-settings.desktop".into()])
 }
 
 fn system_info() -> proto::SystemInfo {

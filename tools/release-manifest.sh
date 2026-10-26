@@ -17,7 +17,7 @@ release_manifest() {
         cd "$ROOT"
         {
             release_sources
-            printf '%s\0' target/release/meridian-shell target/release/meridian-greeter target/release/meridian-drift
+            printf '%s\0' target/release/meridian-shell target/release/meridian-greeter
             find ui/dist -type f -print0
         } | LC_ALL=C sort -z | xargs -0 sha256sum
     )
@@ -32,7 +32,7 @@ verify_release() {
     current="$(release_manifest)" || return 1
     if [ "$current" != "$(cat "$manifest")" ]; then
         echo "error: release binaries, UI, or source files changed since the release build" >&2
-        echo "Rebuild with tools/build-release.sh before running sudo tools/install.sh." >&2
+        echo "Rebuild with tools/build-release.sh before packaging or installing Meridian." >&2
         return 1
     fi
 }

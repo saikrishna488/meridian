@@ -1,6 +1,6 @@
 /* Meridian Design System. Existing theme attributes and token names are stable. */
 :root {
-  color-scheme: light;
+  color-scheme: dark;
   --font-ui: "Inter Variable", "Inter", "Cantarell", "Noto Sans", system-ui, sans-serif;
   --font-mono: "DejaVu Sans Mono", "Cascadia Code", monospace;
   --font-display: "Inter Display", var(--font-ui);
@@ -30,6 +30,7 @@
   --row-height: 52px;
   --icon-size: 18px;
   --dock-surface-height: 64px; /* matches native PANEL_HEIGHT */
+  --topbar-height: 44px; /* matches native TOPBAR_HEIGHT */
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 18px;
@@ -118,6 +119,45 @@
 }
 @media (prefers-reduced-motion: reduce) {
   :root { --dur-fast: 0ms; --dur-med: 0ms; --dur-slow: 0ms; }
+}
+
+/* Dark-only contract. Keep legacy token names for component compatibility, but
+   make every owned surface black and every UI text token strictly white/black. */
+:root, :root[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #000000;
+  --surface: #000000;
+  --surface-raised: #000000;
+  --surface-subtle: #000000;
+  --surface-hover: #247CFF;
+  --ink: #FFFFFF;
+  --ink-muted: #FFFFFF;
+  --line: rgb(255 255 255 / .14);
+  --selection: #247CFF;
+  --selection-ink: #FFFFFF;
+  --action: #FFFFFF;
+  --action-hover: #FFFFFF;
+  --button-primary: #247CFF;
+  --button-primary-hover: #247CFF;
+  --on-primary: #FFFFFF;
+  --focus-ring: #FFFFFF;
+  --danger: #FFFFFF;
+  --button-danger: #000000;
+  --button-danger-hover: #000000;
+  --on-danger: #FFFFFF;
+  --success: #FFFFFF;
+  --chrome-bg: #000000;
+  --chrome-ink: #FFFFFF;
+  --chrome-line: rgb(255 255 255 / .14);
+  --chrome-hover: #247CFF;
+  --glass-background: #000000;
+  --glass-background-strong: #000000;
+  --glass-border: rgb(255 255 255 / .14);
+  --glass-blur: 0px;
+  --tile-bg: #000000;
+  --tile-bg-hover: #247CFF;
+  --tile-bg-active: #247CFF;
+  --tile-fg-active: #FFFFFF;
 }
 
 /* Meridian high-contrast desktop refresh, 2026-10 */

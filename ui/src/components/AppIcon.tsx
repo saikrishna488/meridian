@@ -17,7 +17,6 @@ function subscribeIconRevision(listener: () => void) {
 }
 const getIconRevision = () => iconRevision;
 const builtinIcons: Record<string, string> = {
-  "meridian-drift.desktop": "browser",
   "meridian-calendar.desktop": "calendar",
   "meridian-clock.desktop": "clock",
   "meridian-pulse.desktop": "pulse",
@@ -34,9 +33,10 @@ export function AppIcon({ name, icon, id }: { name: string; icon?: string | null
   const [fallback, setFallback] = useState({ identity, attempt: 0 });
   const attempt = fallback.identity === identity ? fallback.attempt : 0;
   const dynamic = (uri: string | null) => uri ? `${uri}?rev=${revision}` : null;
-  // Retry installed app artwork on catalog refresh, then show a legible monogram.
+  // Retry installed artwork, then use Meridian's stable default app/process icon.
   const candidates = [fixed, id ? dynamic(`meridian://app-icons/${encodeURIComponent(id)}`) : null,
-    icon && !icon.startsWith("/") ? dynamic(`meridian://icons/${encodeURIComponent(icon)}`) : null].filter((src): src is string => !!src);
+    icon && !icon.startsWith("/") ? dynamic(`meridian://icons/${encodeURIComponent(icon)}`) : null,
+    dynamic("meridian://ui/desktop-icons/meridian/generic.svg")].filter((src): src is string => !!src);
   const src = candidates[attempt] ?? null;
   const generic = !!src?.includes("/generic.svg");
   const hue = Array.from(name).reduce((n, c) => (n * 31 + c.charCodeAt(0)) % 360, 0);

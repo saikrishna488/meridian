@@ -236,6 +236,7 @@ pub enum PreferencesPage {
     Appearance,
     Wallpaper,
     Desktop,
+    Applications,
     General,
     Users,
     DeviceManager,
@@ -518,6 +519,8 @@ impl SurfaceKind {
                 Capability::Startup,
                 Capability::PowerStatus,
                 Capability::SystemAdministration,
+                Capability::Search,
+                Capability::AppManagement,
             ],
             SurfaceKind::Finder => &[
                 Capability::Files,
@@ -546,7 +549,14 @@ impl SurfaceKind {
                 Capability::Notifications,
                 Capability::Search,
             ],
-            SurfaceKind::DesktopMenu => &[Capability::Popovers, Capability::Windows, Capability::Session],
+            SurfaceKind::DesktopMenu => &[
+                Capability::Popovers,
+                Capability::Windows,
+                Capability::Session,
+                Capability::Search,
+                Capability::Dock,
+                Capability::DesktopFiles,
+            ],
             SurfaceKind::Applications => &[
                 Capability::Search,
                 Capability::Popovers,
@@ -1597,7 +1607,19 @@ pub struct MenuOpen {
     pub x: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub y: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub window_id: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub item_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub item_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub pinned: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]

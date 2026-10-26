@@ -3,6 +3,7 @@ import { on, request } from "../../lib/bridge";
 import { MeridianLogo } from "../../components/MeridianLogo";
 import { ConfirmButton } from "../../components/ConfirmButton";
 import { mount, useDialogFocus, usePopover, useWindowKey } from "../../lib/react";
+import type { MenuOpen } from "../../lib/generated/MenuOpen";
 import type { SystemInfo } from "../../lib/generated/SystemInfo";
 import type { WindowInfo } from "../../lib/generated/WindowInfo";
 
@@ -11,6 +12,7 @@ function DesktopMenu() {
   const [label, setLabel] = useState("Meridian");
   const [x, setX] = useState(8);
   const [windowId, setWindowId] = useState<number | undefined>();
+  const [dockItem, setDockItem] = useState<MenuOpen | null>(null);
   const [about, setAbout] = useState(false);
   const [info, setInfo] = useState<SystemInfo | null>(null);
   const [windows, setWindows] = useState<WindowInfo[]>([]);
@@ -21,6 +23,7 @@ function DesktopMenu() {
   const { visible, menu, dismiss } = usePopover(async () => { setAbout(false); setError(""); }, () => first.current?.focus(), report);
   useEffect(() => on("menu.opened", e => {
     setWindowId(e.data.window_id);
+    setDockItem(e.data.menu === "DockItem" ? e.data : null);
     setLabel(e.data.menu); setX(e.data.x); setAbout(false); setError("");
     void request({ method: "windows.list" }).then(setWindows).catch(report);
   }), []);
@@ -51,9 +54,11 @@ function DesktopMenu() {
   }
   return <>
     <div hidden={!visible} className="desktop-scrim" onClick={() => void dismiss().catch(report)} />
-    <section ref={menu} inert={!visible} aria-hidden={!visible} className={`desktop-menu${visible ? "" : " hidden"}${about ? " about" : ""}`}
-      style={about ? undefined : { left: `min(${x}px, max(8px, calc(100vw - 280px)))` }}
-      role={about ? "dialog" : "menu"} aria-modal={about || undefined} aria-label={about ? "About this Meridian" : `${label} menu`}>
+    <section ref={menu} inert={!visible} aria-hidden={!visible} className={`desktop-menu${visible ? "" : " hidden"}${about ? " about" : ""}${label === "DockItem" ? " dock-item-menu" : ""}`}
+      style={about ? undefined : {
+        left: `min(${x}px, max(8px, calc(100vw - ${label === "DockItem" ? 236 : 280}px)))`,
+      }}
+      role={about ? "dialog" : "menu"} aria-modal={about || undefined} aria-label={about ? "About this Meridian" : label === "DockItem" ? `${dockItem?.item_name ?? "Application"} actions` : `${label} menu`}>
       {about ? <>
         <button className="close-about" autoFocus aria-label="Close About window" onClick={() => void dismiss().catch(report)}>×</button>
         <div className="meridian-symbol"><MeridianLogo /></div><h1>Meridian</h1>
@@ -62,7 +67,7 @@ function DesktopMenu() {
         {info ? <dl>{[["Laptop", [info.manufacturer, info.model].filter(Boolean).join(" ") || "Unavailable"], ["Operating system", info.os], ["Processor", info.processor], ["Memory", info.memory]].map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl> : <p role="status">{error || "Loading laptop details…"}</p>}
       </> : <>
         {(label === "Meridian" || label === "Help") && <button ref={first} role="menuitem" onClick={() => void showAbout()}>About this Meridian…</button>}
-        {label === "Meridian" && <><hr /><button role="menuitem" onClick={() => void request({ method: "preferences.open" }).then(dismiss).catch(report)}>Settings…</button><button role="menuitem" onClick={() => void request({ method: "finder.open" }).then(dismiss).catch(report)}>Orbit…</button><button role="menuitem" onClick={() => void request({ method: "terminal.open" }).then(dismiss).catch(report)}>Terminal…</button><button role="menuitem" onClick={() => void request({ method: "pulse.open" }).then(dismiss).catch(report)}>Pulse…</button><hr />
+        {label === "Meridian" && <><hr /><button role="menuitem" onClick={() => void request({ method: "preferences.open" }).then(dismiss).catch(report)}>Settings…</button><button role="menuitem" onClick={() => void request({ method: "finder.open" }).then(dismiss).catch(report)}>File Manager…</button><button role="menuitem" onClick={() => void request({ method: "terminal.open" }).then(dismiss).catch(report)}>Terminal…</button><button role="menuitem" onClick={() => void request({ method: "pulse.open" }).then(dismiss).catch(report)}>Pulse…</button><hr />
           <button id="sleep" role="menuitem" disabled={busy} onClick={() => void sessionAction("session.sleep")}>Sleep</button>
           <ConfirmButton id="restart" role="menuitem" className="session-menu-button" label="Restart" report={report} action={() => sessionAction("session.restart")} />
           <ConfirmButton id="shutdown" role="menuitem" className="session-menu-button" label="Shut Down" report={report} action={() => sessionAction("session.shutdown")} />
@@ -73,6 +78,32 @@ function DesktopMenu() {
           if (!focused) return;
           void Promise.all(windows.filter(w => w.name === focused.name).map(w => request({ method: "windows.close", params: { id: w.id } }))).then(dismiss).catch(report);
         }}>Quit {focused?.name ?? "application"}</button>}
+        {label === "DockItem" && <>
+          <button ref={first} role="menuitem" disabled={!dockItem?.item_id} onClick={() => {
+            if (!dockItem?.item_id) return;
+            const running = dockItem.window_id && windows.some(window => window.id === dockItem.window_id);
+            const action = running
+              ? request({ method: "windows.activate", params: { id: dockItem.window_id! } })
+              : request({ method: "search.activate", params: { provider: "apps", item_id: dockItem.item_id } });
+            void action.then(dismiss).catch(report);
+          }}>Open</button>
+          <button role="menuitem" disabled={!dockItem?.item_id || ["meridian-settings.desktop", "meridian-pulse.desktop", "meridian-finder.desktop", "meridian-terminal.desktop"].includes(dockItem?.item_id ?? "")} onClick={() => {
+            if (!dockItem?.item_id) return;
+            void request({ method: "search.activate", params: { provider: "apps", item_id: dockItem.item_id } }).then(dismiss).catch(report);
+          }}>{["meridian-settings.desktop", "meridian-pulse.desktop", "meridian-finder.desktop", "meridian-terminal.desktop"].includes(dockItem?.item_id ?? "") ? "New window unavailable" : "New window"}</button>
+          <button role="menuitem" disabled={!dockItem?.item_id} onClick={() => {
+            if (!dockItem?.item_id) return;
+            void request({ method: "desktop.add_app", params: { id: dockItem.item_id } }).then(dismiss).catch(report);
+          }}>Add to desktop</button>
+          <button role="menuitem" disabled={!windows.some(w => w.name.toLowerCase() === dockItem?.item_name?.toLowerCase())} onClick={() => {
+            if (!dockItem?.item_name) return;
+            void Promise.all(windows.filter(w => w.name.toLowerCase() === dockItem.item_name?.toLowerCase()).map(w => request({ method: "windows.close", params: { id: w.id } }))).then(dismiss).catch(report);
+          }}>Quit</button>
+          <button role="menuitem" disabled={!dockItem?.item_id} onClick={() => {
+            if (!dockItem?.item_id) return;
+            void request({ method: "dock.pin", params: { id: dockItem.item_id, pinned: !dockItem.pinned } }).then(dismiss).catch(report);
+          }}>{dockItem?.pinned ? "Remove from panel" : "Pin to panel"}</button>
+        </>}
         {label === "File" && <button ref={first} role="menuitem" onClick={() => toggle("applications")}>Open application…</button>}
         {label === "Edit" && <><p className="menu-note">App editing commands are unavailable.</p>{["Undo", "Redo", "Cut", "Copy", "Paste", "Select All"].map(item => <button key={item} role="menuitem" disabled>{item}</button>)}</>}
         {label === "View" && <button ref={first} role="menuitem" onClick={() => toggle("options")}>Control Center…</button>}

@@ -265,6 +265,39 @@ html, body, .settings-app { background: var(--settings-bg); color: var(--setting
 .power-source { display:flex; align-items:center; gap:15px; padding:24px; }.power-source-icon { display:grid; place-items:center; width:46px; height:46px; flex:none; border-radius:14px; background:var(--selection); color:var(--action); }.power-source h3 { margin:0 0 7px; font-size:16px; }.power-source p { margin:0; color:var(--ink-muted); font-size:12px; line-height:1.6; }.battery-card { padding:22px; margin-top:18px; }.battery-card header { display:flex; align-items:center; gap:13px; }.battery-card header>span { display:grid; place-items:center; width:40px; height:40px; color:var(--action); }.battery-card header>div { flex:1; }.battery-card h3 { font-size:13px; margin:0 0 5px; }.battery-card header p { color:var(--ink-muted); font-size:11px; margin:0; }.battery-card header>strong { font-size:25px; font-weight:550; letter-spacing:-.8px; }.battery-meter { height:7px; background:var(--surface-hover); border-radius:99px; overflow:hidden; margin-top:20px; }.battery-meter>span { display:block; height:100%; border-radius:inherit; background:var(--action); }.battery-health { color:var(--ink-muted); font-size:10px; margin:12px 0 0; }.settings-content h3.power-section-title { margin:28px 0 14px; font-size:13px; }.power-save { justify-content:space-between; }.power-save>span { font-size:10px; line-height:1.6; color:var(--ink-muted); }.power-lock-note { display:flex; align-items:flex-start; gap:12px; padding:18px 2px; color:var(--ink-muted); }.power-lock-note>.ui-icon { margin-top:2px; color:var(--action); }.power-lock-note p { font-size:11px; line-height:1.8; margin:0; }.power-lock-note kbd { font:10px var(--font-ui); border:1px solid var(--line); border-radius:5px; padding:3px 5px; background:var(--surface); white-space:nowrap; }
 .general-info-row strong { user-select:text; -webkit-user-select:text; }
 
+.app-manager-toolbar { display:flex; align-items:center; gap:10px; margin-bottom:16px; }
+.app-manager-search { display:flex; align-items:center; gap:9px; flex:1; min-width:0; min-height:38px; padding:0 10px; border:1px solid var(--line); border-radius:9px; background:var(--surface-raised); color:var(--ink-muted); }
+.app-manager-search:focus-within { outline:2px solid var(--focus-ring); outline-offset:2px; }
+.app-manager-search input { flex:1; min-width:0; border:0; outline:0; background:transparent; color:var(--ink); font:inherit; }
+.app-manager-search input::placeholder { color:var(--ink-muted); }
+.app-manager-search button { display:grid; place-items:center; min-width:28px; min-height:28px; padding:0; }
+.app-manager-list { margin-top:0; }
+.app-manager-row { gap:14px; min-height:76px; }
+.app-manager-row > .app-icon { width:40px; height:40px; flex:none; }
+.app-manager-details { flex:1; min-width:0; }
+.app-manager-details strong, .app-manager-details small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.app-manager-details strong { font-size:12px; font-weight:550; }
+.app-manager-details small { margin-top:5px; color:var(--ink-muted); font-size:11px; }
+.app-manager-actions { display:flex; align-items:center; gap:8px; flex:none; }
+.app-manager-actions button { min-height:32px; font-size:11px; }
+.app-manager-empty { display:flex; flex-direction:column; align-items:center; gap:10px; padding:36px 24px; color:var(--ink-muted); text-align:center; }
+.app-manager-empty strong { color:var(--ink); font-size:13px; font-weight:550; }
+.app-manager-empty p { margin:0; font-size:11px; }
+@media(max-width:640px) { .app-manager-row { flex-wrap:wrap; }.app-manager-actions { width:100%; justify-content:flex-end; }.app-manager-toolbar > button { padding-inline:8px; font-size:11px; } }
+
+/* Applications: a quiet storefront entry point with a clear, scannable library. */
+.app-store-card { display:flex; align-items:center; gap:16px; min-width:0; margin:0 0 22px; padding:20px 22px; border:1px solid color-mix(in srgb,var(--action) 18%,var(--line)); border-radius:16px; background:linear-gradient(115deg,color-mix(in srgb,var(--action) 8%,var(--surface-raised)),var(--surface-raised) 68%); box-shadow:var(--shadow-card); }
+.app-store-mark { display:grid; place-items:center; width:46px; height:46px; flex:none; border:1px solid color-mix(in srgb,var(--action) 18%,transparent); border-radius:14px; color:var(--action); background:color-mix(in srgb,var(--action) 11%,var(--surface-raised)); }
+.app-store-copy { flex:1; min-width:0; }.app-store-copy strong { display:block; color:var(--ink); font-size:13px; font-weight:600; }.app-store-copy p { margin:5px 0 0; color:var(--ink-muted); font-size:11px; line-height:1.55; }
+.settings-content .app-store-card > button { display:flex; align-items:center; gap:8px; min-height:36px; flex:none; border-radius:9px; font-size:11px; }
+.settings-content .app-store-card > button[data-variant="primary"] { color:var(--on-primary); background:var(--button-primary); border-color:var(--button-primary); }
+.settings-content .app-store-card > button[data-variant="primary"]:hover { background:var(--button-primary-hover); border-color:var(--button-primary-hover); }
+.app-manager-toolbar { margin-bottom:20px; }.app-manager-search { min-height:42px; border-radius:11px; padding-inline:13px; }.app-manager-toolbar > button { min-height:42px; border-radius:11px; gap:7px; }
+.app-manager-list-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0 2px 10px; }.app-manager-list-heading h3 { margin:0; color:var(--ink); font-size:13px; font-weight:600; }.app-manager-list-heading p { margin:5px 0 0; color:var(--ink-muted); font-size:10px; }.app-manager-list-icon { display:grid; place-items:center; width:32px; height:32px; border:1px solid var(--line); border-radius:10px; color:var(--ink-muted); background:var(--surface-raised); }
+.app-manager-list { margin:0; border-radius:14px; }.app-manager-row { min-height:72px; padding:12px 16px; transition:background 140ms ease; }.app-manager-row:hover { background:color-mix(in srgb,var(--action) 4%,var(--surface-raised)); }.app-manager-row > .app-icon { width:42px; height:42px; border-radius:12px; }.app-manager-details strong { color:var(--ink); font-size:12px; font-weight:600; }.app-manager-details small { font-size:10px; }.app-manager-actions button { min-height:31px; border-radius:8px; }
+.app-manager-empty { min-height:190px; justify-content:center; border-style:dashed; border-radius:14px; background:color-mix(in srgb,var(--surface-raised) 82%,var(--canvas)); }.app-manager-empty > .ui-icon { color:var(--action); }.app-manager-empty strong { font-size:13px; }.app-manager-empty p { max-width:290px; line-height:1.6; }
+@media(max-width:640px) { .app-store-card { align-items:flex-start; flex-wrap:wrap; padding:16px; gap:12px; }.app-store-mark { width:40px; height:40px; }.app-store-copy { padding-top:3px; }.settings-content .app-store-card > button { width:100%; justify-content:center; }.app-manager-row { gap:10px; }.app-manager-actions { justify-content:flex-start; padding-left:50px; } }
+
 /* Wi-Fi and Bluetooth use the shared light and dark desktop palette. */
 .wireless-summary { display:flex; align-items:center; gap:18px; padding:24px; }
 .wireless-summary-icon,.wireless-dialog-icon { display:grid; place-items:center; flex:none; width:50px; height:50px; border-radius:15px; background:var(--surface-hover); color:var(--ink-muted); }

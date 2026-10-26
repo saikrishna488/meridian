@@ -51,3 +51,4 @@ label { margin:12px 0; font-size:var(--text-sm); }
 [role="alert"] { color:var(--danger); line-height:1.6; }
 [role="status"] { color:var(--ink-muted); line-height:1.6; }
 @media(max-width:760px) { main { padding:var(--space-5); } .calendar-layout { grid-template-columns:1fr; } aside { border-left:0; border-top:1px solid var(--line); padding:16px 0 0; } .tabs button { padding:8px 12px; } .month button { min-height:44px; } }
+@media(max-width:420px) { main { padding:12px; } .calendar-layout .toolbar h2 { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:center; font-size:14px; } .month { gap:2px; } .month button { min-height:36px; font-size:11px; } }

@@ -1,111 +1,155 @@
 @import url("../../lib/desktop-gloss.css");
 
-body { height: var(--dock-surface-height); padding: 0; }
-.taskbar { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; padding: 0 12px; border-top: 1px solid var(--chrome-line); background: var(--chrome-bg); color: var(--chrome-ink); }
-.bar { position: relative; display: flex; width: max-content; max-width: 100%; height: 100%; padding: 6px 8px; border: 0; border-radius: 0; background: transparent; color: inherit; }
-.windows { display: flex; align-items: center; gap: 5px; min-width: 0; margin: 0; padding: 0 3px; list-style: none; overflow-x: auto; scrollbar-width: none; }
+/* The native layer-shell surface is bottom anchored and exactly 64px tall. */
+html,
+body,
+#root {
+  width: 100%;
+  height: var(--dock-surface-height);
+  min-height: 0;
+  margin: 0;
+  overflow: hidden;
+  background: #000;
+}
+
+.taskbar {
+  position: relative;
+  z-index: var(--layer-listbox, 1000);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 5px 10px;
+  overflow: visible;
+  color: #f8faff;
+  background: #000;
+}
+
+.bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: 100%;
+  padding: 4px 7px;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  color: #f8faff;
+  background: transparent;
+  box-shadow: none;
+}
+
+.windows {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  list-style: none;
+  scrollbar-width: none;
+}
 .windows::-webkit-scrollbar { display: none; }
-.windows li { flex: none; }
-.bar-button, .window { position: relative; display: grid; place-items: center; width: 50px; height: 50px; padding: 5px; border: 0; border-radius: 13px; background: transparent; color: inherit; cursor: pointer; transition: background var(--dur-fast); }
-.bar-button:hover, .window:hover, .bar-button[aria-expanded="true"], .window[aria-pressed="true"] { background: var(--chrome-hover); }
-.dock-icon { width: 40px; height: 40px; font-size: 24px; }
-.app-icon { border-radius: 10px; }
-.generic-monogram { position: absolute; inset: 0; display: grid; place-items: center; font-size: 22px; }
-.window.running::after { content: ""; position: absolute; bottom: 0; width: 4px; height: 3px; border-radius: 2px; background: var(--ink-muted); }
-.window.running[aria-pressed="true"]::after { width: 16px; background: var(--action); }
-.dock-trash { margin-left: 5px; padding-left: 10px; border-left: 1px solid var(--chrome-line); }
-.dock-drop-target, .bar.drop-active { outline: 2px solid var(--focus-ring); border-radius: 13px; }
-.dock-context { position: absolute; top: 3px; z-index: 5; display: grid; gap: 2px; width: 168px; padding: 3px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-raised); box-shadow: var(--shadow-lg); font-size: 12px; }
-.dock-context button, .dock-error { min-height: 24px; border: 0; padding: 3px 8px; border-radius: 6px; background: var(--chrome-hover); color: inherit; cursor: pointer; text-align: left; }
-.dock-context button:disabled { opacity: .4; cursor: default; }
-.dock-error { position: absolute; inset: 0; background: #553336; font-size: 12px; overflow: auto; z-index: 6; }
-@media (max-width: 650px) { .taskbar { padding-inline: 10px; } .windows { gap: 2px; } .bar-button, .window { width: 44px; } }
+.windows li { position: relative; flex: none; }
 
-.dock-window-count { position:absolute; top:1px; right:0; display:grid; place-items:center; min-width:17px; height:17px; padding:0 4px; border:1px solid var(--line); border-radius:9px; background:var(--surface-raised); color:var(--ink); font-size:10px; font-weight:600; line-height:1; }
-.window[aria-pressed="true"] { background: var(--selection); }
-.window.running::after { transition: width var(--dur-fast) var(--ease-out); }
-
-/* Meridian high-contrast desktop refresh, 2026-10 */
-.taskbar { background: #000; color: #fff; border-top: 2px solid #fff; }
-.bar { width: 100%; justify-content: center; }
-.bar-button, .window { transition: background var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-out); }
-.bar-button:hover:not(:disabled), .window:hover:not(:disabled),
-.bar-button[aria-expanded="true"], .window[aria-pressed="true"] {
-  background: #123b75;
-  color: #fff;
-  transform: translateY(-2px) scale(1.04);
-}
-.window.running::after { background: #fff; }
-.window.running[aria-pressed="true"]::after { background: #fff; }
-.dock-trash { border-left-color: #fff; }
-.dock-context { background: #000; color: #fff; border: 1px solid #fff; }
-.dock-context button, .dock-error { background: #111; color: #fff; border: 1px solid #fff; }
-.dock-context button:hover:not(:disabled) { background: #123b75; color: #fff; }
-.taskbar .bar-button:hover:not(:disabled),
-.taskbar .window:hover:not(:disabled),
-.taskbar .bar-button[aria-expanded="true"],
-.taskbar .window[aria-pressed="true"] {
-  background: transparent !important;
-  color: inherit !important;
-  transform: none;
+.bar-button,
+.window {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  padding: 3px;
+  border: 1px solid transparent;
   border-radius: 13px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  transition: transform 150ms cubic-bezier(.2, .8, .2, 1), background 150ms ease,
+    border-color 150ms ease, box-shadow 150ms ease;
 }
-.taskbar .window.running::after,
-.taskbar .window.running[aria-pressed="true"]::after {
+.dock-icon { width: 34px; height: 34px; font-size: 21px; }
+.app-icon { border-radius: 10px; }
+.generic-monogram { position: absolute; inset: 0; display: grid; place-items: center; font-size: 20px; }
+.bar-button:hover,
+.window:hover,
+.bar-button[aria-expanded="true"],
+.window[aria-pressed="true"] {
+  transform: translateY(-2px);
+  border-color: rgb(255 255 255 / 14%);
+  background: linear-gradient(145deg, rgb(102 163 255 / 32%), rgb(52 100 190 / 25%));
+  box-shadow: inset 0 1px rgb(255 255 255 / 12%), 0 4px 12px rgb(0 0 0 / 20%);
+}
+.bar-button:active,
+.window:active { transform: scale(.94); }
+.bar-button:focus-visible,
+.window:focus-visible { outline: 2px solid #9dc5ff; outline-offset: 1px; }
+.window.running::after {
+  content: "";
+  position: absolute;
+  bottom: 1px;
   width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #a9caff;
+  box-shadow: 0 0 8px rgb(111 169 255 / 65%);
+}
+.window.running[aria-pressed="true"]::after {
+  width: 13px;
   height: 3px;
-  background: #fff;
+  border-radius: 3px;
+  background: #78adff;
+}
+.window[aria-pressed="true"] { background: rgb(74 132 224 / 18%); }
+.dock-window-count {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  display: grid;
+  place-items: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border: 1px solid rgb(255 255 255 / 34%);
+  border-radius: 9px;
+  color: #fff;
+  background: #e34f6f;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+}
+.dock-drop-target,
+.bar.drop-active { outline: 2px solid #91bdff; outline-offset: 1px; border-radius: 13px; }
+
+.dock-error {
+  position: absolute;
+  z-index: 2;
+  inset: 2px;
+  overflow: auto;
+  border: 1px solid rgb(255 180 180 / 55%);
+  background: #7b2634;
+  font-size: 11px;
+}
+
+@media (max-width: 520px) {
+  .taskbar { padding-inline: 5px; }
+  .bar { padding-inline: 4px; }
+  .windows { justify-content: center; gap: 2px; }
+  .bar-button, .window { width: 38px; height: 40px; }
+  .dock-icon { width: 31px; height: 31px; }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
+  .bar { background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .bar-button, .window { transition: none; }
-  .bar-button:hover:not(:disabled), .window:hover:not(:disabled) { transform: none; }
-}
-
-/* Floating dock proportions from the Meridian desktop concept. Keep the full
-   layer surface transparent so its existing 64px exclusive zone stays valid. */
-.taskbar {
-  justify-content: center;
-  padding: 0 12px 8px;
-  border: 0;
-  background: transparent;
-}
-.bar {
-  width: max-content;
-  max-width: 100%;
-  height: 56px;
-  align-items: center;
-  justify-content: center;
-  padding: 4px 8px;
-  border: 1px solid var(--glass-border, var(--line));
-  border-radius: 20px;
-  background: var(--glass-background, var(--surface-raised));
-  box-shadow: var(--shadow-dock);
-  -webkit-backdrop-filter: blur(var(--glass-blur, 0px)) saturate(125%);
-  backdrop-filter: blur(var(--glass-blur, 0px)) saturate(125%);
-}
-.bar-button, .window { width: 46px; height: 46px; border-radius: 14px; }
-.dock-icon { width: 38px; height: 38px; }
-.bar-button:hover:not(:disabled), .window:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--action) 18%, transparent);
-  transform: translateY(-2px) scale(1.08);
-}
-.bar-button:active:not(:disabled), .window:active:not(:disabled) { transform: scale(.95); }
-.taskbar .bar-button:hover:not(:disabled), .taskbar .window:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--action) 18%, transparent) !important;
-  color: inherit !important;
-  transform: translateY(-3px) scale(1.08);
-}
-.taskbar .bar-button:active:not(:disabled), .taskbar .window:active:not(:disabled) { transform: scale(.95); }
-.taskbar .window[aria-pressed="true"] { background: color-mix(in srgb, var(--action) 14%, transparent) !important; box-shadow: inset 0 -2px var(--action); }
-.window.running::after { bottom: 1px; }
-.window.running[aria-pressed="true"]::after { width: 14px; }
-.dock-trash { border-left-color: var(--glass-border, var(--line)); }
-@media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
-  .bar { background: var(--surface-raised); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: var(--shadow-card); }
-}
-@media (max-width: 650px) {
-  .taskbar { padding: 0 6px 6px; }
-  .bar { height: 52px; padding: 3px 5px; border-radius: 17px; }
-  .bar-button, .window { width: 40px; height: 42px; }
-  .dock-icon { width: 34px; height: 34px; }
 }

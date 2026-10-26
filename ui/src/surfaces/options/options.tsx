@@ -6,17 +6,16 @@ import { Icon } from "../../components/Icon";
 import { Toggle } from "../../components/Toggle";
 import { SystemSlider } from "../../components/SystemSlider";
 import { BatteryIcon } from "../../components/BatteryIcon";
-import { useDesktop } from "../../lib/desktop";
 import { usePowerStatus } from "../../lib/power";
 import type { SettingsState } from "../../lib/generated/SettingsState";
 import type { NotificationState } from "../../lib/generated/NotificationState";
 function Options() {
  const [notifications,setNotifications]=useState<NotificationState | null>(null),[dndBusy,setDndBusy]=useState(false);
  const notificationRevision=useRef(0), dndPending=useRef(false);
- const [settings,setSettings]=useState<SettingsState>({wifi:null,bluetooth:null,brightness:null,volume:null}),[status,setStatus]=useState(""),[busy,setBusy]=useState(false);
+ const [settings,setSettings]=useState<SettingsState>({wifi:null,bluetooth:null,brightness:null,volume:null}),[status,setStatus]=useState("");
  const power=usePowerStatus();
  const battery=power?.batteries[0];
- const revision=useRef(0); const {desktop,setDesktop}=useDesktop();
+ const revision=useRef(0);
  const report=(e:unknown)=>setStatus(errorMessage(e));
  const {visible,menu,dismiss}=usePopover(async()=>{setStatus("");const notificationMine=notificationRevision.current;
  void request({method:"notifications.get"}).then(result=>{if(notificationMine===notificationRevision.current&&result)setNotifications(result);}).catch(report);
@@ -32,7 +31,6 @@ function Options() {
   try { const result=await request({method:"notifications.do_not_disturb",params:{enabled}});if(mine===notificationRevision.current)setNotifications(result); }
   catch(e){report(e);}finally{dndPending.current=false;setDndBusy(false);}
  }
- async function appearance(){if(busy)return;setBusy(true);try{setDesktop(await request({method:"desktop.appearance_set",params:{id:desktop?.appearance==="dark"?"light":"dark"}}));}catch(e){report(e);}finally{setBusy(false);}}
  return <><div hidden={!visible} className="scrim" id="scrim" onClick={()=>void dismiss().catch(report)}/><section ref={menu} inert={!visible} aria-hidden={!visible} className={`menu control-center${visible?"":" hidden"}`} id="menu" role="dialog" aria-label="Control Center" tabIndex={-1}>
  <header className="control-heading"><h1>Control Center</h1><Button className="settings-shortcut" aria-label="Open Settings" title="Open Settings" onClick={()=>void request({method:"preferences.open"}).then(dismiss).catch(report)}><Icon name="settings" width="17" height="17" /></Button></header>
  <div className="control-grid">{(["wifi","bluetooth"] as const).map(key=><section className="control-card control-connection" key={key}><span className={`control-symbol${settings[key]?" enabled":""}`} aria-hidden="true"><Icon name={key==="wifi"?"wifi":"bluetooth"} width="20" height="20" /></span><div><strong className="visually-hidden" id={`${key}-label`}>{key==="wifi"?"Wi-Fi":"Bluetooth"}</strong><small className="visually-hidden">{settings[key]===null?"Unavailable":settings[key]?"On":"Off"}</small></div><Toggle id={key} labelledBy={`${key}-label`} checked={settings[key]===true} disabled={settings[key]===null} onChange={enabled=>void toggle(key,enabled)}/></section>)}
@@ -41,7 +39,6 @@ function Options() {
   <span className={`control-symbol${power?.on_ac?" enabled":""}`} aria-hidden="true">{battery?<BatteryIcon percent={battery.percent} charging={battery.status==="Charging"}/>:<Icon name="power" width="20" height="20"/>}</span>
   <span><strong>{battery&&battery.percent!==null?`${battery.percent}%`:"Battery"}</strong><small>{battery?battery.status:"Unavailable"}</small></span>
  </button>
- <Button className="control-card appearance-tile control-wide" disabled={busy} onClick={()=>void appearance()} aria-pressed={desktop?.appearance==="dark"}><span className="control-symbol" aria-hidden="true"><Icon name="appearance" width="20" height="20" /></span><strong className="visually-hidden">Appearance</strong><small>{desktop?.appearance==="dark"?"Dark":"Light"}</small><span className="appearance-hint">Switch appearance</span></Button>
  <section className="control-card control-wide" aria-label="Display brightness"><div className="control-card-title"><span aria-hidden="true"><Icon name="monitor" width="18" height="18" /></span><strong>Display</strong></div><SystemSlider name="brightness" label="Brightness" value={settings.brightness} report={report}/></section>
  <section className="control-card control-wide" aria-label="Sound volume"><div className="control-card-title"><span aria-hidden="true"><Icon name="sound" width="18" height="18" /></span><strong>Sound</strong><Button className="sound-settings-link" aria-label="Open Sound settings" onClick={()=>void request({method:"preferences.page_open",params:{page:"sound"}}).then(dismiss).catch(report)}><Icon name="forward" width="14" height="14" /></Button></div><SystemSlider name="volume" label="Volume" value={settings.volume} report={report}/></section>
  </div><p className="status" id="status" role="status" aria-live="polite">{status}</p></section></>;

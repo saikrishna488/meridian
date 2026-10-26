@@ -146,7 +146,7 @@ impl WebSurface {
                 | SurfaceKind::Pulse
         ) {
             let title = match kind {
-                SurfaceKind::Finder => "Orbit",
+                SurfaceKind::Finder => "File Manager",
                 SurfaceKind::Terminal => "Terminal",
                 SurfaceKind::Calendar => "Calendar",
                 SurfaceKind::Clock => "Clock",
@@ -197,7 +197,7 @@ impl WebSurface {
                 });
                 button.set_valign(gtk::Align::Center);
                 button.set_halign(gtk::Align::Center);
-                button.set_size_request(40, 32);
+                button.set_size_request(34, 28);
                 button.set_child(Some(&glyph));
                 button.set_tooltip_text(Some(name));
                 button.add_css_class("meridian-window-button");
@@ -445,6 +445,7 @@ impl WebSurface {
 
 /// Full-width panel height; keep in sync with the UI token.
 pub const PANEL_HEIGHT: i32 = 64;
+pub const TOPBAR_HEIGHT: i32 = 44;
 
 fn entry_dir(kind: SurfaceKind) -> &'static str {
     match kind {
@@ -522,8 +523,8 @@ fn configure_layer(window: &gtk::Window, kind: SurfaceKind, monitor: Option<&gdk
         SurfaceKind::Topbar => {
             window.set_layer(Layer::Top);
             window.set_keyboard_mode(KeyboardMode::None);
-            window.set_default_size(1, 32);
-            window.set_exclusive_zone(32);
+            window.set_default_size(1, TOPBAR_HEIGHT);
+            window.set_exclusive_zone(TOPBAR_HEIGHT);
         }
         SurfaceKind::Greeter => {
             // Covers everything and owns the keyboard: it's the whole screen.

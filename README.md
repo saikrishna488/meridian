@@ -1,14 +1,13 @@
 # Meridian
 
-A Linux desktop shell with a Windows-style bottom taskbar, searchable application
-launcher, Control Center, desktop shortcuts, and built-in Orbit, Terminal,
-and Settings windows.
+A Linux desktop shell with a Windows-style bottom panel, searchable application
+launcher, Control Center, desktop shortcuts, and native Settings windows.
 
 Meridian runs on labwc/Wayland and existing Linux services. Its native host is
 written in Rust; React, TypeScript, HTML, and CSS provide the interface inside
 WebKitGTK. GTK4 hosts the web surfaces and native window controls.
 
-**Status:** working prototype. The [0.2 stability qualification](docs/PHASE1.md) tracks automated coverage and the remaining hardware release gates. [0.3 performance work](docs/PHASE2.md) records optimization changes, measurements and qualification gaps. [0.8 workflow work](docs/PHASE3.md) tracks the initial desktop improvements and remaining Public Beta work. Wallpaper, appearance, networking, Bluetooth,
+**Status:** installable desktop session prototype; not yet ready to be a user's sole daily-use desktop. It targets Debian testing and compatible derivatives, and still has open stability, hardware, installation, and workflow qualification. The [0.2 stability qualification](docs/PHASE1.md) tracks automated coverage and the remaining hardware release gates. [0.3 performance work](docs/PHASE2.md) records optimization changes, measurements and qualification gaps. [0.8 workflow work](docs/PHASE3.md) tracks the initial desktop improvements and remaining Public Beta work. Wallpaper, appearance, networking, Bluetooth,
 display configuration, file operations, and terminal sessions are implemented.
 Some settings remain placeholders, and Sharing is a UI-only prototype.
 See [the architecture](docs/ARCHITECTURE.md) for implementation details and limits.
@@ -43,26 +42,26 @@ tools/check.sh          # fmt, clippy, tests, UI type-check
 
 ## Install (Debian)
 
-For a single-file install, build and package the release:
+Build a Debian package, then install it with APT:
 
 ```sh
-tools/package-installer.sh                  # builds target/meridian-installer.run
-sudo bash target/meridian-installer.run      # one file installs dependencies and Meridian
+tools/build-deb.sh --output /tmp/meridian.deb
+sudo apt install /tmp/meridian.deb
 ```
 
-The generated installer is self-contained and verifies its bundled release.
-For updates, rebuild and package it, run the new file, then sign out of Meridian
-and back in. Developers can still run `sudo tools/install.sh` directly after
-`tools/build-release.sh`. The optional greetd login screen can be trialed with
-`sudo bash target/meridian-installer.run --try-login-screen`, enabled with
-`--enable-login-screen`, disabled with `--disable-login-screen`, or removed with
-`--uninstall`.
+The package contains the compiled shell, UI, assets, and session files; APT installs
+its runtime dependencies. For updates, rebuild and install the package, then sign
+out of Meridian and back in. Remove it with `sudo apt remove meridian-desktop`.
+Developers can alternatively use `tools/build-release.sh` followed by
+`sudo tools/install.sh` for an installation outside APT. Use the same installation
+method for updates and removal. See [installation details](tools/INSTALLER.md),
+including the optional greetd login-screen controls.
 
 | Keys | Action |
 |---|---|
 | Super / Super+Space | Applications menu (type to search, ↑ ↓, Enter, Esc) |
 | Super+C | Control Center |
-| Super+E | Orbit |
+| Super+E | GNOME Files |
 | Super+I | Settings |
 | Super+Enter | Terminal |
 | Super+L | Lock |
@@ -89,12 +88,12 @@ Meridian is free software under the [GNU GPL, version 3 or later](LICENSE).
 
 ## Dock, Settings, and desktop icons
 
-Drag dock items (including the Applications launcher and Trash) to reorder them. The layout is saved in `~/.config/meridian/dock-layout.json`. The taskbar stays visible while Applications is open and hides for fullscreen applications. New configurations pin Meridian Terminal and Orbit alongside the Applications launcher; existing saved pins are preserved.
+Drag panel items (including the Applications launcher and Trash) to reorder them. The layout is saved in `~/.config/meridian/dock-layout.json`. The panel stays visible while Applications is open and hides for fullscreen applications. New configurations no longer pin Meridian Terminal or Orbit; legacy entries are ignored.
 
 Click Trash to open the file manager's trash. Drag an installed app onto Trash, or right-click an app and choose **Uninstall…**, to review and confirm removal. Meridian resolves the desktop entry to an exact Flatpak app ref or its Debian package. Flatpak removal keeps saved app data. Debian package removal uses `pkexec apt-get`, may require authentication, and can remove dependent packages; this is described in the confirmation. Unmanaged launchers show an unsupported-package error rather than deleting a shortcut. Uninstalling multiple apps at once is prevented.
 
 Open **Meridian → Settings…**, or find **Settings** in Applications. Wallpaper,
-light/dark appearance, Wi-Fi, Bluetooth, and display settings are available.
+dark appearance, Wi-Fi, Bluetooth, and display settings are available.
 **Startup Apps** manages applications that open at sign-in. **Sound** selects
 speakers and microphones, sets their levels, and controls mute. **Power & Lock**
 shows battery status and saves automatic lock/display-standby timing for your
@@ -103,7 +102,7 @@ and distribution updates remain manual. Sharing is a UI prototype and does not
 enable sharing services.
 
 Installed apps use their desktop-entry artwork in consistent rounded tiles.
-Orbit, Settings, Terminal, the launcher, Control Center, and Trash use fixed
+Settings, the launcher, Control Center, and Trash use fixed
 Meridian SVG artwork. See [desktop icons](assets/desktop-icons/README.md).
 
 **Settings → Wallpaper** includes Dusk, Tide, Alpine, and Aurora, original GPL-licensed SVG wallpapers. A native picker accepts custom PNG/JPEG/WebP images up to 20 MB and saves a copy, so moving the original image does not break the wallpaper. Your choice and desktop shortcuts are saved in `~/.config/meridian/desktop.json`.
@@ -114,13 +113,11 @@ Drag apps from Applications onto the taskbar to pin them, or right-click an app 
 
 Sleep, Restart, Shut Down, Lock, and Sign out are in the **Meridian** menu and **Control Center**. Restart, Shut Down, and Sign out require a second click to confirm. Control Center keeps connectivity, appearance, brightness, and volume controls.
 
-## Orbit and Terminal
+## Files and Terminal
 
-Open **Meridian → Orbit… / Terminal…**, or search Applications for **Orbit** or **Meridian Terminal**. Both have fixed Meridian window controls and can be pinned to the dock. Built-in apps cannot be uninstalled. The bundled labwc theme also supplies original controls for compositor-decorated windows; third-party apps that draw their own titlebars control their own decorations.
+Meridian uses GNOME Files for folders and Kitty as its official terminal. The embedded Orbit file manager and Meridian Terminal surfaces are not shipped. The bundled labwc theme supplies original controls for compositor-decorated windows; third-party apps that draw their own titlebars control their own decorations.
 
-Orbit browses actual folders, with back/forward navigation, an enclosing-folder button, icon/list views, filtering within the current folder, hidden files, refresh, and a path field. Use **New folder** or a file’s context menu to open, rename, add to the desktop, or move to the system Trash. Rename never overwrites another item. **Applications** lists installed apps with Open, Add to Dock, Add to Desktop, and reviewed Uninstall actions.
-
-Terminal runs your actual interactive shell on a PTY using the locally bundled, MIT-licensed xterm.js renderer. It supports tabs, ANSI colors, shell history and completion, interactive programs, resizing, Ctrl+C to copy selected text (or interrupt when nothing is selected), and Ctrl+V to paste. Ctrl+Shift+C and Ctrl+Shift+V also work. Closing a tab/window ends the shell and processes in its terminal session. Development and installed sessions run on the Debian host.
+GNOME Files remains responsible for folder browsing and file operations. Kitty provides the interactive shell, tabs, history, completion, and terminal rendering.
 
 ## Everyday desktop controls
 
@@ -130,7 +127,10 @@ Terminal runs your actual interactive shell on a PTY using the locally bundled, 
   development sessions skip autostart.
 - **Sound:** select default output and input devices, adjust each level, and mute
   speakers or microphones. Device discovery needs PipeWire (`pw-dump`) and
-  WirePlumber (`wpctl`). Use **Refresh devices** after connecting hardware.
+  WirePlumber (`wpctl`). **Add virtual output** creates a temporary software
+  playback device; select it to route audio to a recording or streaming app.
+  Virtual output support needs PipeWire's PulseAudio service (`pactl`). Use
+  **Refresh devices** after connecting hardware.
   Applications with their own device selection can keep that choice.
 - **Power & Lock:** see laptop battery charge and external power, then choose
   the idle lock delay (1–30 minutes) and display-standby delay after locking.
@@ -151,13 +151,13 @@ Terminal runs your actual interactive shell on a PTY using the locally bundled, 
 
 The Debian installer installs GStreamer base/good/bad/ugly plugins, the FFmpeg bridge, and FFmpeg from your configured APT repositories. No third-party codec repository is enabled. Flatpak players carry their own runtime codecs.
 
-Run `sudo tools/install-codecs.sh` to install codecs separately. The legacy `--full` and `--full-codecs` options use the same Debian package set.
+Optional multimedia codecs can be installed separately from a source checkout with `sudo tools/install-codecs.sh`.
 
 ## Appearance
 
-Appearance can be changed in Settings → Appearance. The saved Light/Dark preference updates Meridian, GTK settings, the desktop color-scheme preference and the KDE palette when its color-scheme tool is installed. Apps with their own theme override can keep that override. App-menu icons and Orbit files or folders can be dragged onto the desktop to create shortcuts; external file-manager drops are accepted through GTK.
+Meridian uses one dark appearance. Settings → Appearance controls typography; GTK and KDE integration is kept dark as well. Apps with their own theme override can keep that override, and external file-manager drops are accepted through GTK.
 
-Every Meridian window reads the saved appearance when it opens and listens for live changes through the shared UI appearance hook (`ui/src/lib/appearance.ts`). The hook updates the WebView color scheme and document theme, so native controls and app styles can follow the same setting. Settings and Terminal use both light and dark palettes; the terminal emulator uses complete, high-contrast light and dark palettes and repaints existing output after appearance changes. Applications outside Meridian may keep their own appearance setting.
+Every Meridian window uses the shared dark appearance hook (`ui/src/lib/appearance.ts`) so native controls and app styles keep the same setting. Applications outside Meridian may keep their own appearance setting.
 
 ## Displays and connectivity
 
@@ -276,23 +276,6 @@ Screenshots are saved as PNGs in `Screenshots` inside your configured Pictures
 folder (normally `~/Pictures/Screenshots`). A notification shows the saved path.
 The installer includes grim, slurp, and notify-send. The capture helper follows
 [grim's documented region capture](https://github.com/emersion/grim).
-
-### Drift
-
-Drift is a native GTK/WebKit browser with DuckDuckGo search, reorderable tabs,
-private windows, local bookmarks, find in page, zoom, and save-as downloads. No
-browser account is required. Normal windows retain website data locally; private
-windows use an ephemeral session. Bookmarks explicitly saved in either mode are
-stored locally. Camera, microphone, and location requests are currently denied.
-Browser history, extensions, password management, and session restore are not yet
-implemented. Keep the distribution’s WebKitGTK security updates installed.
-
-Build and install Drift with `tools/build-release.sh` and `sudo tools/install.sh`.
-It appears as **Drift** in Applications. Development command:
-`cargo run -p meridian-shell --bin meridian-drift`.
-Drift shortcuts: Ctrl+T (new tab), Ctrl+W (close tab), Ctrl+L (address),
-Ctrl+F (find), and Ctrl+R (reload).
-
 
 ## Desktop design and screen power
 

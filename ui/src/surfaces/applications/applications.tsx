@@ -17,20 +17,10 @@ function Applications() {
   const [context, setContext] = useState<{ id: string; x: number; y: number } | null>(null);
   useMenuFocus(contextMenu, !!context, () => setContext(null));
   useEffect(() => on("apps.uninstall_requested", e => setUninstall(e.data.id)), []);
-  const [view, setView] = useState<"grid" | "list">(() => {
-    try { return localStorage.getItem("meridian.launcher.view") === "list" ? "list" : "grid"; }
-    catch { return "grid"; }
-  });
-  function changeView(next: "grid" | "list") {
-    setView(next);
-    try { localStorage.setItem("meridian.launcher.view", next); } catch { /* Storage can be disabled by the host. */ }
-  }
   const [dragging, setDragging] = useState(false);
   const [query, setQuery] = useState("");
   const [allResults, setResults] = useState<Result[]>([]);
-  const [filter, setFilter] = useState<"all" | "pinned">("all"), [pins, setPins] = useState<string[]>([]);
-  const pinRevision = useRef(0);
-  const results = filter === "pinned" ? allResults.filter(result => result.provider === "apps" && pins.includes(result.item.id)) : allResults;
+  const results = allResults;
   const [searching, setSearching] = useState(false);
   const [selected, setSelected] = useState(-1);
   const [status, setStatus] = useState("");
@@ -44,6 +34,8 @@ function Applications() {
   const runQuery = useCallbackRef(async (value: string) => {
     const mine = ++serial.current;
     setSearching(true);
+    setResults([]);
+    setSelected(-1);
     try {
       const response = await request({ method: "search.query", params: { query: value, serial: mine } });
       if (!alive.current || response.serial !== serial.current) return;
@@ -54,17 +46,14 @@ function Applications() {
     } finally { if (alive.current && mine === serial.current) setSearching(false); }
   });
   const { visible, menu, dismiss } = usePopover(async () => {
-    setStatus(""); setQuery(""); setLaunching(null); setContext(null); setUninstall(null); setFilter("all");
-    const mine = pinRevision.current;
-    void request({ method: "dock.list" }).then(items => { if (alive.current && pinRevision.current === mine) setPins(items ?? []); }).catch(report);
+    setStatus(""); setQuery(""); setLaunching(null); setContext(null); setUninstall(null);
     await runQuery("");
   }, () => input.current?.focus(), report);
   const refresh = useCallbackRef(() => { if (visible) void runQuery(query).catch(report); });
   useEffect(() => {
     alive.current = true;
     const off = on("search.invalidated", refresh);
-    const offPins = on("dock.changed", event => { pinRevision.current++; setPins(event.data); });
-    return () => { alive.current = false; serial.current++; off(); offPins(); };
+    return () => { alive.current = false; serial.current++; off(); };
   }, [refresh]);
   useEffect(() => { if (selected >= results.length) setSelected(-1); }, [results.length, selected]);
   useEffect(() => {
@@ -76,7 +65,7 @@ function Applications() {
   }
   async function activate(index: number) {
     const result = results[index];
-    if (!result || launching) return;
+    if (!result || searching || launching) return;
     setLaunching(`${result.provider}:${result.item.id}`);
     try {
       await request({ method: "search.activate", params: { provider: result.provider, item_id: result.item.id } });
@@ -94,12 +83,16 @@ function Applications() {
     }
     if (context) { if (event.key === "Escape") { setContext(null); event.preventDefault(); } return; }
     if ((event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) && selected >= 0) {
-      event.preventDefault(); const bounds = list.current?.children[selected]?.getBoundingClientRect();
-      if (bounds) setContext({ id: results[selected]!.item.id, x: bounds.left, y: bounds.bottom }); return;
+      event.preventDefault();
+      if (results[selected]?.provider === "apps") {
+        const bounds = list.current?.children[selected]?.getBoundingClientRect();
+        if (bounds) setContext({ id: results[selected]!.item.id, x: bounds.left, y: bounds.bottom });
+      }
+      return;
     }
     const row = list.current?.children[0] as HTMLElement | undefined;
     const grid = list.current ? getComputedStyle(list.current).gridTemplateColumns.split(" ").filter(Boolean).length : 0;
-    const columns = view === "list" ? 1 : grid || Math.max(1, Math.floor((list.current?.clientWidth ?? 600) / 112));
+    const columns = grid || Math.max(1, Math.floor((list.current?.clientWidth ?? 600) / 112));
     const page = row && row.offsetHeight ? Math.max(1, Math.floor((scroller.current?.clientHeight ?? 0) / row.offsetHeight) - 1) * columns : columns;
     switch (event.key) {
       case "ArrowDown": move(columns); break;
@@ -119,19 +112,16 @@ function Applications() {
   });
   return <>
     <div hidden={!visible} className={`scrim${dragging ? " dragging" : ""}`} id="scrim" onDragOver={event => { if (event.dataTransfer.types.includes(APP_DRAG)) event.preventDefault(); }} onDrop={event => { const id = event.dataTransfer.getData(APP_DRAG); if (!id) return; event.preventDefault(); setDragging(false); void request({ method: "desktop.add_app", params: { id } }).then(() => dismiss()).catch(report); }} onClick={() => void dismiss().catch(report)} />
-    <section ref={menu} inert={!visible} aria-hidden={!visible} className={`menu${dragging ? " dragging" : ""}${visible ? "" : " hidden"}`} id="menu" role="dialog" aria-label="Applications"
-      >
-      <header className="launcher-heading"><div><span className="launcher-eyebrow">YOUR WORKSPACE</span><h1>Applications</h1></div><button className="close-applications" aria-label="Close applications" onClick={() => void dismiss().catch(report)}><Icon name="close" width="18" height="18" /></button></header>
+    <section ref={menu} inert={!visible} aria-hidden={!visible} className={`menu${dragging ? " dragging" : ""}${visible ? "" : " hidden"}`} id="menu" role="dialog" aria-label="Application launcher">
       <div className="apps-toolbar">
-      <label className="apps-search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.75"/><path d="m13 13 4 4"/></svg><input ref={input} id="search" className="search" type="text" placeholder="Search applications" autoComplete="off"
+      <label className="apps-search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.75"/><path d="m13 13 4 4"/></svg><input ref={input} id="search" className="search" type="text" placeholder="Search…" autoComplete="off"
         spellCheck={false} aria-label="Search applications" aria-controls="list" aria-autocomplete="list"
         aria-activedescendant={selected >= 0 ? `row-${selected}` : undefined}
         value={query} onChange={event => changeQuery(event.target.value)} />{query && <button className="clear-search" type="button" aria-label="Clear search" onClick={() => { changeQuery(""); input.current?.focus(); }}>×</button>}</label>
-      <div className="launcher-views" role="group" aria-label="Application view">{(["grid", "list"] as const).map(mode => <button key={mode} type="button" aria-label={`${mode === "grid" ? "Grid" : "List"} view`} aria-pressed={view === mode} onClick={() => changeView(mode)}><Icon name={mode} width="18" height="18" /></button>)}</div>
+      <button className="close-applications" aria-label="Close applications" onClick={() => void dismiss().catch(report)}><Icon name="close" width="18" height="18" /></button>
       </div>
-      <div className="apps-section-heading"><div className="launcher-filters" role="group" aria-label="Application filter"><button aria-pressed={filter === "all"} onClick={() => { setFilter("all"); setSelected(-1); }}>All apps</button><button aria-pressed={filter === "pinned"} onClick={() => { setFilter("pinned"); setSelected(-1); }}><Icon name="pin" width="13" height="13" />Pinned</button></div><h2 className="visually-hidden">{query ? "Search Results" : filter === "pinned" ? "Pinned Applications" : "All Applications"}</h2><span>{searching ? "Searching…" : `${results.length} ${results.length === 1 ? "item" : "items"}`}</span></div>
       <div ref={scroller} className="scroller" id="scroller">
-        <ul ref={list} className={`list ${view === "list" ? "list-view" : "grid-view"}`} id="list" role="listbox" aria-label="Applications">
+        <ul ref={list} className="list grid-view" id="list" role="listbox" aria-label="Applications">
           {results.map((result, index) => {
             const key = `${result.provider}:${result.item.id}`;
             return <li key={key} id={`row-${index}`} role="option" aria-selected={selected === index}
@@ -140,15 +130,14 @@ function Applications() {
               tabIndex={-1} title={`${result.item.title}${result.item.subtitle ? `\n${result.item.subtitle}` : ""}`}
               className={`row${launching === key ? " launching" : ""}`} onClick={() => { setSelected(index); void activate(index); }}>
               <AppIcon id={result.provider === "apps" ? result.item.id : undefined} name={result.item.title} icon={result.item.icon} />
-              <span className="app-label"><span className="name">{result.item.title}</span>{view === "list" && <span className="app-description">{result.item.subtitle || "Application"}</span>}</span>{view === "list" && <Icon name="forward" width="16" height="16" />}
+              <span className="app-label"><span className="name">{result.item.title}</span></span>
 
             </li>;
           })}
         </ul>
-        {!searching && !results.length && <div className="empty" id="empty"><span className="empty-symbol" aria-hidden="true">⌕</span><strong>{query ? "No results found" : filter === "pinned" ? "Your favorites go here" : "No applications available"}</strong><span>{query ? `Try a different search for “${query}”.` : filter === "pinned" ? "Right-click an app in All apps and choose Add to Dock to pin it." : "Applications will appear here when they are installed."}</span></div>}
+        {!searching && !results.length && <div className="empty" id="empty"><span className="empty-symbol" aria-hidden="true">⌕</span><strong>{query ? "No results found" : "No apps available"}</strong><span>{query ? `Try a different search for “${query}”.` : "Installed apps will appear here."}</span></div>}
         {searching && !results.length && <div className="empty loading" role="status"><span className="search-spinner" /><span>Finding applications…</span></div>}
       </div>
-      <footer className="launcher-footer"><span><kbd>↑ ↓</kbd> Navigate <kbd>↵</kbd> Open <kbd>esc</kbd> Close</span><span>Right-click for more options</span></footer>
       <p className="status" data-kind={status.startsWith("Added") ? "success" : "error"} id="status" role="status" aria-live="polite">{status}</p>
     </section>
     {context && <div ref={contextMenu} className="app-context" role="menu" aria-label="Application actions" style={{ left: Math.max(8, Math.min(context.x, window.innerWidth - 188)), top: Math.max(8, Math.min(context.y, window.innerHeight - 170)) }}>

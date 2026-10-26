@@ -1,30 +1,57 @@
-# Single-file installer
+# Installation
 
-Build on Meridian's supported Debian development host:
+## Debian package
 
-```sh
-bash tools/package-installer.sh
-```
-
-Distribute `target/meridian-installer.run`. On a compatible Debian system:
+Build on a supported Debian development host as your regular user:
 
 ```sh
-bash meridian-installer.run --check-build
-sudo bash meridian-installer.run
+tools/build-deb.sh --output /tmp/meridian.deb
+sudo apt install /tmp/meridian.deb
 ```
 
-No source checkout, Rust, or Node installation is needed on the destination.
-The file includes compiled native binaries, the UI, assets, session files, and
-installer helpers. Source inputs are included to preserve release verification.
-Runtime libraries and codecs are installed from configured APT repositories, so
-installation requires network access unless those packages are already cached.
-The destination must match the build's architecture and meet Meridian's GTK,
-WebKitGTK, and gtk4-layer-shell requirements; this is not a universal Linux binary.
+Without `--output`, the package is written to
+`target/meridian_<version>_<architecture>.deb`. Use `--no-build` to package an
+existing verified release produced by `tools/build-release.sh`.
 
-The default action adds Meridian to the login screen's session list. Sign out and
-select Meridian. It does not replace the current login screen. Keep the installer
-for `--uninstall` and the existing optional login-screen commands (`--help`).
+The package includes compiled binaries, UI, assets, compositor and greeter
+configuration, and the Meridian login-session entry. APT installs the runtime
+dependencies and multimedia codecs. The destination needs the build's
+architecture, GTK >= 4.18, WebKitGTK >= 2.52, and gtk4-layer-shell >= 1.2.
+Rust, Node, and a source checkout are not needed on the destination.
 
-Use `--no-build` only with a verified current release. Use `--output /path/file.run`
-to select a destination outside the checkout. The embedded checksum detects
-corruption; it is not a publisher signature. Only run installers from a trusted source.
+Select Meridian from the existing login screen. To update, build and install the
+new package, then sign out and back in. To remove it:
+
+```sh
+sudo apt remove meridian-desktop
+```
+
+## Source installation and login-screen controls
+
+Developers can install directly from a verified source checkout instead:
+
+```sh
+tools/build-release.sh
+sudo tools/install.sh
+```
+
+Remove a source installation with `sudo tools/install.sh --uninstall`. Keep source
+and APT installations separate: use the same method to update and remove an
+installation.
+
+Both methods keep the existing login screen by default. From a source checkout,
+`tools/install.sh` also provides optional controls for the installed greeter:
+
+```sh
+sudo tools/install.sh --try-login-screen     # trial on VT 7
+sudo tools/install.sh --enable-login-screen  # use greetd after reboot
+sudo tools/install.sh --disable-login-screen # restore the previous login screen
+```
+
+Restore the previous login screen before removing a package if you enabled greetd.
+
+`debian.sh` and `codecs.sh` contain shared package lists; `release-manifest.sh`
+verifies matching source, binaries, and UI; `install-transaction.sh` restores files
+after a failed source installation. These are required helpers, not additional
+installer entry points. `install-codecs.sh` remains available for optional codec
+installation on a source-installed system.

@@ -684,13 +684,6 @@ test("missing third-party icons try the theme and retain a visible monogram", as
   assert.equal(ui.get('[aria-label="Firefox"] .app-icon').textContent, "F");
 });
 
-test("Drift uses dedicated builtin artwork", async t => {
-  const items = [{ id: "meridian-drift.desktop", title: "Drift" }];
-  const ui = await surface(t, "panel", req => req.method === "search.query" ? { serial: req.params.serial, sections: [{ provider: "apps", items }] } : req.method === "dock.list" ? items.map(app => app.id) : defaults(req));
-  await waitFor(() => ui.get('[aria-label="Drift"] img'));
-  assert.equal(ui.get('[aria-label="Drift"] img').src, "meridian://ui/desktop-icons/meridian/browser.svg");
-});
-
 test("Startup Apps toggles a per-user entry and adds an installed app for next login", async t => {
   let entries = [{ id: "mail.desktop", name: "Mail", description: "Email", command: "mail", enabled: false, available: true, reason: "", user: false }];
   const ui = await surface(t, "settings", req => {

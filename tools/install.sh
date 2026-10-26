@@ -3,7 +3,6 @@
 #
 #   sudo tools/install.sh                   install, and add "Meridian" to the
 #                                           current login screen's session list
-#   sudo tools/install.sh --full-codecs     install the distribution multimedia codecs
 #   sudo tools/install.sh --try-login-screen
 #                                           start Meridian's login screen on VT 7
 #                                           alongside the current one, to test it
@@ -18,10 +17,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-source "$ROOT/tools/codecs.sh"
 source "$ROOT/tools/debian.sh"
-source "$ROOT/tools/release-manifest.sh"
 source "$ROOT/tools/install-transaction.sh"
+source "$ROOT/tools/release-manifest.sh"
 PREFIX=/usr/local
 SHARE="$PREFIX/share/meridian"
 SESSION_FILE=/usr/share/wayland-sessions/meridian.desktop
@@ -36,8 +34,12 @@ PACKAGES=("${RUNTIME_PACKAGES[@]}")
 die() { echo "error: $*" >&2; exit 1; }
 step() { printf '\033[1m==> %s\033[0m\n' "$*"; }
 
-if [ "${1:-}" = --check-build ]; then
+verify_install_build() {
     verify_release
+}
+
+if [ "${1:-}" = --check-build ]; then
+    verify_install_build
     echo "Release binaries and UI match this checkout."
     exit 0
 fi
@@ -49,34 +51,29 @@ greeter_command() {
 }
 
 install_files() {
-    verify_release
+    verify_install_build
     for f in target/release/meridian-shell target/release/meridian-greeter ui/dist/surfaces/panel/index.html \
         ui/dist/surfaces/locker/index.html ui/dist/surfaces/locker/locker.js \
-        ui/dist/surfaces/finder/finder.js ui/dist/surfaces/terminal/terminal.js \
-        ui/dist/surfaces/settings/settings.js ui/dist/vendor/xterm.css ui/dist/vendor/LICENSE; do
+        ui/dist/surfaces/settings/settings.js ui/dist/vendor/LICENSE; do
         [ -e "$ROOT/$f" ] || die "$f is missing; build first with tools/build-release.sh (as your user)"
     done
 
     step "Installing runtime packages"
     apt-get update
     apt-get install -y --no-install-recommends "${PACKAGES[@]}"
-    step "Installing multimedia codecs"
-    media_packages_for_host
-    apt-get install -y --no-install-recommends "${MEDIA_SELECTED[@]}"
-
+    step "Enabling Flathub for GNOME Software"
+    if ! flatpak remote-add --system --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo; then
+        echo "warning: Flathub could not be configured. Add it later from GNOME Software or with flatpak remote-add." >&2
+    fi
     step "Backing up the current installation"
     meridian_transaction_begin "$SHARE" "$PREFIX/share/themes/Meridian" "$PREFIX/bin/meridian-shell" \
-        "$PREFIX/bin/meridian-greeter" "$PREFIX/bin/meridian-vault" "$PREFIX/bin/meridian-drift" \
+        "$PREFIX/bin/meridian-greeter" "$PREFIX/bin/meridian-vault" \
         "$PREFIX/bin/meridian-session" "$SESSION_FILE" /etc/pam.d/meridian-lock \
-        "$PREFIX/share/applications/meridian-vault.desktop" "$PREFIX/share/applications/meridian-drift.desktop"
+        "$PREFIX/share/applications/meridian-vault.desktop"
     rm -f "$PREFIX/bin/meridian-vault" "$PREFIX/share/applications/meridian-vault.desktop"
     step "Installing Meridian to $PREFIX"
     install -Dm755 "$ROOT/target/release/meridian-shell" "$PREFIX/bin/meridian-shell"
     install -Dm755 "$ROOT/target/release/meridian-greeter" "$PREFIX/bin/meridian-greeter"
-    for native_app in drift; do
-        install -Dm755 "$ROOT/target/release/meridian-$native_app" "$PREFIX/bin/meridian-$native_app"
-        install -Dm644 "$ROOT/session/meridian-$native_app.desktop" "$PREFIX/share/applications/meridian-$native_app.desktop"
-    done
     sed "s|@SHARE_DIR@|$SHARE|" "$ROOT/session/meridian-session" > "$PREFIX/bin/meridian-session"
     chmod 755 "$PREFIX/bin/meridian-session"
 
@@ -200,7 +197,6 @@ uninstall() {
 
 case "${1:-}" in
     "") install_files ;;
-    --full-codecs) install_files; bash "$ROOT/tools/install-codecs.sh" --full ;;
     --try-login-screen) try_login_screen ;;
     --enable-login-screen) enable_login_screen ;;
     --disable-login-screen) disable_login_screen ;;

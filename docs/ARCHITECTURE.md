@@ -1,8 +1,11 @@
 # Meridian Desktop — Architecture
 
-Status: **working prototype**. This document describes the current implementation.
-Older milestone labels in [decision records](adr/) describe development history;
-they are not a reliable list of what is implemented today.
+Status: **installable desktop session prototype; not ready as a sole daily-use desktop**.
+It targets Debian testing and compatible derivatives. Stability, hardware,
+installation, and workflow qualification remain open. This document describes
+the current implementation. Older milestone labels in [decision records](adr/)
+describe development history; they are not a reliable list of what is
+implemented today.
 
 ## 1. Overview
 
@@ -15,6 +18,12 @@ The workspace contains three Rust crates: `shell`, `services`, and `protocol`.
 The services crate is linked into the shell; there is no separate
 `meridian-servicesd` executable today. Normal applications run independently
 and communicate with labwc directly, or through XWayland for X11 applications.
+
+Meridian provides a usable desktop session, but it is still a prototype. Some
+Settings are placeholders, Sharing is a UI prototype, and hardware behavior
+depends on the Linux services and devices available on the machine. The project
+has not completed its stability, hardware, clean-install, rollback, and extended
+daily-use qualification; see [Phase 1](PHASE1.md) and [Phase 3](PHASE3.md).
 
 ## 2. Current desktop
 

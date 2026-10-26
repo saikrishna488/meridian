@@ -10,7 +10,7 @@ step() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 
 step "release integrity"
 bash tools/tests/release-manifest.sh
-bash tools/tests/package-installer.sh
+bash tools/tests/build-deb.sh
 bash tools/tests/screenshot.sh
 bash tools/tests/power.sh
 bash tools/tests/session.sh

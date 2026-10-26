@@ -1,5 +1,6 @@
 import { Button } from "../../components/ui/button";
 import { SearchSettings } from "./search";
+import { ApplicationsSettings } from "./applications";
 import { Select } from "../../components/Select";
 import { useEffect, useRef, useState } from "react";
 import { hello, on, request } from "../../lib/bridge";
@@ -21,8 +22,8 @@ const sections: { name: string; icon: IconName; description: string }[] = [
   { name: "Home", icon: "home", description: "Your desktop at a glance." },
   { name: "Wallpaper", icon: "image", description: "Make your workspace feel like home." },
   { name: "Appearance", icon: "appearance", description: "Choose a comfortable look for your desktop and apps." },
-  { name: "Desktop & Taskbar", icon: "monitor", description: "Keep your files and favorite apps close at hand." },
   { name: "Startup Apps", icon: "grid", description: "Choose which applications open when you sign in." },
+  { name: "Applications", icon: "grid", description: "Open, inspect, and uninstall installed applications." },
   { name: "Power & Lock", icon: "power", description: "Battery status and automatic screen locking." },
   { name: "Wi-Fi", icon: "wifi", description: "Find a network and manage your connection." },
   { name: "Bluetooth", icon: "bluetooth", description: "Connect headphones, keyboards, and other devices." },
@@ -33,19 +34,19 @@ const sections: { name: string; icon: IconName; description: string }[] = [
   { name: "Sound", icon: "sound", description: "Choose speakers and microphones, and set comfortable levels." },
 ];
 const navigationGroups = [
-  { name: "Workspace", sections: ["Home", "Appearance", "Wallpaper", "Desktop & Taskbar", "Startup Apps", "Search"] },
+  { name: "Workspace", sections: ["Home", "Appearance", "Wallpaper", "Startup Apps", "Applications", "Search"] },
   { name: "Devices & connections", sections: ["Wi-Fi", "Bluetooth", "Displays", "Sound"] },
   { name: "System", sections: ["Power & Lock", "General", "Device Manager", "Users"] },
 ];
-const shortcuts = [["Screenshot desktop", "Print Screen"], ["Screenshot area", "Super + Shift + S / Shift + Print Screen"],["Applications", "Super + Space"], ["Control Center", "Super + C"], ["Lock desktop", "Super + L"], ["Open Orbit", "Super + E"], ["Settings", "Super + I"], ["Switch windows", "Alt + Tab"], ["Minimize window", "Super + ↓"], ["Maximize / restore", "Super + ↑"], ["Snap left / right", "Super + ← / →"], ["Window menu", "Alt + Space"]];
+const shortcuts = [["Screenshot desktop", "Print Screen"], ["Screenshot area", "Super + Shift + S / Shift + Print Screen"],["Applications", "Super + Space"], ["Control Center", "Super + C"], ["Lock desktop", "Super + L"], ["Open Files", "Super + E"], ["Settings", "Super + I"], ["Switch windows", "Alt + Tab"], ["Minimize window", "Super + ↓"], ["Maximize / restore", "Super + ↑"], ["Snap left / right", "Super + ← / →"], ["Window menu", "Alt + Space"]];
 const searchTerms: Record<string, string> = {
   "Device Manager": "hardware wifi adapter bluetooth printer storage disk driver usb pci",
   General: "about version update github system processor memory kernel computer",
   Users: "account password administrator login delete",
   Home: "shortcuts keyboard minimize maximize snap window controls",
-  Appearance: "theme dark light color titlebar font typography",
-  "Desktop & Taskbar": "dock pin favorites icons files",
+  Appearance: "dark color titlebar font typography",
   "Startup Apps": "login autostart launch boot sign in background applications",
+  Applications: "installed apps software programs launch open uninstall remove manage",
   "Power & Lock": "battery power charging energy sleep screen lock idle timeout standby",
   "Wi-Fi": "wifi internet wireless network",
   Bluetooth: "pair headphones mouse keyboard",
@@ -61,7 +62,7 @@ function Settings() {
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     const offWallpaper = on("preferences.wallpaper", () => { setSection("Wallpaper"); setSearch(""); });
-    const offPage = on("preferences.page", event => { const names = { home: "Home", sound: "Sound", power: "Power & Lock", "startup-apps": "Startup Apps", wifi: "Wi-Fi", bluetooth: "Bluetooth", displays: "Displays", appearance: "Appearance", wallpaper: "Wallpaper", desktop: "Desktop & Taskbar", general: "General", users: "Users", "device-manager": "Device Manager", search: "Search" }; setSection(names[event.data.page]); setSearch(""); setError(""); });
+    const offPage = on("preferences.page", event => { const names: Record<string, string> = { home: "Home", sound: "Sound", power: "Power & Lock", "startup-apps": "Startup Apps", applications: "Applications", wifi: "Wi-Fi", bluetooth: "Bluetooth", displays: "Displays", appearance: "Appearance", wallpaper: "Wallpaper", desktop: "Home", general: "General", users: "Users", "device-manager": "Device Manager", search: "Search" }; setSection(names[event.data.page] ?? "Home"); setSearch(""); setError(""); });
     void hello().catch(console.error);
     return () => { offWallpaper(); offPage(); };
   }, []);
@@ -70,11 +71,6 @@ function Settings() {
   async function wallpaper(id?: string) {
     if (busy) return; setBusy(true); setError("");
     try { setDesktop(await (id ? request({ method: "desktop.wallpaper_set", params: { id } }) : request({ method: "desktop.wallpaper_choose" }))); }
-    catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
-  }
-  async function appearance(id: "light" | "dark") {
-    if (busy || !desktop) return; setBusy(true); setError("");
-    try { setDesktop(await request({ method: "desktop.appearance_set", params: { id } })); }
     catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
   }
   async function font(id: string) {
@@ -90,18 +86,16 @@ function Settings() {
       {!categories.length && <p className="settings-no-results">No settings match “{search}”. Try “display” or “wallpaper”.</p>}
 
     </aside>
-    <section className="settings-content" aria-labelledby="settings-title"><div className="settings-page-heading"><div className="settings-heading-copy"><span className="settings-breadcrumb">Settings <Icon name="forward" width="11" height="11" />{section}</span><h2 id="settings-title" ref={heading} tabIndex={-1}>{section}</h2><p>{sections.find(item => item.name === section)?.description}</p></div><Button className="settings-theme-button" aria-label={`Switch to ${desktop?.appearance === "dark" ? "light" : "dark"} mode`} disabled={busy || !desktop} onClick={() => void appearance(desktop?.appearance === "dark" ? "light" : "dark")} title="Change appearance"><Icon name="appearance" width="18" height="18" /></Button></div>
+    <section className="settings-content" aria-labelledby="settings-title"><div className="settings-page-heading"><div className="settings-heading-copy"><span className="settings-breadcrumb">Settings <Icon name="forward" width="11" height="11" />{section}</span><h2 id="settings-title" ref={heading} tabIndex={-1}>{section}</h2><p>{sections.find(item => item.name === section)?.description}</p></div></div>
       {section === "Home" ? <>
         <div className="workspace-preview"><div className="workspace-copy"><span className="workspace-eyebrow">YOUR WORKSPACE</span><h3>Welcome to Meridian.</h3><p>A place for your files, your favorite apps, and a desktop that feels like home.</p><Button onClick={() => navigate("Appearance")}><Icon name="appearance" width="16" height="16" />Personalize appearance<Icon name="forward" width="14" height="14" /></Button></div><Button className="workspace-wallpaper" aria-label="Change desktop wallpaper" onClick={() => navigate("Wallpaper")}>{desktop && <img src={desktop.wallpaper_uri} alt="" />}<span><Icon name="image" width="14" height="14" />Change wallpaper</span></Button></div>
         <h3 className="home-section-title">Everyday essentials</h3>
         <div className="settings-quick-links">{["Wallpaper", "Wi-Fi", "Displays", "Sound", "Startup Apps", "General"].map(name => { const item = sections.find(s => s.name === name)!; return <Button key={name} onClick={() => navigate(name)}><span className="quick-link-icon"><Icon name={item.icon} /></span><span><strong>{name}</strong><small>{name === "Wi-Fi" ? settings.wifi === null ? "Connection settings" : settings.wifi ? "Wi-Fi is on" : "Wi-Fi is off" : name === "Sound" ? settings.volume === null ? "Volume controls" : `Volume · ${settings.volume}%` : name === "Displays" ? "Resolution and scaling" : name === "Startup Apps" ? "Ready when you sign in" : name === "General" ? "System information and updates" : "Choose your background"}</small></span><Icon name="forward" width="16" height="16" /></Button>; })}</div>
         <div className="settings-card shortcut-card"><div className="shortcut-heading"><Icon name="keyboard" /><h3>Keyboard shortcuts</h3></div>{shortcuts.map(([name, keys]) => <div className="settings-row" key={name}><span>{name}</span><kbd>{keys}</kbd></div>)}<p className="section-caption card-caption">In a nested development window, use Ctrl + Alt + H for Applications and Ctrl + Alt + C for Control Center.</p></div>
-      </> : section === "Search" ? <SearchSettings /> : section === "Power & Lock" ? <Power /> : section === "Startup Apps" ? <Startup /> : section === "General" ? <General /> : section === "Device Manager" ? <DeviceManager navigate={navigate} /> : section === "Users" ? <Users /> : section === "Displays" ? <Displays /> : section === "Wi-Fi" || section === "Bluetooth" ? <Wireless key={section} kind={section === "Wi-Fi" ? "wifi" : "bluetooth"} /> : section === "Wallpaper" ? <>
+      </> : section === "Search" ? <SearchSettings /> : section === "Applications" ? <ApplicationsSettings /> : section === "Power & Lock" ? <Power /> : section === "Startup Apps" ? <Startup /> : section === "General" ? <General /> : section === "Device Manager" ? <DeviceManager navigate={navigate} /> : section === "Users" ? <Users /> : section === "Displays" ? <Displays /> : section === "Wi-Fi" || section === "Bluetooth" ? <Wireless key={section} kind={section === "Wi-Fi" ? "wifi" : "bluetooth"} /> : section === "Wallpaper" ? <>
         <div className="settings-card">{desktop ? <img className="wallpaper-current" src={desktop.wallpaper_uri} alt="Current desktop wallpaper" /> : <div className="wallpaper-loading" role="status">Loading wallpaper…</div>}<div className="wallpaper-choices" aria-label="Wallpapers">{desktop?.wallpapers.map(choice => <Button className="wallpaper-choice" key={choice.id} aria-pressed={desktop.wallpaper === choice.id} disabled={busy} onClick={() => void wallpaper(choice.id)}><img src={choice.uri} alt="" /><span>{choice.name}{desktop.wallpaper === choice.id && <Icon name="check" width="14" height="14" />}</span></Button>)}</div><div className="wallpaper-custom"><Button disabled={busy} onClick={() => void wallpaper()}><Icon name="image" width="16" height="16" />{busy ? "Updating…" : "Choose custom image…"}</Button><small>PNG, JPEG or WebP · up to 20 MB</small></div></div>
       </> : section === "Appearance" ? <>
-        <div className="appearance-options" aria-label="Choose appearance">{(["light", "dark"] as const).map(mode => <Button className={`appearance-choice ${mode}`} key={mode} aria-pressed={desktop?.appearance === mode} disabled={busy || !desktop} onClick={() => void appearance(mode)}><span className="appearance-preview" aria-hidden="true"><span className="appearance-preview-sidebar" /><span className="appearance-preview-content"><i /><i /><i /></span></span><span className="appearance-choice-label">{mode === "light" ? "Light" : "Dark"}<span className="choice-check">{desktop?.appearance === mode && <Icon name="check" width="14" height="14" />}</span></span></Button>)}</div><div className="settings-card"><div className="settings-row"><label htmlFor="system-font">Font</label><Select id="system-font" aria-label="System font" value={desktop?.font ?? "Inter"} disabled={busy || !desktop} onChange={e => void font(e.target.value)}>{["Inter", "Noto Sans", "DejaVu Sans", "Liberation Sans"].map(name => <option key={name} value={name}>{name}</option>)}</Select></div></div>
-      </> : section === "Desktop & Taskbar" ? <>
-        <div className="settings-card"><div className="settings-row"><Icon name="pin" /><div><strong>Pinned apps</strong><small className="row-detail">Drag apps to the taskbar to pin them. Drag pinned icons to reorder.</small></div></div><div className="settings-row"><Icon name="folder" /><div><strong>Desktop files</strong><small className="row-detail">Files on your desktop are stored in the Desktop folder.</small></div></div><div className="settings-row"><Icon name="settings" /><div><strong>Control Center</strong><small className="row-detail">Wi-Fi, Bluetooth, volume and brightness.</small></div></div></div>
+        <div className="settings-card"><div className="settings-row"><strong>Dark mode</strong><small className="row-detail">Meridian always uses its dark, high-contrast interface.</small></div><div className="settings-row"><label htmlFor="system-font">Font</label><Select id="system-font" aria-label="System font" value={desktop?.font ?? "Inter"} disabled={busy || !desktop} onChange={e => void font(e.target.value)}>{["Inter", "Noto Sans", "DejaVu Sans", "Liberation Sans"].map(name => <option key={name} value={name}>{name}</option>)}</Select></div></div>
       </> : section === "Sound" ? <Sound /> : null}
       {error && <p className="settings-error" role="alert">{error}</p>}
     </section>

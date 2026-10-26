@@ -78,13 +78,15 @@ fn align(token: &[char], candidate: &Prepared, start: usize) -> Option<i32> {
     let mut gap_penalty = 0;
     let mut prev: Option<usize> = None;
     let mut pos = start;
-    for &tc in token {
+    for (token_index, &tc) in token.iter().enumerate() {
         // Prefer a word-start occurrence ahead over the next plain one
         // when the current run is broken, so "lo" in "LibreOffice" aligns
         // to L…O(ffice) rather than l(ibre)…o.
         let next = (pos..text.len()).find(|&i| text[i] == tc)?;
         let chosen = if prev.is_some_and(|p| next != p + 1) && !candidate.word_start[next] {
-            (next..text.len()).find(|&i| text[i] == tc && candidate.word_start[i]).unwrap_or(next)
+            (next..text.len())
+                .find(|&i| text[i] == tc && candidate.word_start[i] && matches_after(&token[token_index + 1..], candidate, i))
+                .unwrap_or(next)
         } else {
             next
         };
@@ -110,6 +112,15 @@ fn align(token: &[char], candidate: &Prepared, start: usize) -> Option<i32> {
         score += WHOLE_WORD;
     }
     Some(score - gap_penalty.min(MAX_GAP_PENALTY))
+}
+
+fn matches_after(token: &[char], candidate: &Prepared, chosen: usize) -> bool {
+    let mut pos = chosen + 1;
+    for &character in token {
+        let Some(offset) = candidate.chars[pos..].iter().position(|&c| c == character) else { return false };
+        pos += offset + 1;
+    }
+    true
 }
 
 /// Strict match: `token` must be a prefix of some word in `candidate`.

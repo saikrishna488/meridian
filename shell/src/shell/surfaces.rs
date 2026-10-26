@@ -38,53 +38,23 @@ impl Shell {
         }
     }
 
-    pub(super) fn ensure_terminal(&self) {
-        if self.state.borrow().terminal.is_some() {
-            return;
-        }
-        let terminal = WebSurface::new(&self.app, &self.env, SurfaceKind::Terminal, None, self.dispatcher());
-        let weak = self.weak_self.clone();
-        let terminal_weak = Rc::downgrade(&terminal);
-        terminal.window.connect_hide(move |_| {
-            if let Some(shell) = weak.upgrade() {
-                shell.terminals.borrow_mut().clear();
-            }
-            if let Some(surface) = terminal_weak.upgrade() {
-                surface.send(&Event::TerminalClosed);
-            }
-        });
-        self.state.borrow_mut().terminal = Some(terminal);
-    }
-
     pub(super) fn open_terminal(&self) {
-        self.ensure_terminal();
-        if let Some(surface) = &self.state.borrow().terminal {
-            surface.window.present();
-            surface.send(&Event::TerminalOpened);
-        }
+        launch_kitty(None);
         for popover in POPOVERS {
             self.hide_popover(popover);
         }
     }
 
     pub(super) fn open_terminal_at(&self, path: String) {
-        self.ensure_terminal();
-        if let Some(surface) = &self.state.borrow().terminal {
-            surface.window.present();
-            surface.send(&Event::TerminalOpenedAt(proto::FilePath { path }));
-        }
+        launch_kitty(Some(path));
         for popover in POPOVERS {
             self.hide_popover(popover);
         }
     }
 
     pub(super) fn open_finder(&self) {
-        if self.state.borrow().finder.is_none() {
-            let surface = WebSurface::new(&self.app, &self.env, SurfaceKind::Finder, None, self.dispatcher());
-            self.state.borrow_mut().finder = Some(surface);
-        }
-        if let Some(surface) = &self.state.borrow().finder {
-            surface.window.present();
+        if let Err(error) = crate::files::open_directory(&gtk::glib::home_dir().to_string_lossy()) {
+            log::warn!("Could not open GNOME Files: {}", error.message);
         }
         for popover in POPOVERS {
             self.hide_popover(popover);
@@ -111,5 +81,23 @@ impl Shell {
         let surface = WebSurface::new(&self.app, &self.env, popover_surface(popover), None, self.dispatcher());
         self.state.borrow_mut().popovers.insert(popover, surface.clone());
         surface
+    }
+}
+
+fn launch_kitty(cwd: Option<String>) {
+    let mut argv: Vec<std::ffi::OsString> = Vec::new();
+    if std::env::var("MERIDIAN_HOST_APPS").as_deref() == Ok("1") {
+        argv.extend(["flatpak-spawn".into(), "--host".into()]);
+    }
+    argv.push("kitty".into());
+    if let Some(path) = cwd {
+        argv.extend(["--directory".into(), path.into()]);
+    }
+    let refs: Vec<_> = argv.iter().map(|arg| arg.as_os_str()).collect();
+    match gtk::gio::Subprocess::newv(&refs, gtk::gio::SubprocessFlags::NONE) {
+        Ok(process) => process.wait_check_async(gtk::gio::Cancellable::NONE, |result| {
+            if let Err(error) = result { log::warn!("Kitty failed to start: {error}"); }
+        }),
+        Err(error) => log::warn!("Could not start Kitty: {error}"),
     }
 }

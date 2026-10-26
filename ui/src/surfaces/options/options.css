@@ -1,7 +1,6 @@
 @import url("../../lib/floating-panels.css");
 
 .control-center { right: 12px; top: 12px; bottom: auto; width: min(390px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow-y: auto; padding: 22px; border: 1px solid var(--line); border-radius: var(--radius-lg); transform-origin: top right; color: var(--ink); background: var(--surface-raised); }
-[data-theme="light"] .control-center { background: var(--surface-raised); color: var(--ink); }
 .control-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 22px; }
 .control-heading h1 { font-size: 18px; font-weight: 600; letter-spacing: -.5px; margin: 0; }
 .control-heading button { display: flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink-muted); font-size: 11px; padding: 7px 9px; cursor: pointer; }

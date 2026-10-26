@@ -82,6 +82,31 @@ pub fn list() -> Result<AudioState, ErrorBody> {
     })
 }
 pub fn action(choice: AudioAction) -> Result<AudioState, ErrorBody> {
+    if choice.action == "virtual-create" || choice.action == "virtual-remove" {
+        if choice.id != 0 || !choice.name.is_empty() || choice.percent.is_some() {
+            return Err(error("Invalid virtual output request"));
+        }
+        let modules = run(&["pactl", "list", "short", "modules"])?;
+        let matching: Vec<&str> = modules
+            .lines()
+            .filter(|line| line.contains("module-null-sink") && line.contains("sink_name=meridian_virtual_output"))
+            .filter_map(|line| line.split_whitespace().next())
+            .collect();
+        if choice.action == "virtual-create" && matching.is_empty() {
+            run(&[
+                "pactl",
+                "load-module",
+                "module-null-sink",
+                "sink_name=meridian_virtual_output",
+                "sink_properties=device.description=Meridian-Virtual-Output",
+            ])?;
+        } else if choice.action == "virtual-remove" {
+            for id in matching {
+                run(&["pactl", "unload-module", id])?;
+            }
+        }
+        return list();
+    }
     if !["default", "mute", "unmute", "volume"].contains(&choice.action.as_str())
         || choice.percent.is_some_and(|p| p > 100)
         || (choice.action == "volume") != choice.percent.is_some()

@@ -27,7 +27,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             primary_display: None,
-            appearance: "light".into(),
+            appearance: "dark".into(),
             font: "Inter".into(),
             wallpaper: "meridian-dusk".into(),
             custom: None,
@@ -91,10 +91,17 @@ pub fn set_wallpaper(id: &str) -> Result<DesktopState, ErrorBody> {
 }
 pub fn custom_wallpaper() -> Option<PathBuf> {
     let name = load().custom?;
-    if !matches!(name.as_str(), "wallpaper.png" | "wallpaper.jpg" | "wallpaper.webp") {
+    if !valid_custom_name(&name) {
         return None;
     }
     Some(dir().join(name))
+}
+fn valid_custom_name(name: &str) -> bool {
+    ["png", "jpg", "webp"].iter().any(|extension| {
+        name.strip_prefix("wallpaper-")
+            .and_then(|rest| rest.strip_suffix(&format!(".{extension}")))
+            .is_some_and(|revision| !revision.is_empty() && revision.bytes().all(|byte| byte.is_ascii_digit()))
+    }) || matches!(name, "wallpaper.png" | "wallpaper.jpg" | "wallpaper.webp")
 }
 pub fn choose_wallpaper(path: &Path) -> Result<DesktopState, ErrorBody> {
     let _guard = CONFIG_LOCK.lock().map_err(error)?;
@@ -111,13 +118,26 @@ pub fn choose_wallpaper(path: &Path) -> Result<DesktopState, ErrorBody> {
     } else {
         return Err(error("Choose a PNG, JPEG, or WebP image."));
     };
-    let name = format!("wallpaper.{extension}");
     std::fs::create_dir_all(dir()).map_err(error)?;
-    std::fs::write(dir().join(&name), bytes).map_err(error)?;
     let mut config = load();
+    config.revision = config.revision.wrapping_add(1);
+    let name = format!("wallpaper-{}.{extension}", config.revision);
+    let directory = dir();
+    let temporary = directory.join(format!(".{name}.tmp"));
+    let target = directory.join(&name);
+    let _ = std::fs::remove_file(&temporary);
+    {
+        use std::io::Write;
+        let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(&temporary).map_err(error)?;
+        file.write_all(&bytes).map_err(error)?;
+        file.sync_all().map_err(error)?;
+    }
+    if let Err(failure) = std::fs::rename(&temporary, &target) {
+        let _ = std::fs::remove_file(&temporary);
+        return Err(error(failure));
+    }
     config.wallpaper = "custom".into();
     config.custom = Some(name);
-    config.revision = config.revision.wrapping_add(1);
     save(&config)?;
     Ok(state(&config))
 }
@@ -156,7 +176,7 @@ fn desktop_items(config: &Config) -> Vec<DesktopItem> {
         .cloned()
         .map(|mut item| {
             if item.kind == "app" && item.target == "meridian-finder.desktop" {
-                item.name = "Orbit".into();
+                item.name = "File Manager".into();
             }
             if item.kind != "app" {
                 item.id = format!("shortcut:{}", item.id);
@@ -227,13 +247,12 @@ fn error(e: impl std::fmt::Display) -> ErrorBody {
 
 /// Save the preference and update GTK and portal-aware applications via GSettings.
 pub fn set_appearance(mode: &str) -> Result<DesktopState, ErrorBody> {
-    if !matches!(mode, "light" | "dark") {
+    if mode != "dark" {
         return Err(error("Unknown appearance"));
     }
     let _guard = CONFIG_LOCK.lock().map_err(error)?;
     let mut config = load();
-    config.appearance = mode.into();
-    save(&config)?;
+    config.appearance = "dark".into();
     // GTK applications that do not read the portal also inherit the saved preference.
     for version in ["gtk-3.0", "gtk-4.0"] {
         let directory = glib::user_config_dir().join(version);
@@ -274,9 +293,10 @@ pub fn set_appearance(mode: &str) -> Result<DesktopState, ErrorBody> {
             .output()
             .map_err(error)?;
         if !result.status.success() {
-            return Err(error("Appearance was saved, but the KDE palette could not be updated"));
+            return Err(error("The KDE palette could not be updated"));
         }
     }
+    save(&config)?;
     Ok(state(&config))
 }
 

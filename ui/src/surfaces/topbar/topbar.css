@@ -1,59 +1,74 @@
-@import url("../../lib/desktop-gloss.css");
-
-body { height: 32px; }
-.topbar { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-bottom: 1px solid var(--chrome-line); background: var(--chrome-bg); color: var(--chrome-ink); }
-.topbar button { display: flex; align-items: center; justify-content: center; flex: none; height: 28px; padding: 0 9px; border: 0; border-radius: 6px; background: transparent; color: inherit; cursor: pointer; font-size: 12px; }
-.topbar button:hover, .topbar button[aria-expanded="true"] { background: var(--chrome-hover); }
-.topbar .menu-brand { width: 34px; padding: 0; color: var(--action); }
-.meridian-logo { width: 20px; height: 20px; filter: drop-shadow(0 2px 2px #0004); }
-.topbar .focused-app { display: block; min-width: 0; max-width: 35vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-.topbar-spacer { flex: 1; }
-.system-tray { display: flex; align-items: center; gap: 4px; min-width: 0; }
-.system-tray button > svg, .system-tray button > img { filter: none; }
-.system-tray .taskbar-battery { gap: 5px; font-variant-numeric: tabular-nums; font-size: 11px; }
-.taskbar-battery.low { color: var(--danger); }
-#notifications { position: relative; }
-.notification-dot { position: absolute; top: 4px; right: 6px; width: 5px; height: 5px; border-radius: 50%; background: var(--action); }
-.when { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 11px; font-variant-numeric: tabular-nums; }
-.when .date { margin: 0; color: var(--ink-muted); font-size: 11px; }
-@media (max-width: 650px) { .topbar { padding-inline: 4px; gap: 2px; } .system-tray { gap: 0; } .system-tray button { padding-inline: 6px; } .when .date, .taskbar-battery > span { display: none; } }
-
-/* Compact status rail over the desktop wallpaper. */
+body { height: var(--topbar-height); background: transparent; }
 .topbar {
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  gap: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  height: var(--topbar-height);
+  padding: 0 12px;
+  overflow: hidden;
+  border-bottom: 1px solid #292929;
+  background: #000;
+  color: #fff;
+}
+.topbar button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
   height: 32px;
-  background: var(--desktop-gloss-tint);
-  border-color: var(--desktop-gloss-line);
-  box-shadow: inset 0 -1px var(--desktop-gloss-shade);
-  -webkit-backdrop-filter: blur(10px) saturate(120%);
-  backdrop-filter: blur(10px) saturate(120%);
+  padding: 0 9px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: 500 12px/1 var(--font-ui);
 }
-.topbar .menu-brand { display:flex; justify-content:flex-start; gap:8px; width:auto; padding:0 8px 0 2px; color:var(--chrome-ink); font-size:12px; font-weight:600; }
-.topbar .meridian-logo { width:17px; height:17px; color:var(--action); filter:none; }
-.topbar .focused-app { position:absolute; left:122px; max-width:18vw; height:24px; padding-left:11px; border-left:1px solid var(--desktop-gloss-line); color:var(--ink-muted); font-size:11px; font-weight:500; }
-.topbar-spacer { display:none; }
-.topbar .taskbar-calendar { position:relative; justify-self:center; width:auto; min-width:150px; padding:0 10px; color:var(--chrome-ink); }
-.topbar .when { justify-content:center; gap:8px; font-size:11px; font-weight:550; }
-.topbar .when .date { color:var(--chrome-ink); opacity:.76; font-size:11px; }
-.topbar .system-tray { justify-self:end; gap:2px; }
-.topbar .system-tray button { width:30px; padding:0; border-radius:7px; color:var(--chrome-ink); }
-.topbar .system-tray .taskbar-battery { display:flex; width:auto; gap:5px; padding-inline:6px; font-size:10px; }
-.topbar .system-tray .tray-indicator { color:var(--ink-muted); }
-.topbar .system-tray .tray-indicator.is-active { color:var(--chrome-ink); }
-.topbar .system-tray #options { margin-left:3px; }
-.topbar .system-tray #notifications { margin-left:1px; }
-@media (max-width: 650px) {
-  .topbar { grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); gap:2px; padding-inline:5px; }
-  .topbar .menu-brand { gap:5px; padding-inline:0; }
-  .topbar .focused-app { display:none; }
-  .topbar .taskbar-calendar { min-width:0; padding-inline:5px; }
-  .topbar .when { gap:0; }
-  .topbar .system-tray button { width:26px; }
-  .topbar .system-tray .taskbar-battery { padding-inline:2px; }
+.topbar button:hover,
+.topbar button[aria-expanded="true"] { background: #202020; color: #fff; }
+.topbar button:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+.topbar .menu-brand { gap: 7px; padding-inline: 4px 9px; font-weight: 650; }
+.topbar .meridian-logo { width: 20px; height: 20px; color: #fff; }
+.brand-label { white-space: nowrap; }
+.topbar .focused-app {
+  display: block;
+  min-width: 0;
+  max-width: 25vw;
+  overflow: hidden;
+  margin-left: 4px;
+  padding-left: 12px;
+  border-left: 1px solid #555;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
 }
-@media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
-  .topbar { background: var(--surface-raised); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; }
+.topbar-spacer { flex: 1; }
+.topbar .system-tray { display: flex; align-items: center; gap: 2px; flex: none; margin-left: auto; }
+.topbar .system-tray button { width: 32px; padding: 0; }
+.topbar .system-tray .taskbar-battery { display: flex; width: auto; gap: 5px; padding-inline: 7px; font-size: 10px; }
+.topbar .taskbar-battery.low { color: #ff8b8b; }
+.topbar .taskbar-calendar { flex: none; margin-left: 4px; padding-inline: 8px; font-variant-numeric: tabular-nums; }
+.topbar .when { justify-content: flex-end; gap: 7px; font-size: 11px; font-weight: 600; }
+.topbar .when .clock { color: #fff; }
+.topbar .when .date { margin: 0; color: #bbb; font-size: 10px; }
+#notifications { position: relative; }
+.notification-dot { position: absolute; top: 3px; right: 3px; width: 6px; height: 6px; border: 1px solid #000; border-radius: 50%; background: #fff; }
+@media (max-width: 720px) {
+  .topbar { gap: 4px; padding-inline: 7px; }
+  .topbar .focused-app, .brand-label, .topbar .taskbar-battery > span { display: none; }
+  .topbar .system-tray { gap: 0; }
+  .topbar .system-tray button { width: 28px; }
+  .topbar .taskbar-calendar { margin-left: 2px; padding-inline: 4px; }
+  .topbar .when { gap: 0; }
+  .topbar .when .date { display: none; }
+}
+@media (max-width: 480px) {
+  .topbar { gap: 2px; padding-inline: 4px; }
+  .topbar .menu-brand { padding-inline: 2px; }
+  .topbar .system-tray button { width: 24px; }
+  .topbar .taskbar-calendar { font-size: 9px; padding-inline: 2px; }
+  .topbar .when { font-size: 10px; }
 }
