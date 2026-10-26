@@ -14,7 +14,7 @@ cargo install --locked --version 0.7.1 --root "$ROOT/target/media-idle-inhibit" 
 install -Dm755 "$ROOT/target/media-idle-inhibit/bin/wayland-pipewire-idle-inhibit" \
     "$ROOT/target/release/wayland-pipewire-idle-inhibit"
 if [ "$sources_before" != "$(release_source_manifest)" ]; then
-    echo "error: source files changed during the build; run tools/build-release.sh again" >&2
+    echo "error: source files changed during the build; run tools/compile_meridian.sh again" >&2
     exit 1
 fi
 release_manifest > "$ROOT/target/release/meridian-build.sha256"

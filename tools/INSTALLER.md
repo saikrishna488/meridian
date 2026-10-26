@@ -12,11 +12,11 @@ On Debian testing or a compatible Debian derivative:
 
 ```sh
 tools/dev-env.sh
-tools/build-release.sh
+tools/compile_meridian.sh
 sudo tools/install.sh
 ```
 
-`tools/dev-env.sh` installs the build dependencies. `tools/build-release.sh`
+`tools/dev-env.sh` installs the build dependencies. `tools/compile_meridian.sh`
 builds Meridian and the pinned PipeWire idle-inhibit helper. The installer
 checks that the release matches the source tree before changing the system.
 APT still supplies system runtime libraries and services.

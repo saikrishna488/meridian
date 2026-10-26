@@ -30,7 +30,7 @@ extended-use qualification remain open. The project tracks those gaps in
   enforced lock screen on every display.
 - Meridian's PipeWire idle-inhibit helper keeps the session awake during active
   audio playback. It is built from the pinned upstream source by
-  `tools/build-release.sh` and installed by `tools/install.sh`.
+  `tools/compile_meridian.sh` and installed by `tools/install.sh`.
 - Applications management with reviewed uninstall plans for supported Debian,
   Flatpak, and Snap packages. Privileged removals can request authentication.
 - Notification history and Pulse system monitoring. Meridian's Calendar and
@@ -81,7 +81,7 @@ Build and install from a source checkout:
 
 ```sh
 tools/dev-env.sh
-tools/build-release.sh
+tools/compile_meridian.sh
 sudo tools/install.sh
 ```
 

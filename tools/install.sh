@@ -16,7 +16,7 @@ Failed to create stream fd: Operation not permitted
 #                                           go back to the previous login screen
 #   sudo tools/install.sh --uninstall       remove everything this script added
 #
-# Build first (as your user): tools/build-release.sh
+# Build first (as your user): tools/compile_meridian.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -58,7 +58,7 @@ install_files() {
     for f in target/release/meridian-shell target/release/meridian-greeter target/release/wayland-pipewire-idle-inhibit ui/dist/surfaces/panel/index.html \
         ui/dist/surfaces/locker/index.html ui/dist/surfaces/locker/locker.js \
         ui/dist/surfaces/settings/settings.js ui/dist/vendor/LICENSE; do
-        [ -e "$ROOT/$f" ] || die "$f is missing; build first with tools/build-release.sh (as your user)"
+        [ -e "$ROOT/$f" ] || die "$f is missing; build first with tools/compile_meridian.sh (as your user)"
     done
 
     step "Installing runtime packages"

@@ -1,3 +1,6 @@
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
 # Developing Meridian
 
 ## Environment
@@ -88,7 +91,7 @@ which speaks greetd's protocol, accepts any username with the password
 ## Install on this machine
 
 ```sh
-tools/build-release.sh
+tools/compile_meridian.sh
 sudo tools/install.sh            # binaries → /usr/local/bin, data → /usr/local/share/meridian,
                                  # session → /usr/share/wayland-sessions/meridian.desktop
 ```

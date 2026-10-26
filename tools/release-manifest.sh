@@ -29,13 +29,13 @@ release_manifest() {
 verify_release() {
     local manifest="$ROOT/target/release/meridian-build.sha256" current
     if [ ! -f "$manifest" ]; then
-        echo "error: no verified release build; run tools/build-release.sh as your user first" >&2
+        echo "error: no verified release build; run tools/compile_meridian.sh as your user first" >&2
         return 1
     fi
     current="$(release_manifest)" || return 1
     if [ "$current" != "$(cat "$manifest")" ]; then
         echo "error: release binaries, UI, or source files changed since the release build" >&2
-        echo "Rebuild with tools/build-release.sh before packaging or installing Meridian." >&2
+        echo "Rebuild with tools/compile_meridian.sh before packaging or installing Meridian." >&2
         return 1
     fi
 }

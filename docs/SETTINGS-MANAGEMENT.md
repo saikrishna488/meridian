@@ -18,7 +18,7 @@ temporary discovery only after **Pair new device** is selected. Discovery ends
 after the scan completes. Both pages offer a separate scan-again action after
 the first search.
 
-`tools/build-release.sh` builds the pinned `wayland-pipewire-idle-inhibit`
+`tools/compile_meridian.sh` builds the pinned `wayland-pipewire-idle-inhibit`
 helper from source and `tools/install.sh` installs it. It inhibits automatic
 locking and display standby while PipeWire media audio is active; ordinary
 inactivity timers resume when playback stops.
@@ -73,7 +73,7 @@ Save work first, then run:
 
 ```sh
 cd ~/meridian
-./tools/build-release.sh
+./tools/compile_meridian.sh
 sudo ./tools/install.sh
 ```
 

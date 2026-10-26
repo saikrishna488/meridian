@@ -57,7 +57,7 @@ surface through the `lock-session` GApplication action. The explicit Sleep
 control waits for compositor confirmation before suspending.
 
 The required runtime package list includes `swayidle` and `wlopm`.
-`tools/build-release.sh` builds the pinned `wayland-pipewire-idle-inhibit`
+`tools/compile_meridian.sh` builds the pinned `wayland-pipewire-idle-inhibit`
 helper and `tools/install.sh` installs it alongside Meridian. Rebuild and
 reinstall, then start a new login session to apply idle behavior. Power & Lock
 settings save automatic-lock and standby delays for the next sign-in; defaults
