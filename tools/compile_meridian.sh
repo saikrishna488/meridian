@@ -7,6 +7,11 @@ set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 ensure_toolchain "$0" "$@"
 source "$ROOT/tools/release-manifest.sh"
+if ! pkg-config --atleast-version=0.3 libpipewire-0.3; then
+    echo "error: PipeWire development files are missing (libpipewire-0.3.pc)." >&2
+    echo "Install build dependencies with tools/dev-env.sh, or install libpipewire-0.3-dev, then retry." >&2
+    exit 1
+fi
 rm -f "$ROOT/target/release/meridian-build.sha256"
 sources_before="$(release_source_manifest)"
 build_all --release --bin meridian-shell --bin meridian-greeter
