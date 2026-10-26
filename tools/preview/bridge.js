@@ -1,3 +1,6 @@
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
 /* Development fixtures only. Never calls the native bridge or touches files. */
 (() => {
   const previewPage = new URLSearchParams(location.search).get("page");
@@ -113,10 +116,10 @@
       case "terminal.read": result = { data: terminalSent ? [] : [...new TextEncoder().encode("\x1b[1;32malex@meridian\x1b[0m:~$ \r\n")], exited: false }; terminalSent = true; break;
       case "terminal.paste": result = ""; break;
       case "greeter.info": result = { hostname: "meridian", last_user: "alex", last_session: "meridian", sessions: [{ id: "meridian", name: "Meridian", command: "meridian-session" }] }; break;
-      case "settings.check_updates": result = { installed: "0.1.0", latest: "v0.1.0", available: false, message: "Preview · you have the latest published version.", published: null }; break;
+      case "settings.check_updates": result = { installed: "0.1.1", latest: "v0.1.1", available: false, message: "Preview · you have the latest published version.", published: null }; break;
       case "settings.open_releases": result = null; break;
       case "settings.system_info":
-      case "system.info": result = { version: "0.1.0", kernel: "6.12.0", architecture: "x86_64", hostname: "meridian-preview", os: "Debian", manufacturer: "Framework", model: "Laptop 13", processor: "Intel Core", memory: "16 GiB" }; break;
+      case "system.info": result = { version: "0.1.1", kernel: "6.12.0", architecture: "x86_64", hostname: "meridian-preview", os: "Debian", manufacturer: "Framework", model: "Laptop 13", processor: "Intel Core", memory: "16 GiB" }; break;
       case "search.activate": case "pulse.open": case "finder.open": case "terminal.open": case "preferences.open": result = null; break;
     }
     return JSON.stringify({ ok: true, result });

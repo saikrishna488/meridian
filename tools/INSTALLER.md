@@ -1,57 +1,44 @@
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
 # Installation
 
-## Debian package
+Meridian is currently installed from a source checkout; Debian packages are not
+provided. `tools/install.sh` installs runtime dependencies with APT, then copies
+the verified release binaries, UI, assets, compositor configuration, PAM
+service, and session entry into system locations.
 
-Build on a supported Debian development host as your regular user:
-
-```sh
-tools/build-deb.sh --output /tmp/meridian.deb
-sudo apt install /tmp/meridian.deb
-```
-
-Without `--output`, the package is written to
-`target/meridian_<version>_<architecture>.deb`. Use `--no-build` to package an
-existing verified release produced by `tools/build-release.sh`.
-
-The package includes compiled binaries, UI, assets, compositor and greeter
-configuration, and the Meridian login-session entry. APT installs the runtime
-dependencies and multimedia codecs. The destination needs the build's
-architecture, GTK >= 4.18, WebKitGTK >= 2.52, and gtk4-layer-shell >= 1.2.
-Rust, Node, and a source checkout are not needed on the destination.
-
-Select Meridian from the existing login screen. To update, build and install the
-new package, then sign out and back in. To remove it:
+On Debian testing or a compatible Debian derivative:
 
 ```sh
-sudo apt remove meridian-desktop
-```
-
-## Source installation and login-screen controls
-
-Developers can install directly from a verified source checkout instead:
-
-```sh
+tools/dev-env.sh
 tools/build-release.sh
 sudo tools/install.sh
 ```
 
-Remove a source installation with `sudo tools/install.sh --uninstall`. Keep source
-and APT installations separate: use the same method to update and remove an
-installation.
+`tools/dev-env.sh` installs the build dependencies. `tools/build-release.sh`
+builds Meridian and the pinned PipeWire idle-inhibit helper. The installer
+checks that the release matches the source tree before changing the system.
+APT still supplies system runtime libraries and services.
 
-Both methods keep the existing login screen by default. From a source checkout,
-`tools/install.sh` also provides optional controls for the installed greeter:
+Select **Meridian** from the existing login screen. To update, rebuild and run
+`sudo tools/install.sh` again, then sign out and back in. To remove Meridian:
 
 ```sh
-sudo tools/install.sh --try-login-screen     # trial on VT 7
-sudo tools/install.sh --enable-login-screen  # use greetd after reboot
-sudo tools/install.sh --disable-login-screen # restore the previous login screen
+sudo tools/install.sh --uninstall
 ```
 
-Restore the previous login screen before removing a package if you enabled greetd.
+The existing login screen remains the default. The installer has optional
+controls for trying Meridian's greetd-based login screen on VT 7 or enabling it
+as the default:
 
-`debian.sh` and `codecs.sh` contain shared package lists; `release-manifest.sh`
-verifies matching source, binaries, and UI; `install-transaction.sh` restores files
-after a failed source installation. These are required helpers, not additional
-installer entry points. `install-codecs.sh` remains available for optional codec
-installation on a source-installed system.
+```sh
+sudo tools/install.sh --try-login-screen
+sudo tools/install.sh --enable-login-screen
+sudo tools/install.sh --disable-login-screen
+```
+
+Restore the previous login screen before uninstalling if greetd was enabled.
+`debian.sh`, `codecs.sh`, `release-manifest.sh`, and
+`install-transaction.sh` are helpers used by the source installer and build
+scripts, not separate installer entry points.

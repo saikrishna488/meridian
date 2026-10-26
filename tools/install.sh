@@ -1,3 +1,6 @@
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
 #!/usr/bin/env bash
 # Install Meridian on this machine (Debian). Run from the repository, as root:
 #
@@ -52,7 +55,7 @@ greeter_command() {
 
 install_files() {
     verify_install_build
-    for f in target/release/meridian-shell target/release/meridian-greeter ui/dist/surfaces/panel/index.html \
+    for f in target/release/meridian-shell target/release/meridian-greeter target/release/wayland-pipewire-idle-inhibit ui/dist/surfaces/panel/index.html \
         ui/dist/surfaces/locker/index.html ui/dist/surfaces/locker/locker.js \
         ui/dist/surfaces/settings/settings.js ui/dist/vendor/LICENSE; do
         [ -e "$ROOT/$f" ] || die "$f is missing; build first with tools/build-release.sh (as your user)"
@@ -67,13 +70,14 @@ install_files() {
     fi
     step "Backing up the current installation"
     meridian_transaction_begin "$SHARE" "$PREFIX/share/themes/Meridian" "$PREFIX/bin/meridian-shell" \
-        "$PREFIX/bin/meridian-greeter" "$PREFIX/bin/meridian-vault" \
+        "$PREFIX/bin/meridian-greeter" "$PREFIX/bin/wayland-pipewire-idle-inhibit" "$PREFIX/bin/meridian-vault" \
         "$PREFIX/bin/meridian-session" "$SESSION_FILE" /etc/pam.d/meridian-lock \
         "$PREFIX/share/applications/meridian-vault.desktop"
     rm -f "$PREFIX/bin/meridian-vault" "$PREFIX/share/applications/meridian-vault.desktop"
     step "Installing Meridian to $PREFIX"
     install -Dm755 "$ROOT/target/release/meridian-shell" "$PREFIX/bin/meridian-shell"
     install -Dm755 "$ROOT/target/release/meridian-greeter" "$PREFIX/bin/meridian-greeter"
+    install -Dm755 "$ROOT/target/release/wayland-pipewire-idle-inhibit" "$PREFIX/bin/wayland-pipewire-idle-inhibit"
     sed "s|@SHARE_DIR@|$SHARE|" "$ROOT/session/meridian-session" > "$PREFIX/bin/meridian-session"
     chmod 755 "$PREFIX/bin/meridian-session"
 
@@ -100,7 +104,7 @@ install_files() {
     install -Dm644 "$ROOT/session/meridian-lock.pam" /etc/pam.d/meridian-lock
 
     if command -v restorecon >/dev/null; then
-        restorecon -R "$PREFIX/bin/meridian-"* "$SHARE" "$SESSION_FILE"
+        restorecon -R "$PREFIX/bin/meridian-"* "$PREFIX/bin/wayland-pipewire-idle-inhibit" "$SHARE" "$SESSION_FILE"
     fi
     meridian_transaction_commit
     echo "Installed. \"Meridian\" now appears in the login screen's session list."
@@ -188,7 +192,7 @@ uninstall() {
     disable_login_screen
     step "Removing Meridian files"
     rm -f "$PREFIX/bin/meridian-vault" "$PREFIX/bin/meridian-drift" "$PREFIX/share/applications/meridian-vault.desktop" "$PREFIX/share/applications/meridian-drift.desktop"
-    rm -f "$PREFIX/bin/meridian-shell" "$PREFIX/bin/meridian-greeter" "$PREFIX/bin/meridian-session" "$SESSION_FILE" \
+    rm -f "$PREFIX/bin/meridian-shell" "$PREFIX/bin/meridian-greeter" "$PREFIX/bin/wayland-pipewire-idle-inhibit" "$PREFIX/bin/meridian-session" "$SESSION_FILE" \
         /etc/pam.d/meridian-lock
     rm -rf "$SHARE" "$PREFIX/share/themes/Meridian"
     echo "Removed. (Runtime packages were left installed: ${PACKAGES[*]})"

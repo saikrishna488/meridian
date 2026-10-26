@@ -1,3 +1,6 @@
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
 # Meridian
 
 Meridian is a Linux desktop session for Debian testing and compatible
@@ -25,8 +28,9 @@ extended-use qualification remain open. The project tracks those gaps in
 - Control Center for connectivity, volume, brightness, Do Not Disturb, lock,
   sleep, restart, shutdown, and sign out. Meridian provides its own compositor-
   enforced lock screen on every display.
-- Automatic screen locking respects active PipeWire media playback, so audio
-  from a video does not trigger an idle lock or display standby.
+- Meridian's PipeWire idle-inhibit helper keeps the session awake during active
+  audio playback. It is built from the pinned upstream source by
+  `tools/build-release.sh` and installed by `tools/install.sh`.
 - Applications management with reviewed uninstall plans for supported Debian,
   Flatpak, and Snap packages. Privileged removals can request authentication.
 - Notification history and Pulse system monitoring. Meridian's Calendar and
@@ -73,17 +77,18 @@ For development checks, run `tools/check.sh`.
 
 ## Install on Debian
 
-Build and install the Debian package:
+Build and install from a source checkout:
 
 ```sh
-tools/build-deb.sh --output /tmp/meridian.deb
-sudo apt install /tmp/meridian.deb
+tools/dev-env.sh
+tools/build-release.sh
+sudo tools/install.sh
 ```
 
-Select **Meridian** at the login screen. After installing an update, sign out
-and back in to load the updated session. Remove the package with
-`sudo apt remove meridian-desktop`. See [installation details](tools/INSTALLER.md)
-for the source installation method and optional greetd configuration.
+Select **Meridian** at the login screen. To update, rebuild and run
+`sudo tools/install.sh` again, then sign out and back in. Remove it with
+`sudo tools/install.sh --uninstall`. See [installation details](tools/INSTALLER.md)
+for optional greetd configuration.
 
 ## Keyboard shortcuts
 
@@ -112,6 +117,7 @@ Ctrl+Alt+C for Control Center, and Ctrl+Alt+L to lock.
 - [Architecture and current limits](docs/ARCHITECTURE.md)
 - [Development guide](docs/DEVELOPMENT.md)
 - [Settings management](docs/SETTINGS-MANAGEMENT.md)
+- [Third-party components](docs/THIRD-PARTY.md)
 - [Phase 1 stability qualification](docs/PHASE1.md)
 - [Phase 2 performance qualification](docs/PHASE2.md)
 - [Phase 3 workflow work and remaining gaps](docs/PHASE3.md)

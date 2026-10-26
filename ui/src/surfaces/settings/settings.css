@@ -1,3 +1,6 @@
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
 html, body { color: #242428; background: #f5f5f7; font-family: var(--font-ui); }
 .settings-app { display: flex; height: 100vh; min-height: 0; font-size: 13px; }
 .settings-sidebar { width: 242px; flex: none; background: #e8e9ee; border-right: 1px solid #d6d7dd; padding: 22px 14px; overflow-y: auto; }

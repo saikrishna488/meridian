@@ -1,3 +1,6 @@
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
 # Release integrity helpers, sourced after tools/lib.sh or ROOT is defined.
 # Hash both inputs and outputs: an existing binary can still be a stale build.
 release_sources() {
@@ -17,7 +20,7 @@ release_manifest() {
         cd "$ROOT"
         {
             release_sources
-            printf '%s\0' target/release/meridian-shell target/release/meridian-greeter
+            printf '%s\0' target/release/meridian-shell target/release/meridian-greeter target/release/wayland-pipewire-idle-inhibit
             find ui/dist -type f -print0
         } | LC_ALL=C sort -z | xargs -0 sha256sum
     )

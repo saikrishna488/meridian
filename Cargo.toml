@@ -1,9 +1,12 @@
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
 [workspace]
 resolver = "3"
 members = ["protocol", "services", "shell"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 rust-version = "1.92"
 license = "GPL-3.0-or-later"

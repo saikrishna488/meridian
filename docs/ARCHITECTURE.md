@@ -1,3 +1,6 @@
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
 # Meridian Desktop — Architecture
 
 Status: **installable desktop session prototype; not ready as a sole daily-use desktop**.
@@ -171,7 +174,7 @@ activate that window.
 | Wi-Fi status/discovery/join | NetworkManager and `nmcli`; page load reads cached state, explicit New connection triggers a rescan, passwords are supplied on stdin |
 | Bluetooth | BlueZ through D-Bus; paired devices load without discovery, Pair new device starts a temporary scan and pairing uses a temporary agent |
 | Bluetooth audio codecs | PipeWire/WirePlumber negotiates codecs supported by the device and installed system components; Settings documents tradeoffs but does not force codec selection |
-| Media idle inhibition | `wayland-pipewire-idle-inhibit` holds the Wayland idle inhibitor while PipeWire media playback is active; `swayidle` keeps the normal lock and standby timers |
+| Media idle inhibition | `tools/build-release.sh` builds the pinned `wayland-pipewire-idle-inhibit` helper and `tools/install.sh` installs it; it holds the Wayland idle inhibitor during PipeWire playback while `swayidle` keeps normal lock and standby timers |
 | Volume | WirePlumber's `wpctl`, with rapid slider updates coalesced |
 | Built-in backlight | sysfs discovery and logind brightness control |
 | Monitor layout | Wayland output-management test/apply |

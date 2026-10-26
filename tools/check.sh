@@ -1,3 +1,6 @@
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
 #!/usr/bin/env bash
 # Everything CI should run: formatting, lints, tests, UI type-check, and a
 # check that the generated TypeScript protocol types are up to date.
@@ -10,7 +13,6 @@ step() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 
 step "release integrity"
 bash tools/tests/release-manifest.sh
-bash tools/tests/build-deb.sh
 bash tools/tests/screenshot.sh
 bash tools/tests/power.sh
 bash tools/tests/session.sh

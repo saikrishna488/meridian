@@ -1,3 +1,6 @@
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
 import type { SearchPreferences } from "./generated/SearchPreferences";
 import type { PrimaryDisplayState } from "./generated/PrimaryDisplayState";
 import type { FilePreview } from "./generated/FilePreview";

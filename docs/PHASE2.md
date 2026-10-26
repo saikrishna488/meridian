@@ -1,3 +1,6 @@
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
 # Alpha 0.3 performance work
 
 > Nova and Vault have since been removed from the project. References below describe the earlier implementation.

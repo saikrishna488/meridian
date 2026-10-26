@@ -1,3 +1,6 @@
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
 #!/usr/bin/env bash
 # Regression: installation must reject an old backend paired with a new UI.
 set -euo pipefail
@@ -6,7 +9,8 @@ ROOT="$(mktemp -d)"
 trap 'rm -rf "$ROOT"' EXIT
 mkdir -p "$ROOT"/{protocol,services,shell,ui/{src,scripts,dist},assets,session,tools,target/release}
 for file in Cargo.toml Cargo.lock rustfmt.toml ui/package.json ui/package-lock.json ui/tsconfig.json \
-    shell/main.rs ui/src/main.ts ui/dist/main.js target/release/meridian-shell target/release/meridian-greeter; do
+    shell/main.rs ui/src/main.ts ui/dist/main.js target/release/meridian-shell target/release/meridian-greeter \
+    target/release/wayland-pipewire-idle-inhibit; do
     printf 'original\n' > "$ROOT/$file"
 done
 reject() {
@@ -18,7 +22,7 @@ reject() {
 reject
 release_manifest > "$ROOT/target/release/meridian-build.sha256"
 verify_release
-for file in shell/main.rs ui/src/main.ts ui/dist/main.js target/release/meridian-shell; do
+for file in shell/main.rs ui/src/main.ts ui/dist/main.js target/release/meridian-shell target/release/wayland-pipewire-idle-inhibit; do
     printf 'changed\n' > "$ROOT/$file"
     reject
     printf 'original\n' > "$ROOT/$file"

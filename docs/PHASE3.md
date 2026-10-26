@@ -1,3 +1,6 @@
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
 # Beta 0.8 desktop workflow work
 
 Status: **initial core workflow implementation; Phase 3 is incomplete**. This is

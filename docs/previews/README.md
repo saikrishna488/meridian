@@ -1,3 +1,6 @@
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
 # Historical UI captures
 
 **These screenshots are from earlier Meridian revisions and are not current

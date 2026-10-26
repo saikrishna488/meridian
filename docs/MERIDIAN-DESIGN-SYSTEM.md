@@ -1,3 +1,6 @@
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
 # Meridian Design System
 
 > This design-system audit is dated 2026-10-18. The current package is dark-only;

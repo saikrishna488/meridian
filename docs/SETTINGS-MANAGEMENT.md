@@ -1,3 +1,6 @@
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
 # System management and session notes
 
 Meridian's production session launches Kitty for terminal work. The embedded
@@ -15,10 +18,13 @@ temporary discovery only after **Pair new device** is selected. Discovery ends
 after the scan completes. Both pages offer a separate scan-again action after
 the first search.
 
-Automatic locking and display standby are inhibited while PipeWire media audio
-is actively playing. The session starts `wayland-pipewire-idle-inhibit` beside
-`swayidle`; ordinary inactivity timers resume when playback stops. Silent video
-or media routed outside PipeWire cannot be detected by this audio-based helper.
+`tools/build-release.sh` builds the pinned `wayland-pipewire-idle-inhibit`
+helper from source and `tools/install.sh` installs it. It inhibits automatic
+locking and display standby while PipeWire media audio is active; ordinary
+inactivity timers resume when playback stops.
+Silent video or media routed outside PipeWire cannot be detected by this
+audio-based helper. Wayland-native apps can also inhibit idle through the
+compositor protocol.
 Manual, idle and pre-suspend locks all open Meridian's own compositor-enforced
 lock surface on each display; the current user's password is checked through
 the installed `meridian-lock` PAM service.

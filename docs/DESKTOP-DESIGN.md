@@ -1,3 +1,6 @@
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
 # Desktop design refinement
 
 > Historical design notes. This document describes an earlier light/dark UI
@@ -53,9 +56,10 @@ The lock helper asks the running Meridian shell to create its native session-loc
 surface through the `lock-session` GApplication action. The explicit Sleep
 control waits for compositor confirmation before suspending.
 
-The runtime package list now includes `swayidle`, `wlopm`, and
-`wayland-pipewire-idle-inhibit`. Existing installations need a rebuilt release,
-installation, and a new login session to run the media inhibitor. Power & Lock
+The required runtime package list includes `swayidle` and `wlopm`.
+`tools/build-release.sh` builds the pinned `wayland-pipewire-idle-inhibit`
+helper and `tools/install.sh` installs it alongside Meridian. Rebuild and
+reinstall, then start a new login session to apply idle behavior. Power & Lock
 settings save automatic-lock and standby delays for the next sign-in; defaults
 live in `session/labwc/idle`. Browser previews cannot exercise hardware power
 management.
