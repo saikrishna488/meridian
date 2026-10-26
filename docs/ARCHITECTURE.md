@@ -1,6 +1,3 @@
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
 # Meridian Desktop — Architecture
 
 Status: **installable desktop session prototype; not ready as a sole daily-use desktop**.

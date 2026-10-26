@@ -1,6 +1,3 @@
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
 # Debian-family package names shared by development and installation scripts.
 require_debian() {
     local ID= ID_LIKE=

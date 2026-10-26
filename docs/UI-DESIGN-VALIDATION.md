@@ -1,6 +1,3 @@
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
 # UI design validation — 2026-10-18
 
 > Historical validation record for the October 18 design pass. Later code

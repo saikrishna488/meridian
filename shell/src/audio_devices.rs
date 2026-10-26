@@ -1,6 +1,3 @@
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
 //! PipeWire device discovery and WirePlumber defaults, with bounded commands.
 use meridian_protocol::{
     AudioAction, AudioDevice, AudioState, BluetoothAudioMode, BluetoothAudioQuality, BluetoothAudioState, ErrorBody,

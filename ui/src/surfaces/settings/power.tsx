@@ -1,6 +1,3 @@
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
 import { Button } from "../../components/ui/button";
 import { useEffect, useRef, useState } from "react";
 import { usePowerStatus } from "../../lib/power";

@@ -1,6 +1,3 @@
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
 #!/usr/bin/env bash
 # Everything CI should run: formatting, lints, tests, UI type-check, and a
 # check that the generated TypeScript protocol types are up to date.

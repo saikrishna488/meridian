@@ -1,6 +1,3 @@
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
 #!/usr/bin/env bash
 # Build optimized binaries and the UI bundle for Debian and source installation.
 set -euo pipefail

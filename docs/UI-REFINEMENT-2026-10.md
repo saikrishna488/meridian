@@ -1,6 +1,3 @@
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
 # Meridian UI refinement — October 2026
 
 > Drift, Nova, and Vault have since been removed from the project. References below describe the earlier implementation.

@@ -1,6 +1,3 @@
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
 # System management and session notes
 
 Meridian's production session launches Kitty for terminal work. The embedded

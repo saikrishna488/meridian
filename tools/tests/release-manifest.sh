@@ -1,6 +1,3 @@
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
 #!/usr/bin/env bash
 # Regression: installation must reject an old backend paired with a new UI.
 set -euo pipefail

@@ -1,6 +1,3 @@
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
 # Desktop GUI refresh
 
 > Historical implementation notes. Later releases made Meridian dark-only and

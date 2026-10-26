@@ -1,6 +1,3 @@
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
 # Release integrity helpers, sourced after tools/lib.sh or ROOT is defined.
 # Hash both inputs and outputs: an existing binary can still be a stale build.
 release_sources() {

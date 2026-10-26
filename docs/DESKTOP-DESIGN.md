@@ -1,6 +1,3 @@
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
 # Desktop design refinement
 
 > Historical design notes. This document describes an earlier light/dark UI

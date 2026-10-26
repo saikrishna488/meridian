@@ -1,6 +1,3 @@
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
 #!/usr/bin/env bash
 # Exercise the Meridian lock action and idle commands without locking the
 # developer's session: a gapplication mock stands in for the running shell.

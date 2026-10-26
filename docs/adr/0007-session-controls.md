@@ -1,6 +1,3 @@
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
 # ADR-0007: Session controls in the Options menu (Lock, Sign out, Sleep)
 
 Status: accepted with implementation changes.

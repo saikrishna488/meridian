@@ -1,6 +1,3 @@
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
 //! Device integrations. Fixed argument vectors, password on stdin, bounded waits.
 use gtk::{gio, glib};
 use meridian_protocol::{

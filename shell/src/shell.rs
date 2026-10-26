@@ -1,6 +1,3 @@
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
 //! The shell: owns surfaces, services, and the request dispatcher.
 
 use std::cell::RefCell;

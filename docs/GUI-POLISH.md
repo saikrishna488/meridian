@@ -1,6 +1,3 @@
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
 # First-use GUI plan
 
 > Historical design and validation record. The Finder/Orbit, embedded Terminal,
