@@ -65,6 +65,10 @@ impl Shell {
                 let networks = crate::files::blocking(crate::settings_devices::wifi_networks).await?;
                 proto::reply_ok(&networks).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
             }))),
+            Request::SettingsWifiScan => Ok(Reply::Later(Box::pin(async move {
+                crate::files::blocking(crate::settings_devices::wifi_scan).await?;
+                proto::reply_ok(&()).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
             Request::SettingsWifiProfiles => Ok(Reply::Later(Box::pin(async move {
                 let profiles = crate::files::blocking(crate::settings_devices::wifi_profiles).await?;
                 proto::reply_ok(&profiles).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))

@@ -103,6 +103,7 @@ interface ResultMap {
   "settings.display_decide": null;
   "settings.monitor_brightness": import("./generated/MonitorBrightness").MonitorBrightness;
   "settings.wifi_networks": import("./generated/WifiNetwork").WifiNetwork[];
+  "settings.wifi_scan": null;
   "settings.wifi_connect": null;
   "settings.wifi_profiles": import("./generated/WifiProfile").WifiProfile[];
   "settings.wifi_config": import("./generated/WifiConfig").WifiConfig;

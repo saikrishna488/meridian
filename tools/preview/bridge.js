@@ -88,7 +88,7 @@
       case "settings.wifi_profiles": result = [{ uuid: "12345678-1234-1234-1234-123456789abc", name: "Home network", device: "wlan0" }, { uuid: "22345678-1234-1234-1234-123456789abc", name: "Studio", device: "" }]; break;
       case "settings.wifi_config": result = { uuid: params.uuid, autoconnect: true, metered: "unknown", method: "auto", addresses: "", gateway: "", dns: "", ignore_auto_dns: false }; break;
       case "settings.wifi_config_set": case "settings.wifi_profile_action": case "settings.wifi_connect": case "settings.bluetooth_action": throw new Error("Connection changes are unavailable in this read-only preview.");
-      case "settings.bluetooth_scan": break;
+      case "settings.wifi_scan": case "settings.bluetooth_scan": break;
       case "settings.bluetooth_devices": result = [
         { path: "/org/bluez/hci0/keyboard", name: "Wireless keyboard", address: "AA:BB:CC:DD:EE:01", icon: "input-keyboard", paired: true, connected: true, trusted: true, battery: 86 },
         { path: "/org/bluez/hci0/headphones", name: "Studio headphones", address: "AA:BB:CC:DD:EE:02", icon: "audio-headphones", paired: true, connected: false, trusted: true, battery: 74 },

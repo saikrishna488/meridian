@@ -17,8 +17,11 @@ extended-use qualification remain open. The project tracks those gaps in
   common window controls.
 - Settings for Wi-Fi, Bluetooth, displays, sound, startup apps, installed apps,
   local users, devices, power and screen locking, search providers, wallpaper,
-  and system information. Meridian's own interface is dark-only; Appearance
-  lets you choose a system font.
+  and system information. Wi-Fi and Bluetooth discovery starts only when you
+  choose **New connection** or **Pair new device**; current and saved
+  connections load when Settings opens. The Bluetooth page describes PipeWire
+  codec quality, latency and range tradeoffs. Meridian's own interface is
+  dark-only; Appearance lets you choose a system font.
 - Control Center for connectivity, volume, brightness, Do Not Disturb, lock,
   sleep, restart, shutdown, and sign out.
 - Applications management with reviewed uninstall plans for supported Debian,

@@ -171,6 +171,12 @@ fn fields(line: &str) -> Vec<String> {
     result
 }
 pub fn wifi_networks() -> Result<Vec<WifiNetwork>, ErrorBody> {
+    wifi_networks_with_rescan(false)
+}
+pub fn wifi_scan() -> Result<(), ErrorBody> {
+    wifi_networks_with_rescan(true).map(|_| ())
+}
+fn wifi_networks_with_rescan(rescan: bool) -> Result<Vec<WifiNetwork>, ErrorBody> {
     let output = run(
         &[
             "nmcli",
@@ -183,7 +189,7 @@ pub fn wifi_networks() -> Result<Vec<WifiNetwork>, ErrorBody> {
             "wifi",
             "list",
             "--rescan",
-            "yes",
+            if rescan { "yes" } else { "no" },
         ],
         None,
     )?;

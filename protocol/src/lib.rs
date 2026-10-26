@@ -822,6 +822,8 @@ pub enum Request {
     SettingsMonitorBrightness(MonitorBrightnessRequest),
     #[serde(rename = "settings.wifi_networks")]
     SettingsWifiNetworks,
+    #[serde(rename = "settings.wifi_scan")]
+    SettingsWifiScan,
     #[serde(rename = "settings.wifi_profiles")]
     SettingsWifiProfiles,
     #[serde(rename = "settings.wifi_config")]
@@ -1150,6 +1152,7 @@ impl Request {
             | Request::SettingsDisplayDecide(_)
             | Request::SettingsMonitorBrightness(_)
             | Request::SettingsWifiNetworks
+            | Request::SettingsWifiScan
             | Request::SettingsWifiProfiles
             | Request::SettingsWifiConfig(_)
             | Request::SettingsWifiConfigSet(_)

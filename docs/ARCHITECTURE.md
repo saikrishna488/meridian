@@ -166,8 +166,9 @@ activate that window.
 | Feature | Current implementation |
 |---|---|
 | Wi-Fi toggle | NetworkManager through D-Bus |
-| Wi-Fi discovery/join | `nmcli`; passwords supplied on stdin |
-| Bluetooth | BlueZ through D-Bus, with a temporary pairing agent |
+| Wi-Fi status/discovery/join | NetworkManager and `nmcli`; page load reads cached state, explicit New connection triggers a rescan, passwords are supplied on stdin |
+| Bluetooth | BlueZ through D-Bus; paired devices load without discovery, Pair new device starts a temporary scan and pairing uses a temporary agent |
+| Bluetooth audio codecs | PipeWire/WirePlumber negotiates codecs supported by the device and installed system components; Settings documents tradeoffs but does not force codec selection |
 | Volume | WirePlumber's `wpctl`, with rapid slider updates coalesced |
 | Built-in backlight | sysfs discovery and logind brightness control |
 | Monitor layout | Wayland output-management test/apply |

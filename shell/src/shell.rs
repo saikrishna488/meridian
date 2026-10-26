@@ -907,6 +907,7 @@ impl Shell {
             | Request::SettingsDisplayDecide(_)
             | Request::SettingsMonitorBrightness(_)
             | Request::SettingsWifiNetworks
+            | Request::SettingsWifiScan
             | Request::SettingsWifiProfiles
             | Request::SettingsWifiConfig(_)
             | Request::SettingsWifiConfigSet(_)

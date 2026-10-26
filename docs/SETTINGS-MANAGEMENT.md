@@ -5,6 +5,23 @@ PTY terminal and its scrollback UI described in older development notes are
 not part of the current UI bundle; terminal behavior and shortcuts are provided
 by Kitty.
 
+## Wi-Fi and Bluetooth
+
+The Wi-Fi page loads the active connection and saved NetworkManager profiles
+when opened. Nearby access points are listed only after **New connection** is
+selected; the shell requests an explicit NetworkManager rescan at that point.
+Bluetooth loads paired and connected BlueZ devices immediately and starts
+temporary discovery only after **Pair new device** is selected. Discovery ends
+after the scan completes. Both pages offer a separate scan-again action after
+the first search.
+
+The Bluetooth page documents the A2DP codec families provided by PipeWire's
+BlueZ monitor: SBC, SBC-XQ, AAC, aptX and its HD/LL variants, FastStream,
+LDAC, LC3, LC3plus H3 and the Opus 0.5 profiles. The quality, latency and
+range notes are common tradeoffs, not per-device measurements. The actual codec
+is negotiated by PipeWire and depends on the connected device, installed codec
+support and radio conditions; Meridian does not force a codec from this page.
+
 Settings includes three additional categories:
 
 - **Device Manager** groups hardware by category, with properties and relevant
