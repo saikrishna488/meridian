@@ -13,7 +13,8 @@ import type { BluetoothDevice } from "../../lib/generated/BluetoothDevice";
 import type { WifiNetwork } from "../../lib/generated/WifiNetwork";
 import type { WifiProfile } from "../../lib/generated/WifiProfile";
 import type { WifiConfig } from "../../lib/generated/WifiConfig";
-import type { BluetoothAudioMode, BluetoothAudioState } from "../../lib/generated/BluetoothAudioState";
+import type { BluetoothAudioMode } from "../../lib/generated/BluetoothAudioMode";
+import type { BluetoothAudioState } from "../../lib/generated/BluetoothAudioState";
 
 function deviceIcon(device: BluetoothDevice): IconName {
   if (device.icon?.includes("audio")) return "sound";
