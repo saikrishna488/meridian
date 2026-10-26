@@ -1,7 +1,13 @@
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
 //! PipeWire device discovery and WirePlumber defaults, with bounded commands.
-use meridian_protocol::{AudioAction, AudioDevice, AudioState, ErrorBody, ErrorCode};
+use meridian_protocol::{
+    AudioAction, AudioDevice, AudioState, BluetoothAudioMode, BluetoothAudioQuality, BluetoothAudioState, ErrorBody,
+    ErrorCode,
+};
 use serde_json::Value;
-use std::time::Duration;
+use std::{fs::OpenOptions, io::Write, os::unix::fs::OpenOptionsExt, path::PathBuf, time::Duration};
 fn error(message: impl std::fmt::Display) -> ErrorBody {
     ErrorBody::new(ErrorCode::Failed, message.to_string())
 }
@@ -135,6 +141,73 @@ pub fn action(choice: AudioAction) -> Result<AudioState, ErrorBody> {
         _ => unreachable!(),
     }
     list()
+}
+
+fn bluetooth_quality_config() -> PathBuf {
+    gtk::glib::user_config_dir().join("wireplumber/wireplumber.conf.d/90-meridian-bluetooth.conf")
+}
+
+fn active_bluetooth_codec() -> (Option<String>, Option<String>) {
+    let Ok(data) = run(&["pw-dump", "-N"]) else { return (None, None) };
+    let Ok(objects) = serde_json::from_str::<Vec<Value>>(&data) else { return (None, None) };
+    objects
+        .iter()
+        .filter(|o| o["type"] == "PipeWire:Interface:Node")
+        .filter_map(|o| {
+            let props = &o["info"]["props"];
+            if props["media.class"] != "Audio/Sink" {
+                return None;
+            }
+            Some((
+                props["api.bluez5.codec"].as_str()?.to_owned(),
+                props["node.description"].as_str().or_else(|| props["node.name"].as_str())?.to_owned(),
+            ))
+        })
+        .next()
+        .map(|(codec, name)| (Some(codec), Some(name)))
+        .unwrap_or((None, None))
+}
+
+pub fn bluetooth_audio() -> BluetoothAudioState {
+    let mode = std::fs::read_to_string(bluetooth_quality_config())
+        .ok()
+        .filter(|text| text.contains("bluez5.a2dp.ldac.quality = \"hq\""))
+        .map_or(BluetoothAudioMode::Auto, |_| BluetoothAudioMode::HighestQuality);
+    let (active_codec, active_device) = active_bluetooth_codec();
+    BluetoothAudioState { mode, active_codec, active_device }
+}
+
+pub fn set_bluetooth_audio(choice: BluetoothAudioQuality) -> Result<BluetoothAudioState, ErrorBody> {
+    let quality = match choice.mode {
+        BluetoothAudioMode::Auto => "auto",
+        BluetoothAudioMode::HighestQuality => "hq",
+    };
+    let path = bluetooth_quality_config();
+    let parent = path.parent().ok_or_else(|| error("WirePlumber configuration folder is unavailable"))?;
+    std::fs::create_dir_all(parent).map_err(error)?;
+    let temporary = path.with_extension(format!("conf.tmp-{}", std::process::id()));
+    let mut file = OpenOptions::new().write(true).create_new(true).mode(0o600).open(&temporary).map_err(error)?;
+    let config = format!(
+        "# Meridian Bluetooth audio preference. Managed by Meridian Settings.\n\
+         monitor.bluez.rules = [\n\
+           {{\n\
+             matches = [ {{ device.name = \"~bluez_card.*\" }} ]\n\
+             actions = {{ update-props = {{ bluez5.a2dp.ldac.quality = \"{quality}\" }} }}\n\
+           }}\n\
+         ]\n"
+    );
+    if let Err(e) = file.write_all(config.as_bytes()).and_then(|_| file.sync_all()) {
+        let _ = std::fs::remove_file(&temporary);
+        return Err(error(e));
+    }
+    std::fs::rename(&temporary, &path).map_err(error)?;
+    crate::settings_devices::run_timeout(
+        &["systemctl", "--user", "restart", "wireplumber.service"],
+        None,
+        Duration::from_secs(10),
+    )
+    .map_err(|_| error("Preference saved, but WirePlumber could not restart. Restart it from your user session to apply the change."))?;
+    Ok(bluetooth_audio())
 }
 #[cfg(test)]
 mod tests {

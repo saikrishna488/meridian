@@ -21,6 +21,10 @@ builds Meridian and the pinned PipeWire idle-inhibit helper. The installer
 checks that the release matches the source tree before changing the system.
 APT still supplies system runtime libraries and services.
 
+Run `dev-env.sh` and `compile_meridian.sh` as your regular user; `dev-env.sh`
+uses `sudo` for APT when needed. Only `install.sh` needs `sudo`. The build
+requires the PipeWire development package installed by `dev-env.sh`.
+
 Select **Meridian** from the existing login screen. To update, rebuild and run
 `sudo tools/install.sh` again, then sign out and back in. To remove Meridian:
 

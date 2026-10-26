@@ -23,8 +23,9 @@ extended-use qualification remain open. The project tracks those gaps in
   and system information. Wi-Fi and Bluetooth discovery starts only when you
   choose **New connection** or **Pair new device**; current and saved
   connections load when Settings opens. The Bluetooth page describes PipeWire
-  codec quality, latency and range tradeoffs. Meridian's own interface is
-  dark-only; Appearance lets you choose a system font.
+  codec quality, latency and range tradeoffs, choose Auto or Highest quality,
+  and view the active codec when reported by PipeWire. Meridian's own interface
+  is dark-only; Appearance lets you choose a system font.
 - Control Center for connectivity, volume, brightness, Do Not Disturb, lock,
   sleep, restart, shutdown, and sign out. Meridian provides its own compositor-
   enforced lock screen on every display.
@@ -84,6 +85,9 @@ tools/dev-env.sh
 tools/compile_meridian.sh
 sudo tools/install.sh
 ```
+
+Run the first two commands as your regular user. `dev-env.sh` uses `sudo` for
+APT if needed; only `install.sh` should be run with `sudo`.
 
 Select **Meridian** at the login screen. To update, rebuild and run
 `sudo tools/install.sh` again, then sign out and back in. Remove it with

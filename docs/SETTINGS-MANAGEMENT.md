@@ -31,10 +31,12 @@ the installed `meridian-lock` PAM service.
 
 The Bluetooth page documents the A2DP codec families provided by PipeWire's
 BlueZ monitor: SBC, SBC-XQ, AAC, aptX and its HD/LL variants, FastStream,
-LDAC, LC3, LC3plus H3 and the Opus 0.5 profiles. The quality, latency and
-range notes are common tradeoffs, not per-device measurements. The actual codec
-is negotiated by PipeWire and depends on the connected device, installed codec
-support and radio conditions; Meridian does not force a codec from this page.
+LDAC, LC3, LC3plus H3 and the Opus 0.5 profiles. It reports the active codec
+when PipeWire exposes it, and provides Auto and Highest quality preferences.
+Highest quality requests LDAC's high-quality bitrate; it requires a compatible
+headset and installed codec support, and may stutter at range. Auto retains
+adaptive LDAC quality. The codec list's quality, latency and range notes are
+common tradeoffs, not per-device measurements.
 
 Settings includes three additional categories:
 

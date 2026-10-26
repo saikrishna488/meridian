@@ -173,7 +173,7 @@ activate that window.
 | Wi-Fi toggle | NetworkManager through D-Bus |
 | Wi-Fi status/discovery/join | NetworkManager and `nmcli`; page load reads cached state, explicit New connection triggers a rescan, passwords are supplied on stdin |
 | Bluetooth | BlueZ through D-Bus; paired devices load without discovery, Pair new device starts a temporary scan and pairing uses a temporary agent |
-| Bluetooth audio codecs | PipeWire/WirePlumber negotiates codecs supported by the device and installed system components; Settings documents tradeoffs but does not force codec selection |
+| Bluetooth audio codecs | PipeWire/WirePlumber negotiates codecs supported by the device and installed system components; Settings shows the active codec and can request LDAC high-quality mode or adaptive mode |
 | Media idle inhibition | `tools/compile_meridian.sh` builds the pinned `wayland-pipewire-idle-inhibit` helper and `tools/install.sh` installs it; it holds the Wayland idle inhibitor during PipeWire playback while `swayidle` keeps normal lock and standby timers |
 | Volume | WirePlumber's `wpctl`, with rapid slider updates coalesced |
 | Built-in backlight | sysfs discovery and logind brightness control |

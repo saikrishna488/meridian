@@ -919,6 +919,8 @@ impl Shell {
             | Request::SettingsBluetoothDevices
             | Request::SettingsBluetoothScan
             | Request::SettingsBluetoothAction(_)
+            | Request::SettingsBluetoothAudio
+            | Request::SettingsBluetoothAudioSet(_)
             | Request::SettingsUsers
             | Request::SettingsUserCreate(_)
             | Request::SettingsUserAction(_)

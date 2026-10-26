@@ -107,6 +107,14 @@ impl Shell {
                     proto::reply_ok(&()).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
                 })))
             }
+            Request::SettingsBluetoothAudio => {
+                let state = crate::audio_devices::bluetooth_audio();
+                serialize(proto::reply_ok(&state))
+            }
+            Request::SettingsBluetoothAudioSet(choice) => Ok(Reply::Later(Box::pin(async move {
+                let state = crate::files::blocking(move || crate::audio_devices::set_bluetooth_audio(choice)).await?;
+                proto::reply_ok(&state).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
             Request::SettingsUsers => Ok(Reply::Later(Box::pin(async move {
                 let users = crate::users::list().await?;
                 proto::reply_ok(&users).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))

@@ -115,6 +115,8 @@ interface ResultMap {
   "settings.bluetooth_devices": import("./generated/BluetoothDevice").BluetoothDevice[];
   "settings.bluetooth_scan": null;
   "settings.bluetooth_action": null;
+  "settings.bluetooth_audio": import("./generated/BluetoothAudioState").BluetoothAudioState;
+  "settings.bluetooth_audio_set": import("./generated/BluetoothAudioState").BluetoothAudioState;
   "settings.system_info": import("./generated/SystemInfo").SystemInfo;
   "settings.startup": import("./generated/StartupEntry").StartupEntry[];
   "settings.startup_set": import("./generated/StartupEntry").StartupEntry[];

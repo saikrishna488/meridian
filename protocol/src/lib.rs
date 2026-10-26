@@ -432,6 +432,26 @@ pub struct BluetoothAction {
     pub path: String,
     pub action: String,
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "kebab-case")]
+#[ts(export)]
+pub enum BluetoothAudioMode {
+    Auto,
+    HighestQuality,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct BluetoothAudioState {
+    pub mode: BluetoothAudioMode,
+    pub active_codec: Option<String>,
+    pub active_device: Option<String>,
+}
+#[derive(Debug, Clone, PartialEq, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct BluetoothAudioQuality {
+    pub mode: BluetoothAudioMode,
+}
 /// The kinds of UI surfaces the shell hosts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[serde(rename_all = "kebab-case")]
@@ -843,6 +863,10 @@ pub enum Request {
     SettingsBluetoothScan,
     #[serde(rename = "settings.bluetooth_action")]
     SettingsBluetoothAction(BluetoothAction),
+    #[serde(rename = "settings.bluetooth_audio")]
+    SettingsBluetoothAudio,
+    #[serde(rename = "settings.bluetooth_audio_set")]
+    SettingsBluetoothAudioSet(BluetoothAudioQuality),
     /// Current settings state.
     #[serde(rename = "settings.get")]
     SettingsGet,
@@ -1164,6 +1188,8 @@ impl Request {
             | Request::SettingsBluetoothDevices
             | Request::SettingsBluetoothScan
             | Request::SettingsBluetoothAction(_)
+            | Request::SettingsBluetoothAudio
+            | Request::SettingsBluetoothAudioSet(_)
             | Request::SettingsGet
             | Request::SettingsSetWifi(_)
             | Request::SettingsSetBluetooth(_)
