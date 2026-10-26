@@ -51,6 +51,8 @@ pkg="$stage/package"
 share="$pkg/usr/local/share/meridian"
 
 install -d "$pkg/DEBIAN" "$pkg/usr/local/bin" "$pkg/usr/share/wayland-sessions" "$pkg/usr/local/share/themes/Meridian"
+install -Dm644 "$ROOT/session/meridian-lock.pam" "$pkg/etc/pam.d/meridian-lock"
+printf '%s\n' /etc/pam.d/meridian-lock > "$pkg/DEBIAN/conffiles"
 install -Dm755 "$ROOT/target/release/meridian-shell" "$pkg/usr/local/bin/meridian-shell"
 install -Dm755 "$ROOT/target/release/meridian-greeter" "$pkg/usr/local/bin/meridian-greeter"
 sed "s|@SHARE_DIR@|/usr/local/share/meridian|" "$ROOT/session/meridian-session" > "$pkg/usr/local/bin/meridian-session"

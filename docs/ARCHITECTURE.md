@@ -49,7 +49,9 @@ daily-use qualification; see [Phase 1](PHASE1.md) and [Phase 3](PHASE3.md).
   applications; the older embedded Finder and terminal interfaces are not in
   the production UI bundle.
 - **Session actions:** lock, sleep, restart, shutdown, and sign out. Automatic
-  lock and display standby use `swayidle`, `swaylock`, and `wlopm`.
+  locking uses Meridian's native session-lock surface; `swayidle` and `wlopm`
+  handle the inactivity and display-standby timers. PipeWire media playback
+  inhibits those timers.
 
 System sharing is not implemented. Some settings and device actions depend on
 the services and hardware present on the host.
@@ -66,8 +68,8 @@ windows to survive a shell crash while labwc remains running.
 The compositor provides window placement, focus, Alt+Tab, output composition,
 and XWayland support. Meridian uses layer-shell for desktop surfaces,
 foreign-toplevel management for the window list/activation, and output
-management for display configuration. `swaylock` owns session locking and PAM
-authentication.
+management for display configuration. Meridian owns the lock surface and
+authenticates through its `meridian-lock` PAM service.
 
 labwc is the supplied configuration. Other compositors need the corresponding
 protocols; layer-shell support alone does not guarantee full functionality.
@@ -87,7 +89,7 @@ potentially blocking work is also dispatched to worker threads.
 | Topbar | Meridian menu, focused app menu with Quit, system controls and clock | Top-anchored full-width top layer, reserves 32 logical pixels |
 | Applications / Options / DesktopMenu / Notifications | Launcher, Control Center, menus, notification history | Overlay layer |
 | Preferences / Pulse | Settings and Meridian's system monitor | Ordinary GTK windows |
-| Locker | Legacy, unused custom password prompt | Not launched; `swaylock` handles locking |
+| Locker | Custom Meridian password prompt with clock and current wallpaper | Compositor-enforced `ext-session-lock-v1` surface on every monitor |
 | Greeter | Login screen in a separate executable | Overlay in the greeter session |
 
 Panel uses `surfaces/panel`; its 88-pixel surface includes space for the floating dock shadow. Topbar uses `surfaces/topbar`. The launcher opens above the dock; Meridian and application menus, Control Center, and notifications open below the top bar. Quit requests graceful closure through the compositor, allowing applications to prompt for unsaved work.
@@ -169,6 +171,7 @@ activate that window.
 | Wi-Fi status/discovery/join | NetworkManager and `nmcli`; page load reads cached state, explicit New connection triggers a rescan, passwords are supplied on stdin |
 | Bluetooth | BlueZ through D-Bus; paired devices load without discovery, Pair new device starts a temporary scan and pairing uses a temporary agent |
 | Bluetooth audio codecs | PipeWire/WirePlumber negotiates codecs supported by the device and installed system components; Settings documents tradeoffs but does not force codec selection |
+| Media idle inhibition | `wayland-pipewire-idle-inhibit` holds the Wayland idle inhibitor while PipeWire media playback is active; `swayidle` keeps the normal lock and standby timers |
 | Volume | WirePlumber's `wpctl`, with rapid slider updates coalesced |
 | Built-in backlight | sysfs discovery and logind brightness control |
 | Monitor layout | Wayland output-management test/apply |
@@ -176,9 +179,9 @@ activate that window.
 | Notification history | `org.freedesktop.Notifications`; in-memory session history, no toast service |
 | Local accounts | AccountsService and PolicyKit-mediated administrative actions |
 | Printers and storage | CUPS controls, UDisks actions, GNOME Disks for partition/filesystem work |
-| Idle lock and display standby | `swayidle`, `swaylock`, and `wlopm` |
+| Idle lock and display standby | `swayidle` calls Meridian's `lock-session` action; `wlopm` powers down outputs after lock |
 | Suspend/sign out/restart/shutdown | systemd-logind |
-| Lock authentication | PAM through `swaylock` |
+| Lock authentication | Meridian's native lock UI verifies the current account through PAM (`/etc/pam.d/meridian-lock`) |
 | Login | Separate `meridian-greeter` communicating with greetd |
 | App removal | Exact Flatpak ref, Snap name, or dpkg-owned desktop entry; privileged removals use `pkexec` |
 
@@ -226,8 +229,8 @@ by the owning services or authentication helpers.
   deliberately allow the desktop's scoped file operations.
 - App launches resolve installed catalog IDs. The terminal shortcut launches
   the installed Kitty terminal application.
-- `swaylock` provides the lock surface and PAM authentication outside Meridian's
-  UI process.
+- Lock screens are owned by Meridian through `ext-session-lock-v1`; lock
+  authentication is handled by the shell's PAM worker, not a separate locker.
 
 These are implementation boundaries, not a claim that the prototype has
 completed a security audit.
@@ -282,8 +285,8 @@ Desktop file drops use GIO moves without overwrite and preserve source files on 
 See [Phase 1](PHASE1.md) for current recovery behavior, capability audit, transfer
 failure semantics, CI smoke tests and mandatory hardware/endurance release gates.
 The session supervisor restarts only the shell; labwc remains independent.
-Discarded surfaces explicitly destroy their GTK windows. Locking is delegated
-to swaylock. File transfers stage data before no-overwrite publication;
+Discarded surfaces explicitly destroy their GTK windows. Meridian creates its
+own compositor-enforced lock surface on each monitor. File transfers stage data before no-overwrite publication;
 cross-device held sources have explicit recovery manifests.
 
 

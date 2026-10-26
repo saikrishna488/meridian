@@ -16,6 +16,10 @@ for agent in /usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1 /usr
 done
 
 # The idle client is scoped to this compositor and exits when it disconnects.
+# Keep the session awake while PipeWire is carrying active media playback.
+if command -v wayland-pipewire-idle-inhibit >/dev/null 2>&1; then
+    wayland-pipewire-idle-inhibit &
+fi
 sh "$(dirname -- "$0")/idle" &
 
 # Launch XDG login applications once per compositor session. Nested development

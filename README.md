@@ -23,7 +23,10 @@ extended-use qualification remain open. The project tracks those gaps in
   codec quality, latency and range tradeoffs. Meridian's own interface is
   dark-only; Appearance lets you choose a system font.
 - Control Center for connectivity, volume, brightness, Do Not Disturb, lock,
-  sleep, restart, shutdown, and sign out.
+  sleep, restart, shutdown, and sign out. Meridian provides its own compositor-
+  enforced lock screen on every display.
+- Automatic screen locking respects active PipeWire media playback, so audio
+  from a video does not trigger an idle lock or display standby.
 - Applications management with reviewed uninstall plans for supported Debian,
   Flatpak, and Snap packages. Privileged removals can request authentication.
 - Notification history and Pulse system monitoring. Meridian's Calendar and

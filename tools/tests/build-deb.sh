@@ -16,7 +16,7 @@ printf '[Desktop Entry]\nExec=meridian-session\n' > "$ROOT/session/meridian.desk
 for file in Cargo.lock rustfmt.toml LICENSE ui/package.json ui/package-lock.json ui/tsconfig.json \
     ui/dist/main.js ui/dist/main.js.map ui/dist/surfaces/panel/index.html \
     target/release/meridian-shell target/release/meridian-greeter session/shell-supervisor \
-    session/labwc/autostart session/greeter/labwc/rc.xml assets/themes/Meridian/openbox-3/themerc; do
+    session/labwc/autostart session/meridian-lock.pam session/greeter/labwc/rc.xml assets/themes/Meridian/openbox-3/themerc; do
     printf 'fixture\n' > "$ROOT/$file"
 done
 release_manifest > "$ROOT/target/release/meridian-build.sha256"
@@ -45,6 +45,7 @@ share="$fixture/unpacked/usr/local/share/meridian"
 [ -x "$share/shell-supervisor" ]
 [ -f "$share/greeter/labwc/rc.xml" ]
 [ -f "$share/labwc/autostart" ]
+[ -f "$fixture/unpacked/etc/pam.d/meridian-lock" ]
 [ -f "$share/ui/main.js" ]
 [ ! -e "$share/ui/main.js.map" ]
 [ -f "$fixture/unpacked/usr/local/share/themes/Meridian/LICENSE" ]

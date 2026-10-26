@@ -996,23 +996,27 @@ impl Shell {
     /// surfaces. Closing the Options menu first avoids resuming into a
     /// dropdown that has nothing left open behind it.
     fn lock_session(&self) -> Result<(), ErrorBody> {
-        let child = std::process::Command::new("swaylock")
-            .args(["--daemonize", "--color", "000000"])
-            .spawn()
-            .map_err(|e| ErrorBody::new(ErrorCode::Unavailable, format!("Could not start swaylock: {e}")))?;
-        std::thread::spawn(move || {
-            let mut child = child;
-            let _ = child.wait();
-        });
+        if self.locker.is_locked() {
+            return Ok(());
+        }
         for popover in POPOVERS {
             self.dismiss_popover(popover);
+        }
+        if !self.locker.lock() {
+            return Err(ErrorBody::new(ErrorCode::Unavailable, "Meridian could not lock the session."));
         }
         Ok(())
     }
 
     async fn lock_session_confirmed(&self) -> Result<(), ErrorBody> {
         self.lock_session()?;
-        Ok(())
+        for _ in 0..30 {
+            if self.locker.is_locked() {
+                return Ok(());
+            }
+            glib::timeout_future(Duration::from_millis(100)).await;
+        }
+        Err(ErrorBody::new(ErrorCode::Unavailable, "Meridian could not confirm the session lock."))
     }
 
     fn accepts_unlock(&self, surface: &Rc<WebSurface>) -> bool {

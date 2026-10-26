@@ -37,9 +37,9 @@ The labwc autostart starts `swayidle`, with these defaults:
 | Inactivity | Action |
 | --- | --- |
 | 5 minutes | Lock the session |
-| 5 minutes, 30 seconds | Confirm the lock, then put all displays in standby |
+| 5 minutes, 30 seconds | Put all displays in standby after requesting the lock |
 | Input after standby | Restore display power; the password is still required |
-| Before system sleep | Request and wait for the native lock |
+| Before system sleep | Request the native lock |
 | After system resume | Restore display power |
 
 `wlopm` changes display power without disabling outputs or rearranging windows,
@@ -49,24 +49,25 @@ following [labwc's integration guidance](https://labwc.github.io/integration.htm
 External suspend ultimately follows logind's inhibitor policy and time limits.
 The explicit Meridian Sleep action refuses to proceed without a confirmed lock.
 
-The lock helper waits for the boolean state exported by the `lock-session`
-GApplication action. Only the compositor's locked signal sets it to true. A failed
-lock, unavailable shell, or timeout prevents the idle display-off command.
+The lock helper asks the running Meridian shell to create its native session-lock
+surface through the `lock-session` GApplication action. The explicit Sleep
+control waits for compositor confirmation before suspending.
 
-The runtime package list now includes `swayidle` and `wlopm`. Existing installations
-need a rebuilt release, installation, and a new login session to run the idle
-manager. There is no power timeout editor yet; defaults live in
-`session/labwc/idle`. Browser previews cannot exercise hardware power management.
+The runtime package list now includes `swayidle`, `wlopm`, and
+`wayland-pipewire-idle-inhibit`. Existing installations need a rebuilt release,
+installation, and a new login session to run the media inhibitor. Power & Lock
+settings save automatic-lock and standby delays for the next sign-in; defaults
+live in `session/labwc/idle`. Browser previews cannot exercise hardware power
+management.
 
 ## Verification
 
 - UI build, type checking, and interaction tests cover list-view navigation,
   saved view preference, power confirmation, error recovery, and icon fallback.
 - Protocol tests verify session controls are restricted to desktop controls.
-- `bash tools/tests/power.sh` checks the swaylock hand-off, lock refusal when
-  swaylock is missing or fails, standby/wake commands, and lock-before-blank
-  behavior with isolated command fixtures (a swaylock mock stands in for the
-  real lock screen, so the developer's session is never locked).
+- `bash tools/tests/power.sh` checks the Meridian lock action hand-off, lock
+  refusal when `gapplication` is missing or fails, standby/wake commands, and
+  lock-before-blank behavior with isolated command fixtures.
 - Rust workspace tests, formatting, and shell Clippy checks validate native changes.
 - Visual previews use the actual WebKit engine with deterministic sample data.
   Physical standby, PAM unlock, and suspend/resume need verification in the

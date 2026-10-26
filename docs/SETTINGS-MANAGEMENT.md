@@ -15,6 +15,14 @@ temporary discovery only after **Pair new device** is selected. Discovery ends
 after the scan completes. Both pages offer a separate scan-again action after
 the first search.
 
+Automatic locking and display standby are inhibited while PipeWire media audio
+is actively playing. The session starts `wayland-pipewire-idle-inhibit` beside
+`swayidle`; ordinary inactivity timers resume when playback stops. Silent video
+or media routed outside PipeWire cannot be detected by this audio-based helper.
+Manual, idle and pre-suspend locks all open Meridian's own compositor-enforced
+lock surface on each display; the current user's password is checked through
+the installed `meridian-lock` PAM service.
+
 The Bluetooth page documents the A2DP codec families provided by PipeWire's
 BlueZ monitor: SBC, SBC-XQ, AAC, aptX and its HD/LL variants, FastStream,
 LDAC, LC3, LC3plus H3 and the Opus 0.5 profiles. The quality, latency and

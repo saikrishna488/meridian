@@ -5,7 +5,8 @@ Status: accepted with implementation changes.
 > Current implementation: session actions are in the Meridian menu and Control
 > Center. DesktopMenu and Options hold the Session capability. Restart and Shut Down
 > are also available. Sleep waits for compositor-confirmed locking. The installed
-> session uses swayidle and wlopm for automatic locking and display standby. The lock/PAM design below remains relevant; descriptions
+> session uses Meridian's own `ext-session-lock-v1` surface, plus swayidle and
+> wlopm for automatic locking and display standby. The lock/PAM design below remains relevant; descriptions
 > of the original Options rows are historical. See [current architecture](../ARCHITECTURE.md).
 
 ## Context

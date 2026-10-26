@@ -96,9 +96,8 @@ install_files() {
     sed "s|^Exec=.*|Exec=$PREFIX/bin/meridian-session|" "$ROOT/session/meridian.desktop" > "$SESSION_FILE"
     chmod 644 "$SESSION_FILE"
 
-    # Remove the legacy custom locker's PAM service; swaylock uses its own
-    # package-provided PAM configuration.
-    rm -f /etc/pam.d/meridian-lock
+    # The custom Meridian lock surface authenticates through this PAM service.
+    install -Dm644 "$ROOT/session/meridian-lock.pam" /etc/pam.d/meridian-lock
 
     if command -v restorecon >/dev/null; then
         restorecon -R "$PREFIX/bin/meridian-"* "$SHARE" "$SESSION_FILE"

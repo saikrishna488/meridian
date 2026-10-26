@@ -1,5 +1,5 @@
 #!/bin/sh
-# swaylock owns session locking and PAM authentication.
+# Ask the running Meridian shell to lock through ext-session-lock-v1.
 set -eu
-command -v swaylock >/dev/null 2>&1 || { echo 'Meridian: swaylock is required to lock the session.' >&2; exit 1; }
-exec swaylock --daemonize --color 000000
+command -v gapplication >/dev/null 2>&1 || { echo 'Meridian: GLib application actions are unavailable.' >&2; exit 1; }
+exec gapplication action org.meridian.Shell lock-session
