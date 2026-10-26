@@ -5,12 +5,26 @@ Failed to create stream fd: Operation not permitted
 # Build optimized binaries and the UI bundle for Debian and source installation.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
+if [ "$(id -u)" = 0 ]; then
+    echo "error: compile as your regular user, without sudo (sudo is used only to install a missing build package)." >&2
+    exit 1
+fi
 ensure_toolchain "$0" "$@"
 source "$ROOT/tools/release-manifest.sh"
-if ! pkg-config --atleast-version=0.3 libpipewire-0.3; then
-    echo "error: PipeWire development files are missing (libpipewire-0.3.pc)." >&2
-    echo "Install build dependencies with tools/dev-env.sh, or install libpipewire-0.3-dev, then retry." >&2
-    exit 1
+if ! command -v pkg-config >/dev/null 2>&1 || ! pkg-config --atleast-version=0.3 libpipewire-0.3; then
+    echo "==> Installing the missing PipeWire build dependency"
+    source "$ROOT/tools/debian.sh"
+    require_debian
+    command -v sudo >/dev/null 2>&1 || {
+        echo "error: sudo is required to install pkg-config and libpipewire-0.3-dev." >&2
+        exit 1
+    }
+    sudo apt-get update
+    sudo apt-get install -y --no-install-recommends pkg-config libpipewire-0.3-dev
+    pkg-config --atleast-version=0.3 libpipewire-0.3 || {
+        echo "error: libpipewire-0.3-dev did not provide the required PipeWire development files." >&2
+        exit 1
+    }
 fi
 rm -f "$ROOT/target/release/meridian-build.sha256"
 sources_before="$(release_source_manifest)"
