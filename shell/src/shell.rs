@@ -488,7 +488,7 @@ impl Shell {
                     match item.target.as_str() {
                         "meridian-settings.desktop" => self.open_preferences(),
                         "meridian-finder.desktop" => self.open_finder(),
-                        "meridian-terminal.desktop" => self.open_terminal(),
+                        "meridian-terminal.desktop" => self.open_meridian_terminal(),
                         "meridian-calendar.desktop" => self
                             .catalog
                             .borrow()
@@ -880,7 +880,7 @@ impl Shell {
                     return serialize(ok());
                 }
                 if a.item_id == "meridian-terminal.desktop" {
-                    self.open_terminal();
+                    self.open_meridian_terminal();
                     return serialize(ok());
                 }
                 if a.item_id == "meridian-finder.desktop" {
