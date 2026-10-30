@@ -1,7 +1,6 @@
 # Meridian
 
-Meridian is a Linux desktop session for Debian testing and compatible
-derivatives. It combines the labwc Wayland compositor with a Rust/GTK shell and
+Meridian is a Linux desktop session for modern Debian, Fedora, and Arch Linux systems. It combines the labwc Wayland compositor with a Rust/GTK shell and
 a React interface rendered by WebKitGTK.
 
 **Project status:** installable prototype, not yet ready to be a user's sole
@@ -56,12 +55,12 @@ captured in a working desktop session.
 
 The current checkout needs Rust 1.92 or newer, GTK 4.18 or newer, WebKitGTK
 2.52 or newer, gtk4-layer-shell 1.2 or newer, and Node.js 22.22.2 or newer.
-Development and CI target Debian testing; Debian derivatives need matching
+Debian testing remains the CI baseline; Fedora, Arch, and derivatives need matching
 versions. The development setup script installs the required host packages.
 
 ## Try it in a development session
 
-On Debian testing with the required GTK, WebKitGTK, labwc, Rust, and Node
+On a supported distribution with the required GTK, WebKitGTK, labwc, Rust, and Node
 versions:
 
 ```sh
@@ -73,7 +72,7 @@ This runs Meridian in a nested compositor window. To try the login screen with
 a fake greeter, use `tools/dev-greeter.sh`; its test password is `meridian`.
 For development checks, run `tools/check.sh`.
 
-## Install on Debian
+## Install on Linux
 
 Build and install from a source checkout:
 
@@ -84,7 +83,12 @@ sudo tools/install.sh
 ```
 
 Run the first two commands as your regular user. `dev-env.sh` uses `sudo` for
-APT if needed; only `install.sh` should be run with `sudo`.
+the distribution package manager if needed; only `install.sh` should be run with `sudo`.
+
+Setup selects APT, DNF, or pacman from `/etc/os-release`. Arch setup performs
+a full system upgrade. Fedora codecs come from its configured repositories and
+may support fewer formats. New profiles have script tests; desktop and hardware
+qualification on Fedora and Arch remains pending. Systemd/logind is required.
 
 Select **Meridian** at the login screen. To update, rebuild and run
 `sudo tools/install.sh` again, then sign out and back in. Remove it with

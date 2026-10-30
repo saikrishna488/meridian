@@ -2,7 +2,7 @@
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Build on the Debian host; tools/dev-env.sh installs the native dependencies.
+# Build on the Linux host; tools/dev-env.sh installs the native dependencies.
 ensure_toolchain() {
     command -v cargo >/dev/null 2>&1 || {
         echo "error: no Rust toolchain found. Run tools/dev-env.sh first." >&2
@@ -15,5 +15,5 @@ build_all() {
     cargo build --manifest-path "$ROOT/Cargo.toml" -p meridian-shell "$@"
 }
 
-# Run the nested Wayland compositor on the Debian host.
+# Run the nested Wayland compositor on the Linux host.
 exec_compositor() { exec "$@"; }

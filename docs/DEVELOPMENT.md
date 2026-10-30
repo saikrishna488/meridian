@@ -2,15 +2,15 @@
 
 ## Environment
 
-Development targets Debian testing and compatible Debian derivatives. Run:
+Development setup supports Debian, Fedora, and Arch families. Debian testing remains the CI baseline. Run:
 
 ```sh
 tools/dev-env.sh
 ```
 
-This installs native APT packages on the host, using sudo when needed. It does not create a container or add repositories. The current Rust bindings require Rust >= 1.92, GTK >= 4.18, WebKitGTK >= 2.52, and gtk4-layer-shell >= 1.2. Node >= 22.22.2 is required by the UI test dependencies. Older Debian stable packages may be too old: use matching backports or a release providing these versions. The setup checks the native library versions after installation.
+This installs native distribution packages on the host, using sudo when needed. It does not create a container or add repositories. The current Rust bindings require Rust >= 1.92, GTK >= 4.18, WebKitGTK >= 2.52, and gtk4-layer-shell >= 1.2. Node >= 22.22.2 is required by the UI test dependencies. Older Debian stable packages may be too old: use matching backports or a release providing these versions. The setup checks the native library versions after installation.
 
-Build packages are listed in `tools/debian.sh`: Rust/Cargo/rustfmt/clippy, Node/npm, GTK4/WebKitGTK development libraries, gtk4-layer-shell, PAM, libclang, pkg-config and build-essential. Runtime packages include labwc, Xwayland, greetd, NetworkManager, BlueZ, WirePlumber, Inter and DDC utilities. PAM uses Debian’s common-auth/common-account stack.
+Build packages are listed in `tools/distro.sh` (with the Debian profile in `tools/debian.sh`): Rust/Cargo/rustfmt/clippy, Node/npm, GTK4/WebKitGTK development libraries, gtk4-layer-shell, PAM, libclang, pkg-config and build-essential. Runtime packages include labwc, Xwayland, greetd, NetworkManager, BlueZ, WirePlumber, Inter and DDC utilities. PAM uses the selected distribution’s authentication stack; see [installation](../tools/INSTALLER.md).
 
 Package references: [Debian gtk4-layer-shell](https://packages.debian.org/testing/libgtk4-layer-shell-dev), [Debian WebKitGTK](https://packages.debian.org/testing/libwebkitgtk-6.0-dev).
 

@@ -9,6 +9,7 @@ cd "$ROOT"
 step() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 
 step "release integrity"
+bash tools/tests/distro.sh
 bash tools/tests/release-manifest.sh
 bash tools/tests/screenshot.sh
 bash tools/tests/power.sh

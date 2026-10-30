@@ -319,7 +319,13 @@ pub fn action(choice: DeviceAction) -> Result<(), ErrorBody> {
             ])?;
         }
         ("printer", "pause" | "resume") => {
-            let program = if choice.action == "pause" { "/usr/sbin/cupsdisable" } else { "/usr/sbin/cupsenable" };
+            let name_of_program = if choice.action == "pause" { "cupsdisable" } else { "cupsenable" };
+            let program = ["/usr/sbin", "/usr/bin", "/sbin"]
+                .map(|dir| std::path::Path::new(dir).join(name_of_program))
+                .into_iter()
+                .find(|path| path.is_file())
+                .ok_or_else(|| error("Install the CUPS tools to manage printers."))?;
+            let program = program.to_str().ok_or_else(|| error("Invalid CUPS program path"))?;
             crate::settings_devices::run_timeout(&["pkexec", program, name], None, Duration::from_secs(60))?;
         }
         _ => return Err(error("Unsupported device action")),

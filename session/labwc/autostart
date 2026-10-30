@@ -7,7 +7,7 @@ fi
 
 # Supply graphical PolicyKit authentication for Settings and package operations.
 agent_started=0
-for agent in /usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1 /usr/libexec/polkit-gnome-authentication-agent-1; do
+for agent in /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1 /usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1 /usr/libexec/polkit-gnome-authentication-agent-1 /usr/libexec/polkit-mate-authentication-agent-1; do
     if [ -x "$agent" ]; then
         "$agent" &
         agent_started=1

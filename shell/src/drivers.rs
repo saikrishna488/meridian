@@ -91,7 +91,7 @@ pub fn change(choice: DriverAction) -> Result<(), ErrorBody> {
     if !choice.enabled && driver.users > 0 {
         return Err(error("Driver is in use. Close dependent applications or disconnect its devices first."));
     }
-    let modprobe = ["/usr/sbin/modprobe", "/sbin/modprobe"]
+    let modprobe = ["/usr/sbin/modprobe", "/sbin/modprobe", "/usr/bin/modprobe"]
         .into_iter()
         .find(|p| Path::new(p).exists())
         .ok_or_else(|| error("Install the kmod package to manage drivers."))?;

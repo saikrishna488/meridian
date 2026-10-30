@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build optimized binaries and the UI bundle for Debian and source installation.
+# Build optimized binaries and the UI bundle for source installation.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 if [ "$(id -u)" = 0 ]; then
@@ -10,16 +10,15 @@ ensure_toolchain "$0" "$@"
 source "$ROOT/tools/release-manifest.sh"
 if ! command -v pkg-config >/dev/null 2>&1 || ! pkg-config --atleast-version=0.3 libpipewire-0.3; then
     echo "==> Installing the missing PipeWire build dependency"
-    source "$ROOT/tools/debian.sh"
-    require_debian
+    source "$ROOT/tools/distro.sh"
+    meridian_load_packages
     command -v sudo >/dev/null 2>&1 || {
-        echo "error: sudo is required to install pkg-config and libpipewire-0.3-dev." >&2
+        echo "error: sudo is required to install the PipeWire build dependencies." >&2
         exit 1
     }
-    sudo apt-get update
-    sudo apt-get install -y --no-install-recommends pkg-config libpipewire-0.3-dev
+    meridian_install_packages sudo -- "${PIPEWIRE_BUILD_PACKAGES[@]}"
     pkg-config --atleast-version=0.3 libpipewire-0.3 || {
-        echo "error: libpipewire-0.3-dev did not provide the required PipeWire development files." >&2
+        echo "error: The installed packages did not provide the required PipeWire development files." >&2
         exit 1
     }
 fi

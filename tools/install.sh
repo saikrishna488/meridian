@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install Meridian on this machine (Debian). Run from the repository, as root:
+# Install Meridian on this Linux machine. Run from the repository, as root:
 #
 #   sudo tools/install.sh                   install, and add "Meridian" to the
 #                                           current login screen's session list
@@ -17,7 +17,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-source "$ROOT/tools/debian.sh"
+source "$ROOT/tools/distro.sh"
 source "$ROOT/tools/install-transaction.sh"
 source "$ROOT/tools/release-manifest.sh"
 PREFIX=/usr/local
@@ -28,8 +28,6 @@ GREETD_BACKUP=/etc/greetd/config.toml.before-meridian
 TRIAL_UNIT=meridian-login-trial
 # Save the actual display manager so switching to greetd can be reversed.
 PREVIOUS_DM_FILE=/etc/greetd/.meridian-previous-dm
-
-PACKAGES=("${RUNTIME_PACKAGES[@]}")
 
 die() { echo "error: $*" >&2; exit 1; }
 step() { printf '\033[1m==> %s\033[0m\n' "$*"; }
@@ -44,7 +42,8 @@ if [ "${1:-}" = --check-build ]; then
     exit 0
 fi
 [ "$(id -u)" = 0 ] || die "run as root: sudo $0 $*"
-require_debian
+meridian_load_packages
+PACKAGES=("${RUNTIME_PACKAGES[@]}")
 
 greeter_command() {
     echo "labwc -C $SHARE/greeter/labwc -S $PREFIX/bin/meridian-greeter"
@@ -59,8 +58,7 @@ install_files() {
     done
 
     step "Installing runtime packages"
-    apt-get update
-    apt-get install -y --no-install-recommends "${PACKAGES[@]}"
+    meridian_install_packages -- "${PACKAGES[@]}"
     step "Enabling Flathub for GNOME Software"
     if ! flatpak remote-add --system --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo; then
         echo "warning: Flathub could not be configured. Add it later from GNOME Software or with flatpak remote-add." >&2
@@ -94,14 +92,16 @@ install_files() {
     chmod -R a+rX "$SHARE" "$PREFIX/share/themes/Meridian"
 
     step "Adding the Meridian session to the login screen"
+    install -d "$(dirname "$SESSION_FILE")"
     sed "s|^Exec=.*|Exec=$PREFIX/bin/meridian-session|" "$ROOT/session/meridian.desktop" > "$SESSION_FILE"
     chmod 644 "$SESSION_FILE"
 
     # The custom Meridian lock surface authenticates through this PAM service.
-    install -Dm644 "$ROOT/session/meridian-lock.pam" /etc/pam.d/meridian-lock
+    meridian_write_lock_pam > /etc/pam.d/meridian-lock
+    chmod 644 /etc/pam.d/meridian-lock
 
     if command -v restorecon >/dev/null; then
-        restorecon -R "$PREFIX/bin/meridian-"* "$PREFIX/bin/wayland-pipewire-idle-inhibit" "$SHARE" "$SESSION_FILE"
+        restorecon -R "$PREFIX/bin/meridian-"* "$PREFIX/bin/wayland-pipewire-idle-inhibit" "$SHARE" "$SESSION_FILE" /etc/pam.d/meridian-lock
     fi
     meridian_transaction_commit
     echo "Installed. \"Meridian\" now appears in the login screen's session list."
@@ -109,7 +109,12 @@ install_files() {
 }
 
 write_greetd_config() {
-    local vt="$1" path="$2" switch="${3:-true}"
+    local vt="$1" path="$2" switch="${3:-true}" greeter_user
+    if id _greetd >/dev/null 2>&1; then greeter_user=_greetd
+    elif id greeter >/dev/null 2>&1; then greeter_user=greeter
+    elif id greetd >/dev/null 2>&1; then greeter_user=greetd
+    else die "greetd service account is missing; check the greetd package installation"; fi
+    install -d "$(dirname "$path")"
     cat > "$path" <<EOF
 # Written by Meridian's tools/install.sh.
 [terminal]
@@ -118,7 +123,7 @@ switch = $switch
 
 [default_session]
 command = "$(greeter_command)"
-user = "_greetd"
+user = "$greeter_user"
 EOF
 }
 
@@ -135,7 +140,7 @@ try_login_screen() {
     systemctl stop "$TRIAL_UNIT" 2>/dev/null || true
     step "Starting Meridian's login screen on VT 7"
     systemd-run --unit="$TRIAL_UNIT" --description="Meridian login screen (trial)" \
-        /usr/sbin/greetd --config "$config"
+        "$(command -v greetd || die "greetd is missing")" --config "$config"
     cat <<EOF
 The trial login screen is running on virtual terminal 7.
   - Switch to it:      Ctrl+Alt+F7 (logging in there starts a second session)
