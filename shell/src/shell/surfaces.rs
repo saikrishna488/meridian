@@ -37,11 +37,22 @@ impl Shell {
     }
 
     pub(super) fn open_finder(&self) {
-        if let Err(error) = crate::files::open_directory(&gtk::glib::home_dir().to_string_lossy()) {
-            log::warn!("Could not open GNOME Files: {}", error.message);
+        if self.state.borrow().finder.is_none() {
+            let surface = WebSurface::new(&self.app, &self.env, SurfaceKind::Finder, None, self.dispatcher());
+            self.state.borrow_mut().finder = Some(surface);
+        }
+        if let Some(surface) = &self.state.borrow().finder {
+            surface.window.present();
         }
         for popover in POPOVERS {
             self.hide_popover(popover);
+        }
+    }
+
+    pub(super) fn open_finder_at(&self, path: &str) {
+        self.open_finder();
+        if let Some(surface) = &self.state.borrow().finder {
+            surface.send(&Event::FinderLocation(proto::FilePath { path: path.to_owned() }));
         }
     }
 
