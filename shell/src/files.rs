@@ -34,6 +34,28 @@ fn valid_name(name: &str) -> Result<(), ErrorBody> {
     }
     Ok(())
 }
+/// Network filesystems already mounted by the user's session or system.
+/// Show only accessible local mount points, never remote URI credentials.
+fn network_locations() -> Vec<FileLocation> {
+    let mut found = std::collections::BTreeSet::new();
+    let mut locations = Vec::new();
+    if let Ok(mounts) = std::fs::read_to_string("/proc/mounts") {
+        for line in mounts.lines() {
+            let columns: Vec<_> = line.split_whitespace().collect();
+            let (Some(source), Some(target), Some(kind)) = (columns.first(), columns.get(1), columns.get(2)) else { continue };
+            if !matches!(*kind, "cifs" | "nfs" | "nfs4" | "sshfs" | "fuse.sshfs" | "davfs" | "fuse.gvfsd-fuse") {
+                continue;
+            }
+            let target = target.replace("\\040", " ").replace("\\011", "\t").replace("\\134", "\\");
+            let path = PathBuf::from(&target);
+            if !path.is_dir() || !found.insert(target.clone()) { continue; }
+            let source = source.split('@').next_back().unwrap_or(source);
+            locations.push(FileLocation { name: format!("Network · {source}"), path: target });
+        }
+    }
+    locations
+}
+
 pub fn locations() -> Vec<FileLocation> {
     let mut result = vec![FileLocation { name: "Home".into(), path: glib::home_dir().to_string_lossy().into_owned() }];
     for (name, directory) in [
@@ -49,6 +71,7 @@ pub fn locations() -> Vec<FileLocation> {
         }
     }
     result.push(FileLocation { name: "Computer".into(), path: "/".into() });
+    result.extend(network_locations());
     if let Ok(mounts) = std::fs::read_dir(format!("/media/{}", glib::user_name().to_string_lossy())) {
         for entry in mounts.flatten().filter(|e| e.path().is_dir()) {
             result.push(FileLocation {
