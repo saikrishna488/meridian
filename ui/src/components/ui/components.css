@@ -19,3 +19,7 @@
 
 /* This legacy dialog already spaces its header, details and footer. */
 .ui-dialog.properties-dialog { padding: 0; }
+
+/* Interactive Glisse buttons use the hand cursor unless disabled. */
+.ui-button:not(:disabled) { cursor: pointer; }
+.ui-button:disabled { cursor: default; }
