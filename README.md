@@ -15,7 +15,7 @@ extended-use qualification remain open. The project tracks those gaps in
   application launcher, a reorderable dock, a top bar, window switching, and
   common window controls.
 - Settings for Wi-Fi, Bluetooth, displays, sound, startup apps, installed apps,
-  local users, devices, power and screen locking, search providers, wallpaper,
+  local users, storage, power and screen locking, search providers, wallpaper,
   and system information. Wi-Fi and Bluetooth discovery starts only when you
   choose **New connection** or **Pair new device**; current and saved
   connections load when Settings opens. The Bluetooth page describes PipeWire

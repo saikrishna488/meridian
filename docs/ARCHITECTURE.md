@@ -178,7 +178,7 @@ activate that window.
 | Sound | PipeWire/WirePlumber tools, including a temporary virtual output when supported |
 | Notification history | `org.freedesktop.Notifications`; in-memory session history, no toast service |
 | Local accounts | AccountsService and PolicyKit-mediated administrative actions |
-| Printers and storage | CUPS controls, UDisks actions, GNOME Disks for partition/filesystem work |
+| Storage | Dedicated page; lsblk topology, root filesystem usage, GIO open and safe UDisks2 mount/unmount/eject |
 | Idle lock and display standby | `swayidle` calls Meridian's `lock-session` action; `wlopm` powers down outputs after lock |
 | Suspend/sign out/restart/shutdown | systemd-logind |
 | Lock authentication | Meridian's native lock UI verifies the current account through PAM (`/etc/pam.d/meridian-lock`) |
@@ -186,8 +186,8 @@ activate that window.
 | App removal | Exact Flatpak ref, Snap name, or dpkg-owned desktop entry; privileged removals use `pkexec` |
 
 Monitor changes revert after 15 seconds unless kept. Accepted layouts are saved
-for later sessions. External monitor brightness currently directs users to the
-monitor's hardware controls; DDC/CI control is not implemented.
+for later sessions. External monitor brightness is exposed only when a supported DDC/CI monitor
+responds through ddcutil. See [Settings integration details](SETTINGS-INTEGRATION-OVERHAUL.md).
 
 Some operations live in `shell/src/settings_devices.rs` and
 `shell/src/bluetooth_agent.rs`, rather than the services crate.

@@ -19,6 +19,9 @@ import type { WindowInfo } from "./generated/WindowInfo";
 
 /** Result type of each request method. Keep in sync with `shell/src/bridge.rs`. */
 interface ResultMap {
+  "settings.capability": import("./generated/SystemCapability").SystemCapability;
+  "settings.storage": import("./generated/StorageState").StorageState;
+  "settings.storage_action": null;
   "notifications.do_not_disturb": import("./generated/NotificationState").NotificationState;
   "settings.primary_display": PrimaryDisplayState;
   "settings.primary_display_set": PrimaryDisplayState;
@@ -28,6 +31,7 @@ interface ResultMap {
   "shell.hello": SurfaceInfo;
   "desktop.font_set": import("./generated/DesktopState").DesktopState;
   "desktop.appearance_set": import("./generated/DesktopState").DesktopState;
+  "desktop.hover_background_set": import("./generated/DesktopState").DesktopState;
   "desktop.dock_style_set": import("./generated/DesktopState").DesktopState;
   "desktop.get": import("./generated/DesktopState").DesktopState;
   "desktop.wallpaper_set": import("./generated/DesktopState").DesktopState;
@@ -238,7 +242,11 @@ export function hello(): Promise<SurfaceInfo> {
 
 /** Resolve after the next rendered frame (refresh-rate independent). */
 export function nextFrame(): Promise<number> {
-  return new Promise((resolve) => requestAnimationFrame(resolve));
+  return new Promise(resolve => {
+    let frame = 0;
+    const timer = setTimeout(() => { cancelAnimationFrame(frame); resolve(performance.now()); }, 100);
+    frame = requestAnimationFrame(time => { clearTimeout(timer); resolve(time); });
+  });
 }
 
 /** Read a CSS `<time>` custom property (e.g. `--dur-med`) in milliseconds. */

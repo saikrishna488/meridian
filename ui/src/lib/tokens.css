@@ -159,3 +159,11 @@
   --tile-bg-active: var(--selection);
   --tile-fg-active: #fff;
 }
+
+/* One persisted hover preference across Meridian surfaces; text remains white. */
+:root[data-hover-background="green"] { --surface-hover: rgb(52 199 89 / .2); }
+:root[data-hover-background="blue"] { --surface-hover: rgb(0 145 255 / .22); }
+:root[data-hover-background="grey"] { --surface-hover: rgb(255 255 255 / .12); }
+@media (forced-colors: active) {
+  :root[data-hover-background] { --surface-hover: Highlight; }
+}

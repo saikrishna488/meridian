@@ -64,24 +64,39 @@ fn rss() -> String {
 }
 
 // A persistent virtual pointer exercises compositor hit testing, not DOM-generated hover.
-struct TestPointer { child: std::process::Child, output: std::io::BufReader<std::process::ChildStdout> }
+struct TestPointer {
+    child: std::process::Child,
+    output: std::io::BufReader<std::process::ChildStdout>,
+}
 impl TestPointer {
     fn new(connector: &str, width: i32, height: i32) -> Self {
         use std::io::BufRead;
         let mut child = std::process::Command::new(std::env::var("MERIDIAN_TEST_POINTER").unwrap())
             .args([connector, &width.to_string(), &height.to_string()])
-            .stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).spawn().unwrap();
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
         let mut output = std::io::BufReader::new(child.stdout.take().unwrap());
-        let mut line = String::new(); output.read_line(&mut line).unwrap(); assert_eq!(line.trim(), "ready");
+        let mut line = String::new();
+        output.read_line(&mut line).unwrap();
+        assert_eq!(line.trim(), "ready");
         Self { child, output }
     }
     fn send(&mut self, command: &str) {
         use std::io::{BufRead, Write};
         writeln!(self.child.stdin.as_mut().unwrap(), "{command}").unwrap();
-        let mut line = String::new(); self.output.read_line(&mut line).unwrap(); assert_eq!(line.trim(), "ok");
+        let mut line = String::new();
+        self.output.read_line(&mut line).unwrap();
+        assert_eq!(line.trim(), "ok");
     }
 }
-impl Drop for TestPointer { fn drop(&mut self) { let _ = self.child.kill(); let _ = self.child.wait(); } }
+impl Drop for TestPointer {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
 
 fn validate_dock(shell: &Rc<Shell>, preferences: &Rc<WebSurface>) {
     let panel = shell.state.borrow().panel.clone().unwrap();
@@ -89,28 +104,55 @@ fn validate_dock(shell: &Rc<Shell>, preferences: &Rc<WebSurface>) {
     let connector = monitor.connector().unwrap().to_string();
     let geometry = monitor.geometry();
     let mut pointer = TestPointer::new(&connector, geometry.width(), geometry.height());
+    wait_until("dock first native buffer", || {
+        panel.window.surface().is_some_and(|s| s.display().monitor_at_surface(&s).is_some())
+    });
     let surface = panel.window.surface().unwrap();
     assert_eq!(surface.height(), crate::surface::PANEL_HEIGHT + crate::surface::PANEL_ANIMATION_OVERFLOW);
     let capture = std::env::var_os("MERIDIAN_DOCK_CAPTURES").map(std::path::PathBuf::from);
-    if let Some(dir) = &capture { std::fs::create_dir_all(dir).unwrap(); }
+    if let Some(dir) = &capture {
+        std::fs::create_dir_all(dir).unwrap();
+    }
     let wallpaper = shell.state.borrow().wallpapers.iter().find(|(m, _)| m == &monitor).unwrap().1.clone();
-    eval(&wallpaper, "window.__dockPointerPassedThrough = false; window.addEventListener('pointermove', () => window.__dockPointerPassedThrough = true); 'ready'");
+    eval(
+        &wallpaper,
+        "window.__dockPointerPassedThrough = false; window.addEventListener('pointermove', () => window.__dockPointerPassedThrough = true, {once:true}); 'ready'",
+    );
     pointer.send(&format!("move {} {}", geometry.width() / 2, geometry.height() - 150));
-    wait_until("transparent panel input passes through", || eval(&wallpaper, "window.__dockPointerPassedThrough") == "true");
+    wait_until("transparent panel input passes through", || {
+        eval(&wallpaper, "window.__dockPointerPassedThrough") == "true"
+    });
     for style in ["floating", "full-width", "minimal"] {
         let raw = serde_json::json!({"method":"desktop.dock_style_set", "params":{"id":style}}).to_string();
         assert_eq!(bridge_request(preferences, &raw)["ok"], true);
         wait_until("dock appearance", || eval(&panel, &format!("!!document.querySelector('.dock-{style}')")) == "true");
-        for (edge, selector) in [("left", ".dock-items li:first-child button"), ("right", ".dock-items li:last-child button")] {
-            let coords = eval(&panel, &format!("JSON.stringify((() => {{ const b=document.querySelector({selector:?}).getBoundingClientRect(); return [b.x+b.width/2,b.y+b.height/2,innerHeight]; }})())"));
+        for (edge, selector) in
+            [("left", ".dock-items li:first-child button"), ("right", ".dock-items li:last-child button")]
+        {
+            let coords = eval(
+                &panel,
+                &format!(
+                    "JSON.stringify((() => {{ const b=document.querySelector({selector:?}).getBoundingClientRect(); return [b.x+b.width/2,b.y+b.height/2,innerHeight]; }})())"
+                ),
+            );
             let coords: Vec<f64> = serde_json::from_str(&coords).unwrap();
             let x = coords[0].round() as i32;
             let y = geometry.height() - coords[2].round() as i32 + coords[1].round() as i32;
             pointer.send(&format!("move {x} {y}"));
-            wait_until("real pointer dock hover", || eval(&panel, &format!("document.querySelector({selector:?}).parentElement.classList.contains('dock-hovered')")) == "true");
+            wait_until("real pointer dock hover", || {
+                eval(
+                    &panel,
+                    &format!("document.querySelector({selector:?}).parentElement.classList.contains('dock-hovered')"),
+                ) == "true"
+            });
             wait_until("dock tooltip", || eval(&panel, "!!document.querySelector('.dock-preview')") == "true");
             glib::MainContext::default().block_on(glib::timeout_future(Duration::from_millis(250)));
-            let fits = eval(&panel, &format!("(() => {{ const i=document.querySelector({selector:?}).querySelector('.dock-icon').getBoundingClientRect(), l=document.querySelector('.windows').getBoundingClientRect(), p=document.querySelector('.dock-preview').getBoundingClientRect(); return i.top>=l.top-1 && i.left>=l.left-1 && i.right<=l.right+1 && i.bottom<=l.bottom+1 && p.top>=0 && p.left>=0 && p.right<=innerWidth && p.bottom<=innerHeight; }})()"));
+            let fits = eval(
+                &panel,
+                &format!(
+                    "(() => {{ const i=document.querySelector({selector:?}).querySelector('.dock-icon').getBoundingClientRect(), l=document.querySelector('.windows').getBoundingClientRect(), p=document.querySelector('.dock-preview').getBoundingClientRect(); return i.top>=l.top-1 && i.left>=l.left-1 && i.right<=l.right+1 && i.bottom<=l.bottom+1 && p.top>=0 && p.left>=0 && p.right<=innerWidth && p.bottom<=innerHeight; }})()"
+                ),
+            );
             assert_eq!(fits, "true", "{style} {edge}: animated icon or tooltip exceeds its clipping boundary");
             if let Some(dir) = &capture {
                 let path = dir.join(format!("{style}-{edge}.png"));
@@ -123,11 +165,29 @@ fn validate_dock(shell: &Rc<Shell>, preferences: &Rc<WebSurface>) {
                 pointer.send("button 273 0");
                 wait_until("dock context menu", || {
                     let menu = shell.state.borrow().popovers.get(&Popover::DesktopMenu).cloned();
-                    menu.is_some_and(|menu| menu.is_ready() && eval(&menu, "!!document.querySelector('.dock-item-menu:not(.hidden)')") == "true")
+                    menu.is_some_and(|menu| {
+                        menu.is_ready()
+                            && eval(&menu, "!!document.querySelector('.dock-item-menu:not(.hidden)')") == "true"
+                    })
                 });
                 let menu = shell.state.borrow().popovers[&Popover::DesktopMenu].clone();
-                assert_eq!(eval(&menu, "(() => { const r=document.querySelector('.dock-item-menu').getBoundingClientRect(); return r.left>=0 && r.right<=innerWidth && Math.abs(innerHeight-r.bottom-8)<2; })()"), "true");
-                if let Some(dir) = &capture { assert!(std::process::Command::new("grim").args(["-o", &connector]).arg(dir.join("context-menu.png")).status().unwrap().success()); }
+                assert_eq!(
+                    eval(
+                        &menu,
+                        "(() => { const r=document.querySelector('.dock-item-menu').getBoundingClientRect(); return r.left>=0 && r.right<=innerWidth && Math.abs(innerHeight-r.bottom-8)<2; })()"
+                    ),
+                    "true"
+                );
+                if let Some(dir) = &capture {
+                    assert!(
+                        std::process::Command::new("grim")
+                            .args(["-o", &connector])
+                            .arg(dir.join("context-menu.png"))
+                            .status()
+                            .unwrap()
+                            .success()
+                    );
+                }
                 shell.hide_popover(Popover::DesktopMenu);
                 wait_until("context menu closed", || !menu.window.is_visible());
             }
@@ -136,30 +196,215 @@ fn validate_dock(shell: &Rc<Shell>, preferences: &Rc<WebSurface>) {
             wait_until("dock tooltip dismisses", || eval(&panel, "!document.querySelector('.dock-preview')") == "true");
         }
     }
-    assert_eq!(bridge_request(preferences, r#"{"method":"desktop.dock_style_set","params":{"id":"floating"}}"#)["ok"], true);
+    assert_eq!(
+        bridge_request(preferences, r#"{"method":"desktop.dock_style_set","params":{"id":"floating"}}"#)["ok"],
+        true
+    );
     wait_until("floating dock restored", || eval(&panel, "!!document.querySelector('.dock-floating')") == "true");
     // Exercise scroll overflow with many independent application groups. The
     // compositor pointer still drives the rendered first and last buttons.
-    panel.send(&Event::WindowsChanged((0..35).map(|id| proto::WindowInfo {
-        id: 1000 + id, name: format!("Overflow {id}"), title: format!("Window {id}"), active: false,
-    }).collect()));
-    wait_until("dock overflow", || eval(&panel, "document.querySelectorAll('.dock-items li').length >= 35 && document.querySelector('.windows').scrollWidth > document.querySelector('.windows').clientWidth") == "true");
-    for (edge, selector, scroll) in [("left", ".dock-items li:first-child button", "0"), ("right", ".dock-items li:last-child button", "el.scrollWidth")] {
+    panel.send(&Event::WindowsChanged(
+        (0..35)
+            .map(|id| proto::WindowInfo {
+                id: 1000 + id,
+                name: format!("Overflow {id}"),
+                title: format!("Window {id}"),
+                active: false,
+            })
+            .collect(),
+    ));
+    wait_until("dock overflow", || {
+        eval(
+            &panel,
+            "document.querySelectorAll('.dock-items li').length >= 35 && document.querySelector('.windows').scrollWidth > document.querySelector('.windows').clientWidth",
+        ) == "true"
+    });
+    for (edge, selector, scroll) in [
+        ("left", ".dock-items li:first-child button", "0"),
+        ("right", ".dock-items li:last-child button", "el.scrollWidth"),
+    ] {
         eval(&panel, &format!("(() => {{ const el=document.querySelector('.windows'); el.scrollLeft={scroll}; }})()"));
-        let coords = eval(&panel, &format!("JSON.stringify((() => {{ const b=document.querySelector({selector:?}).getBoundingClientRect(); return [b.x+b.width/2,b.y+b.height/2,innerHeight]; }})())"));
+        let coords = eval(
+            &panel,
+            &format!(
+                "JSON.stringify((() => {{ const b=document.querySelector({selector:?}).getBoundingClientRect(); return [b.x+b.width/2,b.y+b.height/2,innerHeight]; }})())"
+            ),
+        );
         let coords: Vec<f64> = serde_json::from_str(&coords).unwrap();
-        pointer.send(&format!("move {} {}", coords[0].round() as i32, geometry.height() - coords[2].round() as i32 + coords[1].round() as i32));
-        wait_until("overflow edge hover", || eval(&panel, &format!("document.querySelector({selector:?}).parentElement.classList.contains('dock-hovered')")) == "true");
+        pointer.send(&format!(
+            "move {} {}",
+            coords[0].round() as i32,
+            geometry.height() - coords[2].round() as i32 + coords[1].round() as i32
+        ));
+        wait_until("overflow edge hover", || {
+            eval(
+                &panel,
+                &format!("document.querySelector({selector:?}).parentElement.classList.contains('dock-hovered')"),
+            ) == "true"
+        });
         wait_until("overflow tooltip", || eval(&panel, "!!document.querySelector('.dock-preview')") == "true");
         glib::MainContext::default().block_on(glib::timeout_future(Duration::from_millis(250)));
-        assert_eq!(eval(&panel, &format!("(() => {{ const i=document.querySelector({selector:?}).querySelector('.dock-icon').getBoundingClientRect(), l=document.querySelector('.windows').getBoundingClientRect(), p=document.querySelector('.dock-preview').getBoundingClientRect(); return i.top>=l.top-1 && i.left>=l.left-1 && i.right<=l.right+1 && p.left>=0 && p.right<=innerWidth; }})()")), "true", "overflow {edge} icon or tooltip clipped");
+        assert_eq!(
+            eval(
+                &panel,
+                &format!(
+                    "(() => {{ const i=document.querySelector({selector:?}).querySelector('.dock-icon').getBoundingClientRect(), l=document.querySelector('.windows').getBoundingClientRect(), p=document.querySelector('.dock-preview').getBoundingClientRect(); return i.top>=l.top-1 && i.left>=l.left-1 && i.right<=l.right+1 && p.left>=0 && p.right<=innerWidth; }})()"
+                )
+            ),
+            "true",
+            "overflow {edge} icon or tooltip clipped"
+        );
         if let Some(dir) = &capture {
-            assert!(std::process::Command::new("grim").args(["-o", &connector]).arg(dir.join(format!("overflow-{edge}.png"))).status().unwrap().success());
+            assert!(
+                std::process::Command::new("grim")
+                    .args(["-o", &connector])
+                    .arg(dir.join(format!("overflow-{edge}.png")))
+                    .status()
+                    .unwrap()
+                    .success()
+            );
         }
         pointer.send("move 0 0");
-        wait_until("overflow hover exits", || eval(&panel, "!document.querySelector('.dock-hovered') && !document.querySelector('.dock-preview')") == "true");
+        wait_until("overflow hover exits", || {
+            eval(&panel, "!document.querySelector('.dock-hovered') && !document.querySelector('.dock-preview')")
+                == "true"
+        });
     }
     panel.send(&Event::WindowsChanged(shell.window_infos(&shell.windows.borrow().as_ref().unwrap().windows())));
+}
+
+fn profile_surface(name: &str) {
+    if std::env::var_os("MERIDIAN_PROFILE_SETTINGS").is_none() {
+        return;
+    }
+    let before = crate::bridge::request_counts();
+    let script = std::path::Path::new(&std::env::var("MERIDIAN_TEST_ROOT").unwrap()).join("tools/profile-desktop.py");
+    let pid = std::process::id().to_string();
+    let process = gio::Subprocess::newv(
+        &[
+            std::ffi::OsStr::new("python3"),
+            script.as_os_str(),
+            std::ffi::OsStr::new("--shell-pid"),
+            std::ffi::OsStr::new(&pid),
+            std::ffi::OsStr::new("--samples"),
+            std::ffi::OsStr::new(if name == "Bluetooth" { "20" } else { "5" }),
+        ],
+        gio::SubprocessFlags::STDOUT_PIPE,
+    )
+    .unwrap();
+    let (output, _) = glib::MainContext::default().block_on(process.communicate_utf8_future(None)).unwrap();
+    assert!(process.is_successful());
+    let samples: Vec<serde_json::Value> =
+        output.unwrap().lines().map(|line| serde_json::from_str(line).unwrap()).collect();
+    let requests: std::collections::BTreeMap<_, _> = crate::bridge::request_counts()
+        .into_iter()
+        .filter_map(|(method, count)| {
+            let delta = count - before.get(&method).copied().unwrap_or(0);
+            ((method.starts_with("Preferences/") || method.starts_with("Notifications/")) && delta > 0)
+                .then_some((method, delta))
+        })
+        .collect();
+    println!(
+        "settings_profile {}",
+        serde_json::json!({"surface":name,"samples":samples,"requests_during_sample":requests,"requests_total":crate::bridge::request_counts()})
+    );
+}
+
+// Focused Settings/Notifications qualification also runs on small logical outputs.
+fn settings_surfaces(shell: &Rc<Shell>) {
+    profile_surface("Baseline");
+    shell.open_preferences();
+    let preferences = shell.state.borrow().preferences.clone().unwrap();
+    preferences.window.maximize();
+    wait_until("Settings startup", || preferences.is_ready());
+    assert_eq!(eval(&preferences, "!!document.querySelector('nav [aria-label=\"Device Manager\"]')"), "false");
+    eval(&preferences, "document.querySelector('nav [aria-label=\"Storage\"]').click(); 'clicked'");
+    wait_until("Storage overview", || eval(&preferences, "!!document.querySelector('.storage-overview')") == "true");
+    profile_surface("Storage");
+    if std::env::var_os("MERIDIAN_PROFILE_SETTINGS").is_some() {
+        for (label, selector) in
+            [("Wi-Fi", ".wireless-page"), ("Bluetooth", ".wireless-page"), ("Displays", ".display-tile")]
+        {
+            eval(&preferences, &format!("document.querySelector('nav [aria-label=\"{label}\"]').click(); 'clicked'"));
+            wait_until("profile page loaded", || {
+                eval(
+                    &preferences,
+                    &format!(
+                        "!!document.querySelector('{selector}') && document.querySelector('.wireless-page')?.getAttribute('aria-busy') !== 'true'"
+                    ),
+                ) == "true"
+            });
+            profile_surface(label);
+        }
+    }
+    let capability =
+        bridge_request(&preferences, r#"{"method":"settings.capability","params":{"feature":"bluetooth"}}"#);
+    assert_eq!(capability["ok"], true);
+    assert_ne!(capability["result"]["state"], "ready", "fixture has no system bus");
+    preferences.window.set_visible(false);
+    let context = glib::MainContext::default();
+    let service = shell.notifications.borrow().clone().unwrap();
+    wait_until("notification bus name", || service.snapshot().available);
+    use glib::variant::ToVariant;
+    let arguments = (
+        "Meridian fixture",
+        0u32,
+        "",
+        "Scaling fixture",
+        "A long notification body. ".repeat(30),
+        vec!["open", "Open"],
+        std::collections::HashMap::<String, glib::Variant>::new(),
+        0i32,
+    )
+        .to_variant();
+    context.block_on(async {
+        let bus = gio::bus_get_future(gio::BusType::Session).await.unwrap();
+        bus.call_future(
+            Some("org.freedesktop.Notifications"),
+            "/org/freedesktop/Notifications",
+            "org.freedesktop.Notifications",
+            "Notify",
+            Some(&arguments),
+            None,
+            gio::DBusCallFlags::NONE,
+            10000,
+        )
+        .await
+        .unwrap();
+    });
+    shell.open_popover(Popover::Notifications);
+    let panel = shell.state.borrow().popovers[&Popover::Notifications].clone();
+    let waiting = Instant::now();
+    let mut diagnosed = false;
+    wait_until("notification panel visible", || {
+        if waiting.elapsed() > Duration::from_secs(5) && !diagnosed {
+            diagnosed = true;
+            println!(
+                "notification_fixture visible={} ready={} items={} dom={}",
+                panel.window.is_visible(),
+                panel.is_ready(),
+                service.snapshot().items.len(),
+                eval(
+                    &panel,
+                    "JSON.stringify({hidden:document.hidden,width:innerWidth,height:innerHeight,panel:document.querySelector('.notification-center')?.className,body:document.body.innerText})"
+                )
+            );
+        }
+        panel.is_ready()
+            && eval(&panel, "!!document.querySelector('.notification-center:not(.hidden) .notification')") == "true"
+    });
+    profile_surface("Notifications");
+    assert_eq!(bridge_request(&panel, r#"{"method":"notifications.get"}"#)["result"]["items"][0]["unread"], true);
+    assert_eq!(
+        eval(
+            &panel,
+            "(() => {const p=document.querySelector('.notification-center'),r=p.getBoundingClientRect(),s=getComputedStyle(p);return r.left>=0&&r.top>=0&&r.right<=innerWidth&&r.bottom<=innerHeight&&s.backgroundColor==='rgb(0, 0, 0)'&&s.backdropFilter==='none';})()"
+        ),
+        "true"
+    );
+    eval(&panel, "document.querySelector('.notification-actions button').click(); 'clicked'");
+    wait_until("notification action dismisses", || service.snapshot().items.is_empty());
+    shell.hide_popover(Popover::Notifications);
 }
 
 #[cfg_attr(test, test)]
@@ -175,6 +420,16 @@ pub(super) fn nested_wayland_smoke() {
         .build();
     app.register(gio::Cancellable::NONE).unwrap();
     let started = Instant::now();
+    if std::env::var_os("MERIDIAN_TEST_PRIMARY_RIGHT").is_some() {
+        let monitor = gdk::Display::default()
+            .unwrap()
+            .monitors()
+            .iter::<gdk::Monitor>()
+            .filter_map(Result::ok)
+            .max_by_key(|m| m.geometry().x())
+            .unwrap();
+        crate::desktop::set_primary_display(monitor.connector().map(|s| s.to_string())).unwrap();
+    }
     let shell = Shell::start(&app, crate::paths::roots().unwrap(), true);
     wait_until("critical surface startup", || {
         let state = shell.state.borrow();
@@ -182,6 +437,18 @@ pub(super) fn nested_wayland_smoke() {
             && state.topbar.as_ref().is_some_and(|surface| surface.is_ready())
             && state.popovers.values().all(|surface| surface.is_ready())
     });
+    wait_until("native wallpaper first buffer", || {
+        shell
+            .state
+            .borrow()
+            .wallpapers
+            .iter()
+            .all(|(_, w)| w.window.surface().is_some_and(|s| s.display().monitor_at_surface(&s).is_some()))
+    });
+    if std::env::var_os("MERIDIAN_SETTINGS_ONLY").is_some() {
+        settings_surfaces(&shell);
+        return;
+    }
     println!(
         "performance_cold critical_ready_ms={} windows={} tree={:?} shell={:?}",
         started.elapsed().as_millis(),
@@ -220,7 +487,11 @@ pub(super) fn nested_wayland_smoke() {
     let lost_panel = Rc::new(Cell::new(0));
     let count = lost_panel.clone();
     panel.view.connect_web_process_terminated(move |_, _| count.set(count.get() + 1));
-    for popover in if std::env::var_os("MERIDIAN_DOCK_ONLY").is_some() { &[][..] } else { &[Popover::Applications, Popover::Options][..] } {
+    for popover in if std::env::var_os("MERIDIAN_DOCK_ONLY").is_some() {
+        &[][..]
+    } else {
+        &[Popover::Applications, Popover::Options][..]
+    } {
         let popover = *popover;
         let response_started = Instant::now();
         shell.open_popover(popover);
@@ -315,6 +586,17 @@ pub(super) fn nested_wayland_smoke() {
     wait_until("window service reconnection", || shell.windows.borrow().is_some());
     assert!(shell.windows.borrow().as_ref().unwrap().windows().iter().all(|window| !previous_ids.contains(&window.id)));
     validate_dock(&shell, &preferences);
+    // Exercise the secondary output explicitly as well as the layout origin.
+    let mut monitors: Vec<_> = display.monitors().iter::<gdk::Monitor>().filter_map(Result::ok).collect();
+    monitors.sort_by_key(|m| m.geometry().x());
+    for monitor in monitors {
+        let connector = monitor.connector().unwrap().to_string();
+        let request =
+            serde_json::json!({"method":"settings.primary_display_set","params":{"connector":connector}}).to_string();
+        assert_eq!(bridge_request(&preferences, &request)["ok"], true);
+        wait_until("dock on selected monitor", || shell.state.borrow().panel.as_ref().is_some_and(|p| p.is_ready()));
+        validate_dock(&shell, &preferences);
+    }
     let unlocked_windows = app.windows().len();
     for _ in 0..3 {
         assert!(shell.locker.lock(), "disposable compositor must support session locking");
@@ -344,44 +626,129 @@ pub(super) fn nested_wayland_smoke() {
     // The production terminal is a separate Kitty Wayland client, not a WebSurface.
     let before_terminal: Vec<_> = shell.windows.borrow().as_ref().unwrap().windows().iter().map(|w| w.id).collect();
     shell.open_terminal();
-    wait_until("external Kitty window", || shell.windows.borrow().as_ref().unwrap().windows().iter().any(|w| {
-        !before_terminal.contains(&w.id) && w.app_id.to_lowercase().contains("kitty")
-    }));
-    let kitty = shell.windows.borrow().as_ref().unwrap().windows().into_iter()
-        .find(|w| !before_terminal.contains(&w.id) && w.app_id.to_lowercase().contains("kitty")).unwrap();
+    wait_until("external Kitty window", || {
+        shell
+            .windows
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .windows()
+            .iter()
+            .any(|w| !before_terminal.contains(&w.id) && w.app_id.to_lowercase().contains("kitty"))
+    });
+    let kitty = shell
+        .windows
+        .borrow()
+        .as_ref()
+        .unwrap()
+        .windows()
+        .into_iter()
+        .find(|w| !before_terminal.contains(&w.id) && w.app_id.to_lowercase().contains("kitty"))
+        .unwrap();
     assert!(shell.state.borrow().terminal.is_none());
     shell.open_terminal();
-    wait_until("second external Kitty window", || shell.windows.borrow().as_ref().unwrap().windows().iter()
-        .filter(|w| !before_terminal.contains(&w.id) && w.app_id.to_lowercase().contains("kitty")).count() >= 2);
-    let kitty_windows: Vec<_> = shell.windows.borrow().as_ref().unwrap().windows().into_iter()
-        .filter(|w| !before_terminal.contains(&w.id) && w.app_id.to_lowercase().contains("kitty")).collect();
+    wait_until("second external Kitty window", || {
+        shell
+            .windows
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .windows()
+            .iter()
+            .filter(|w| !before_terminal.contains(&w.id) && w.app_id.to_lowercase().contains("kitty"))
+            .count()
+            >= 2
+    });
+    let kitty_windows: Vec<_> = shell
+        .windows
+        .borrow()
+        .as_ref()
+        .unwrap()
+        .windows()
+        .into_iter()
+        .filter(|w| !before_terminal.contains(&w.id) && w.app_id.to_lowercase().contains("kitty"))
+        .collect();
     let names = shell.window_infos(&kitty_windows);
     let panel = shell.state.borrow().panel.clone().unwrap();
     let selector = format!("button[aria-label={}]", serde_json::to_string(&names[0].name).unwrap());
-    wait_until("grouped Kitty dock item", || eval(&panel, &format!("document.querySelector({selector:?})?.querySelector('.dock-window-count')?.textContent === '2'")) == "true");
+    wait_until("grouped Kitty dock item", || {
+        eval(
+            &panel,
+            &format!("document.querySelector({selector:?})?.querySelector('.dock-window-count')?.textContent === '2'"),
+        ) == "true"
+    });
     let monitor = shell.state.borrow().primary.clone().unwrap();
     let geometry = monitor.geometry();
     let connector = monitor.connector().unwrap().to_string();
     let mut pointer = TestPointer::new(&connector, geometry.width(), geometry.height());
-    let coords = eval(&panel, &format!("JSON.stringify((() => {{ const b=document.querySelector({selector:?}).getBoundingClientRect(); return [b.x+b.width/2,b.y+b.height/2,innerHeight]; }})())"));
+    let coords = eval(
+        &panel,
+        &format!(
+            "JSON.stringify((() => {{ const b=document.querySelector({selector:?}).getBoundingClientRect(); return [b.x+b.width/2,b.y+b.height/2,innerHeight]; }})())"
+        ),
+    );
     let coords: Vec<f64> = serde_json::from_str(&coords).unwrap();
-    pointer.send(&format!("move {} {}", coords[0].round() as i32, geometry.height() - coords[2].round() as i32 + coords[1].round() as i32));
-    wait_until("multiple window preview", || eval(&panel, "document.querySelectorAll('.dock-preview-window').length === 2") == "true");
-    assert_eq!(eval(&panel, "(() => { const r=document.querySelector('.dock-preview').getBoundingClientRect(); return r.left>=0 && r.right<=innerWidth && r.top>=0; })()"), "true");
+    pointer.send(&format!(
+        "move {} {}",
+        coords[0].round() as i32,
+        geometry.height() - coords[2].round() as i32 + coords[1].round() as i32
+    ));
+    wait_until("multiple window preview", || {
+        eval(&panel, "document.querySelectorAll('.dock-preview-window').length === 2") == "true"
+    });
+    assert_eq!(
+        eval(
+            &panel,
+            "(() => { const r=document.querySelector('.dock-preview').getBoundingClientRect(); return r.left>=0 && r.right<=innerWidth && r.top>=0; })()"
+        ),
+        "true"
+    );
     if let Some(dir) = std::env::var_os("MERIDIAN_DOCK_CAPTURES") {
-        assert!(std::process::Command::new("grim").args(["-o", &connector]).arg(std::path::Path::new(&dir).join("multiple-windows.png")).status().unwrap().success());
+        assert!(
+            std::process::Command::new("grim")
+                .args(["-o", &connector])
+                .arg(std::path::Path::new(&dir).join("multiple-windows.png"))
+                .status()
+                .unwrap()
+                .success()
+        );
     }
-    let preview_coords = eval(&panel, "JSON.stringify((() => { const b=document.querySelectorAll('.dock-preview-window')[1].getBoundingClientRect(); return [b.x+b.width/2,b.y+b.height/2,innerHeight]; })())");
+    let preview_coords = eval(
+        &panel,
+        "JSON.stringify((() => { const b=document.querySelectorAll('.dock-preview-window')[1].getBoundingClientRect(); return [b.x+b.width/2,b.y+b.height/2,innerHeight]; })())",
+    );
     let preview_coords: Vec<f64> = serde_json::from_str(&preview_coords).unwrap();
-    pointer.send(&format!("move {} {}", preview_coords[0].round() as i32, geometry.height() - preview_coords[2].round() as i32 + preview_coords[1].round() as i32));
-    wait_until("pointer enters window preview", || eval(&panel, "document.querySelectorAll('.dock-preview-window')[1]?.matches(':hover') === true") == "true");
-    pointer.send("button 272 1"); pointer.send("button 272 0");
-    wait_until("preview activates selected Kitty window", || shell.windows.borrow().as_ref().unwrap().windows().iter().any(|w| w.id == names[1].id && w.active));
+    pointer.send(&format!(
+        "move {} {}",
+        preview_coords[0].round() as i32,
+        geometry.height() - preview_coords[2].round() as i32 + preview_coords[1].round() as i32
+    ));
+    wait_until("pointer enters window preview", || {
+        eval(&panel, "document.querySelectorAll('.dock-preview-window')[1]?.matches(':hover') === true") == "true"
+    });
+    pointer.send("button 272 1");
+    pointer.send("button 272 0");
+    wait_until("preview activates selected Kitty window", || {
+        shell.windows.borrow().as_ref().unwrap().windows().iter().any(|w| w.id == names[1].id && w.active)
+    });
     pointer.send("move 0 0");
     drop(pointer);
     assert!(shell.windows.borrow().as_ref().unwrap().close(kitty.id));
-    for window in &kitty_windows { if window.id != kitty.id { assert!(shell.windows.borrow().as_ref().unwrap().close(window.id)); } }
-    wait_until("external Kitty closed", || !shell.windows.borrow().as_ref().unwrap().windows().iter().any(|w| kitty_windows.iter().any(|kitty| kitty.id == w.id)));
+    for window in &kitty_windows {
+        if window.id != kitty.id {
+            assert!(shell.windows.borrow().as_ref().unwrap().close(window.id));
+        }
+    }
+    wait_until("external Kitty closed", || {
+        !shell
+            .windows
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .windows()
+            .iter()
+            .any(|w| kitty_windows.iter().any(|kitty| kitty.id == w.id))
+    });
     shell.open_preferences();
     shell.state.borrow().preferences.as_ref().unwrap().window.set_visible(false);
     let topbar = shell.state.borrow().topbar.clone().unwrap();

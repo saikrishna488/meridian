@@ -649,7 +649,7 @@ test("top bar uses its logo and opens system notifications with unread state", a
 
 test("notification center receives app messages, invokes actions and dismisses", async t => {
   const item = { id: 4, app: "Mail", summary: "New message", body: "Hello", time: Date.now(), unread: true, actions: [["open", "Open"]] };
-  const ui = await surface(t, "notifications", r => r.method.startsWith("notifications.") ? { available: true, items: r.method === "notifications.read" ? [{ ...item, unread: false }] : [] } : defaults(r));
+  const ui = await surface(t, "notifications", r => r.method.startsWith("notifications.") ? { available: true, items: r.method === "notifications.get" ? [item] : [] } : defaults(r));
   await waitFor(() => ui.requests.some(r => r.method === "shell.hello"));
   ui.emit("popover.shown");
   await waitFor(() => ui.get(".notification h3"));
@@ -848,7 +848,7 @@ test("notification mutation replies cannot discard a newer incoming message", as
   const old = { id: 1, app: "Mail", summary: "Earlier message", body: "", time: Date.now() - 172800000, unread: false, actions: [] };
   const latest = { ...old, id: 2, summary: "New arrival", time: Date.now() };
   let finish;
-  const ui = await surface(t, "notifications", req => req.method === "notifications.read" ? { available: true, items: [old] } : req.method === "notifications.dismiss" ? new Promise(resolve => { finish = resolve; }) : defaults(req));
+  const ui = await surface(t, "notifications", req => req.method === "notifications.get" ? { available: true, items: [old] } : req.method === "notifications.dismiss" ? new Promise(resolve => { finish = resolve; }) : defaults(req));
   ui.emit("popover.shown");
   await waitFor(() => ui.get('[aria-label="Dismiss Earlier message"]'));
   ui.get('[aria-label="Dismiss Earlier message"]').click(); await waitFor(() => finish);
@@ -1013,6 +1013,8 @@ test("Settings persists launcher providers and opens typed settings search targe
   ui.emit('preferences.page', { page: 'search' });
   await waitFor(() => ui.get('[aria-label="Search calculator"]')?.disabled === false);
   await waitFor(() => ui.window.glisseSwitchReady(ui.get('[aria-label="Search calculator"]')));
+  // Glisse updates its controlled callback in a passive effect after loading.
+  await new Promise(resolve => ui.window.requestAnimationFrame(() => ui.window.requestAnimationFrame(resolve)));
   ui.get('[aria-label="Search calculator"]').click();
   await waitFor(() => ui.requests.some(req => req.method === 'settings.search_set'));
   assert.deepEqual(ui.requests.find(req => req.method === 'settings.search_set').params, { settings: true, calculator: true });
@@ -1048,14 +1050,15 @@ test("Control Center DND preserves newer events without reading notification his
   assert.equal(ui.requests.some(req => req.method === 'notifications.read'), false);
 });
 
-test("Notifications groups messages by app without a duplicate DND control", async t => {
+test("Notifications groups messages by app and preserves unread until explicitly marked", async t => {
   const item = { id: 1, app: 'Mail', summary: 'Message', body: '', time: Date.now(), unread: false, actions: [] };
-  const ui = await surface(t, 'notifications', req => req.method === 'notifications.read'
+  const ui = await surface(t, 'notifications', req => req.method === 'notifications.get'
     ? { available: true, do_not_disturb: false, items: [item] } : defaults(req));
   ui.emit('popover.shown'); await waitFor(() => ui.get('.notification'));
   ui.emit('notifications.changed', { available: true, do_not_disturb: true, items: [item, { ...item, id: 2, app: 'Calendar', summary: 'Meeting' }] });
   await waitFor(() => ui.window.document.querySelectorAll('.notification-group').length === 2);
-  assert.equal(ui.get('[aria-label="Do Not Disturb"]'), null);
+  assert.ok(ui.get('[aria-label="Do Not Disturb"]'));
+  assert.equal(ui.requests.some(r => r.method === 'notifications.read'), false);
   assert.ok(ui.get('.notification-list').textContent.includes('Meeting'));
 });
 
@@ -1129,4 +1132,52 @@ test("Calendar uses one date tab stop and moves focus across month boundaries", 
   assert.equal(ui.window.document.querySelectorAll('.month button[tabindex="0"]').length, 1);
   assert.equal(ui.get('.month button[aria-pressed="true"]').dataset.date, dateKey(next));
   assert.ok(!ui.requests.some(r => r.method === 'calendar.save'));
+});
+
+test("Notifications expands long messages and prevents duplicate action invocation", async t => {
+  const item = { id: 10, app: 'Mail', summary: 'Long message', body: 'A long body. '.repeat(60), time: Date.now(), unread: true, actions: [['open', 'Open']] };
+  let finish;
+  const ui = await surface(t, 'notifications', req => req.method === 'notifications.get'
+    ? { available: true, do_not_disturb: false, items: [item] }
+    : req.method === 'notifications.action' ? new Promise(resolve => { finish = resolve; }) : defaults(req));
+  ui.emit('popover.shown');
+  await waitFor(() => ui.get('.notification'));
+  assert.equal(ui.requests.some(r => r.method === 'notifications.read'), false);
+  const expand = ui.get('[aria-controls="notification-body-10"]'); expand.click();
+  await waitFor(() => expand.getAttribute('aria-expanded') === 'true');
+  const action = ui.get('.notification-actions button'); action.click(); action.click();
+  await waitFor(() => finish);
+  assert.equal(ui.requests.filter(r => r.method === 'notifications.action').length, 1);
+  finish({ available: true, do_not_disturb: false, items: [] });
+  await waitFor(() => ui.get('.notification-empty'));
+});
+
+test("shared hover preferences follow host events across Notification Center", async t => {
+  const ui = await surface(t, 'notifications', req => req.method === 'desktop.get' ? { ...desktop, hover_background: 'blue' } : defaults(req));
+  await waitFor(() => ui.window.document.documentElement.dataset.hoverBackground === 'blue');
+  ui.emit('desktop.changed', { ...desktop, hover_background: 'green' });
+  await waitFor(() => ui.window.document.documentElement.dataset.hoverBackground === 'green');
+  ui.emit('desktop.changed', { ...desktop, hover_background: 'auto' });
+  await waitFor(() => ui.window.document.documentElement.dataset.hoverBackground === 'auto');
+});
+
+test("failed display rollback retains the dialog and permits a safe retry", async t => {
+  const mode = { width: 1280, height: 720, refresh: 60000, preferred: true };
+  let attempts = 0;
+  const ui = await surface(t, 'settings', r => r.method === 'settings.displays'
+    ? [{ name: 'Virtual-1', description: 'Virtual display', enabled: true, x: 0, y: 0, scale: 1, transform: 0, current: mode, modes: [mode] }]
+    : r.method === 'settings.display_apply' ? { token: 'retry-trial', seconds: 15 }
+    : r.method === 'settings.display_decide' && ++attempts === 1 ? { error: { code: 'unavailable', message: 'Compositor disconnected. Retry Revert.' } } : defaults(r));
+  ui.get('nav [aria-label="Displays"]').click();
+  await waitFor(() => ui.get('#resolution'));
+  [...ui.window.document.querySelectorAll('button')].find(b => b.textContent === 'Apply changes').click();
+  await waitFor(() => ui.get('[aria-label="Keep display settings"]'));
+  const revert = () => [...ui.get('[aria-label="Keep display settings"]').querySelectorAll('button')].find(b => b.textContent === 'Revert');
+  revert().click();
+  await waitFor(() => ui.get('[role="alert"]')?.textContent.includes('Compositor disconnected'));
+  assert.ok(ui.get('[aria-label="Keep display settings"]'));
+  await waitFor(() => !revert().disabled);
+  revert().click();
+  await waitFor(() => !ui.get('[aria-label="Keep display settings"]'));
+  assert.equal(attempts, 2);
 });

@@ -26,7 +26,11 @@ cat > "$fixture/run" <<'RUN'
 #!/bin/sh
 export MERIDIAN_TEST_COMPOSITOR_PID="$PPID"
 if [ -n "${MERIDIAN_TEST_SCALE:-}" ]; then
-    "${MERIDIAN_TEST_WLR_RANDR:-wlr-randr}" --output HEADLESS-1 --scale "$MERIDIAN_TEST_SCALE" --output HEADLESS-2 --scale "$MERIDIAN_TEST_SCALE" || exit 1
+    if [ -n "${MERIDIAN_TEST_WLR_RANDR:-}" ]; then
+        "$MERIDIAN_TEST_WLR_RANDR" --output HEADLESS-1 --scale "$MERIDIAN_TEST_SCALE" --output HEADLESS-2 --scale "$MERIDIAN_TEST_SCALE" || exit 1
+    else
+        "$MERIDIAN_TEST_ROOT/target/debug/meridian-smoke" --scale "$MERIDIAN_TEST_SCALE" || exit 1
+    fi
 fi
 "$MERIDIAN_TEST_ROOT/target/debug/meridian-smoke"
 status=$?

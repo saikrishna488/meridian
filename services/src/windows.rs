@@ -227,6 +227,8 @@ impl Dispatch<ZwlrForeignToplevelManagerV1, ()> for State {
         match event {
             manager_v1::Event::Toplevel { toplevel } => {
                 static NEXT_ID: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(1);
+                // Retain the minimum-toolchain API; newer Rust renamed this method.
+                #[allow(deprecated)]
                 let Ok(id) = NEXT_ID.fetch_update(
                     std::sync::atomic::Ordering::Relaxed,
                     std::sync::atomic::Ordering::Relaxed,

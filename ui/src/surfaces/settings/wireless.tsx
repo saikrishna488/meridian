@@ -10,6 +10,7 @@ import { useSystemSettings } from "../../lib/settings";
 import type { BluetoothDevice } from "../../lib/generated/BluetoothDevice";
 import type { WifiNetwork } from "../../lib/generated/WifiNetwork";
 import type { WifiProfile } from "../../lib/generated/WifiProfile";
+import type { SystemCapability } from "../../lib/generated/SystemCapability";
 import type { WifiConfig } from "../../lib/generated/WifiConfig";
 
 function deviceIcon(device: BluetoothDevice): IconName {
@@ -38,56 +39,94 @@ export function Wireless({ kind }: { kind: "wifi" | "bluetooth" }) {
   const [configLoading, setConfigLoading] = useState(false);
   const [confirmation, setConfirmation] = useState<{ name: string; uuid?: string; device?: BluetoothDevice } | null>(null);
   const joinDialog = useRef<HTMLFormElement>(null), configDialog = useRef<HTMLFormElement>(null), forgetDialog = useRef<HTMLElement>(null);
-  const configRevision = useRef(0);
-  const name = kind === "wifi" ? "Wi-Fi" : "Bluetooth", value = settings[kind];
+  const configRevision = useRef(0), loadRevision = useRef(0), pending = useRef(false), alive = useRef(true);
+  const [capability, setCapability] = useState<SystemCapability | null>(null), [connectivity, setConnectivity] = useState("");
+  const [adapter, setAdapter] = useState("");
+  const [profileError, setProfileError] = useState("");
+  const name = kind === "wifi" ? "Wi-Fi" : "Bluetooth", value = capability?.state === "ready" ? true : capability?.state === "disabled" ? false : capability && ["hardware_unavailable", "service_unavailable", "unsupported"].includes(capability.state) ? null : settings[kind];
   function closeJoin() { setNetwork(null); setPassword(""); setShowPassword(false); }
   function closeConfig() { configRevision.current++; setProfile(null); setConfig(null); setConfigLoading(false); }
   useDialogFocus(joinDialog, !!network, () => { if (!busy) closeJoin(); });
   useDialogFocus(configDialog, !!profile && !confirmation, () => { if (!busy) closeConfig(); });
   useDialogFocus(forgetDialog, !!confirmation, () => { if (!busy) setConfirmation(null); });
 
-  async function load() {
+  const loadRequest = useRef<Promise<boolean | undefined> | null>(null);
+  function load() { return loadRequest.current ??= read().finally(() => { loadRequest.current = null; }); }
+  async function read() {
+    const revision = ++loadRevision.current;
+    const current = () => alive.current && revision === loadRevision.current;
+    const cap = await request({ method: "settings.capability", params: { feature: kind } });
+    if (!current()) return;
+    setCapability(cap);
+    if (cap?.adapters?.length) setAdapter(old => cap.adapters.some(a => a.path === old && a.enabled) ? old : cap.adapters.find(a => a.enabled)?.path ?? cap.adapters[0]!.path);
     if (kind === "wifi") {
       const results = await Promise.allSettled([
-        request({ method: "settings.wifi_networks" }).then(v => setNetworks(v ?? [])),
-        request({ method: "settings.wifi_profiles" }).then(v => setProfiles(v ?? [])),
+        request({ method: "settings.wifi_networks" }),
+        request({ method: "settings.wifi_profiles" }),
+        request({ method: "settings.capability", params: { feature: "network" } }),
       ]);
-      const failed = results.find(result => result.status === "rejected");
-      if (failed?.status === "rejected") throw failed.reason;
-    } else {
-      const found = await request({ method: "settings.bluetooth_devices" });
-      setDevices(found ?? []);
+      if (!current()) return;
+      const [net, saved, active] = results;
+      if (net.status === "fulfilled") { setNetworks(net.value ?? []); setError(""); }
+      else { setNetworks([]); setError(errorMessage(net.reason)); }
+      if (saved.status === "fulfilled") { setProfiles(saved.value ?? []); setProfileError(""); }
+      else setProfileError(`Saved networks: ${errorMessage(saved.reason)}`);
+      if (active.status === "fulfilled") setConnectivity(active.value?.message ?? "");
+      else setConnectivity("Network connectivity information is temporarily unavailable. Retry.");
+      return net.status === "fulfilled";
     }
+    if (cap && !["ready", "disabled"].includes(cap.state)) {
+      setDevices([]);
+      if (cap.state !== "hardware_unavailable") setError(cap.message);
+      return false;
+    }
+    const found = await request({ method: "settings.bluetooth_devices" });
+    if (current()) { setDevices(found ?? []); setError(""); }
+    return true;
   }
   useEffect(() => {
-    setDiscovered(false);
-    void load().catch(e => setError(errorMessage(e))).finally(() => setLoading(false));
-    return () => { configRevision.current++; };
+    alive.current = true; setDiscovered(false);
+    void load().catch(e => { if (alive.current) setError(errorMessage(e)); }).finally(() => { if (alive.current) setLoading(false); });
+    return () => { alive.current = false; loadRevision.current++; configRevision.current++; };
   }, [kind]);
   useEffect(() => {
     if (kind !== "bluetooth") return;
-    const refresh = () => { if (!document.hidden) void load().catch(() => {}); };
-    const timer = window.setInterval(refresh, 4000);
-    return () => window.clearInterval(timer);
+    let stopped = false, timer: ReturnType<typeof setTimeout>, failures = 0;
+    const refresh = async () => {
+      if (!document.hidden && !pending.current) {
+        try { const success = await load(); failures = success === false ? failures + 1 : 0; }
+        catch (e) { failures++; if (alive.current) setError(errorMessage(e)); }
+      }
+      if (!stopped) timer = setTimeout(() => void refresh(), Math.min(60000, 15000 * (1 + failures)));
+    };
+    timer = setTimeout(() => void refresh(), 15000);
+    return () => { stopped = true; clearTimeout(timer); };
   }, [kind]);
 
   async function perform(message: string, action: () => Promise<void>) {
-    if (busy || loading) return;
-    setBusy(true); setOperation(message); setError(""); setNotice("");
-    try { await action(); }
-    catch (e) { setError(errorMessage(e)); }
-    finally { setBusy(false); setOperation(""); }
+    if (pending.current || loading) return;
+    pending.current = true; setBusy(true); setOperation(message); setError(""); setNotice("");
+    try { if (loadRequest.current) await loadRequest.current; if (!alive.current) return; await action(); }
+    catch (e) { if (alive.current) setError(errorMessage(e)); }
+    finally { pending.current = false; if (alive.current) { setBusy(false); setOperation(""); } }
   }
   async function toggle(enabled: boolean) {
     await perform(`${enabled ? "Turning on" : "Turning off"} ${name}…`, async () => {
-      await request({ method: kind === "wifi" ? "settings.set_wifi" : "settings.set_bluetooth", params: { enabled } });
+      if (kind === "bluetooth" && capability?.adapters?.length) {
+        const results = await Promise.allSettled(capability.adapters.filter(a => a.enabled !== enabled).map(a => request({ method: "settings.bluetooth_action", params: { path: a.path, action: enabled ? "on" : "off" } })));
+        const failure = results.find(r => r.status === "rejected");
+        await load();
+        if (failure?.status === "rejected") throw failure.reason;
+      } else {
+        await request({ method: kind === "wifi" ? "settings.set_wifi" : "settings.set_bluetooth", params: { enabled } });
+        await load();
+      }
       setSettings(await request({ method: "settings.get" }));
-      if (enabled) await load();
     });
   }
   async function scan() {
     await perform(kind === "wifi" ? "Scanning for networks…" : "Discovering Bluetooth devices…", async () => {
-      if (kind === "bluetooth") await request({ method: "settings.bluetooth_scan" });
+      if (kind === "bluetooth") { if (adapter) await request({ method: "settings.bluetooth_action", params: { path: adapter, action: "discover" } }); else await request({ method: "settings.bluetooth_scan" }); }
       else await request({ method: "settings.wifi_scan" });
       await load();
       setDiscovered(true);
@@ -133,6 +172,7 @@ export function Wireless({ kind }: { kind: "wifi" | "bluetooth" }) {
       await load();
     });
   }
+  const unavailable = capability != null && !["ready", "disabled"].includes(capability.state);
   const disabled = busy || loading;
   const matches = (text: string) => text.toLowerCase().includes(query.trim().toLowerCase());
   const visibleNetworks = networks.filter(n => matches(`${n.ssid} ${n.security} ${n.device}`));
@@ -153,25 +193,29 @@ export function Wireless({ kind }: { kind: "wifi" | "bluetooth" }) {
     return items.map(d => <article className={`wireless-item${d.connected && value ? " is-connected" : ""}`} key={d.path}>
       <div className="settings-row wireless-row"><span className="wireless-symbol"><Icon name={deviceIcon(d)} /></span>
         <div className="device-name"><strong>{d.name}</strong><small className="row-detail">{d.connected && value ? "Connected" : d.paired ? "Paired" : "Ready to pair"}{d.battery != null && value && ` · ${d.battery}% battery`}</small></div>
-        <div className="wireless-row-actions"><Button disabled={disabled || value !== true} onClick={() => void deviceAction(d, d.connected ? "disconnect" : d.paired ? "connect" : "pair")}>{d.connected && value ? "Disconnect" : d.paired ? "Connect" : "Pair"}</Button>
+        <div className="wireless-row-actions"><Button disabled={disabled || value !== true || unavailable} onClick={() => void deviceAction(d, d.connected ? "disconnect" : d.paired ? "connect" : "pair")}>{d.connected && value ? "Disconnect" : d.paired ? "Connect" : "Pair"}</Button>
           <Button className="wireless-details-button" aria-label={`Details for ${d.name}`} aria-expanded={expanded === d.path} aria-controls={`details-${d.path}`} onClick={() => setExpanded(expanded === d.path ? "" : d.path)}><Icon name="info" width="17" height="17" /></Button></div>
       </div>
       {expanded === d.path && <div className="wireless-details" id={`details-${d.path}`}><Properties items={[["Device address", d.address], ["Pairing", d.paired ? "Paired" : "Not paired"], ["Device type", d.icon || "Bluetooth device"], ["Trusted", d.trusted ? "Yes" : "No"], ["Battery", d.battery == null ? "Not reported" : `${d.battery}%`]]} />
-        {d.paired && <><div className="settings-row wireless-trust"><div><strong>Trust this device</strong><small className="row-detail">Allow this device to connect without asking again.</small></div><Toggle label={`Trust ${d.name}`} checked={!!d.trusted} disabled={disabled || value !== true} onChange={trusted => void deviceAction(d, trusted ? "trust" : "untrust")} /></div><Button className="wireless-forget" disabled={disabled} onClick={() => { setError(""); setConfirmation({ name: d.name, device: d }); }}>Forget device…</Button></>}
+        {d.paired && <><div className="settings-row wireless-trust"><div><strong>Trust this device</strong><small className="row-detail">Allow this device to connect without asking again.</small></div><Toggle label={`Trust ${d.name}`} checked={!!d.trusted} disabled={disabled || value !== true || unavailable} onChange={trusted => void deviceAction(d, trusted ? "trust" : "untrust")} /></div><Button className="wireless-forget" disabled={disabled} onClick={() => { setError(""); setConfirmation({ name: d.name, device: d }); }}>Forget device…</Button></>}
       </div>}
     </article>);
   }
   return <div className="wireless-page" aria-busy={disabled}>
-    <div className="settings-card wireless-summary"><span className={`wireless-summary-icon${value ? " enabled" : ""}`}><Icon name={kind} width="25" height="25" /></span><div><h3>{name}</h3><p>{value === null ? "No adapter available" : !value ? `${name} is turned off` : kind === "wifi" ? networks.find(n => n.connected)?.ssid ? `Connected to ${networks.find(n => n.connected)!.ssid}` : "Ready to connect" : `${devices.filter(d => d.connected).length} connected · Discover and manage your devices`}</p></div><Toggle id={kind} label={name} checked={value === true} disabled={disabled || value === null} onChange={v => void toggle(v)} /></div>
-    <div className="wireless-toolbar"><SearchField className="wireless-search" aria-label={kind === "wifi" ? "Filter networks" : "Filter Bluetooth devices"} placeholder={kind === "wifi" ? "Find a network" : "Find a device"} value={query} onValueChange={setQuery} /><Button variant="primary" className="primary" disabled={disabled || value !== true} onClick={() => void scan()}><Icon name={discovered ? "refresh" : "plus"} width="15" height="15" />{busy ? (kind === "wifi" ? "Scanning…" : "Searching…") : discovered ? "Scan again" : (kind === "wifi" ? "New connection" : "Pair new device")}</Button></div>
+    <div className="settings-card wireless-summary"><span className={`wireless-summary-icon${value ? " enabled" : ""}`}><Icon name={kind} width="25" height="25" /></span><div><h3>{name}</h3><p>{capability?.message || (value === null ? "No adapter available" : !value ? `${name} is turned off` : kind === "wifi" ? networks.find(n => n.connected)?.ssid ? `Connected to ${networks.find(n => n.connected)!.ssid}` : "Ready to connect" : `${devices.filter(d => d.connected).length} connected · Discover and manage your devices`)}</p></div><Toggle id={kind} label={name} checked={value === true} disabled={disabled || value === null || unavailable} onChange={v => void toggle(v)} /></div>
+    {kind === "bluetooth" && !!capability?.adapters?.length && <div className="settings-card">{capability.adapters.map(radio => <div className="settings-row" key={radio.path}><span>{radio.name}</span><Toggle label={`Enable ${radio.name}`} checked={radio.enabled} disabled={disabled} onChange={enabled => void perform(`Updating ${radio.name}…`, async () => { await request({ method: "settings.bluetooth_action", params: { path: radio.path, action: enabled ? "on" : "off" } }); await load(); })} /></div>)}<div className="settings-row"><label htmlFor="discovery-adapter">Discovery adapter</label><Select id="discovery-adapter" value={adapter} onChange={e => setAdapter(e.target.value)}>{capability.adapters.filter(a => a.enabled).map(a => <option key={a.path} value={a.path}>{a.name}</option>)}</Select></div></div>}
+    {capability && <p role="status" className="section-caption">{capability.message}</p>}
+    {connectivity && kind === "wifi" && <p className="section-caption">{connectivity}</p>}
+    <div className="wireless-toolbar"><SearchField className="wireless-search" aria-label={kind === "wifi" ? "Filter networks" : "Filter Bluetooth devices"} placeholder={kind === "wifi" ? "Find a network" : "Find a device"} value={query} onValueChange={setQuery} /><Button variant="primary" className="primary" disabled={disabled || value !== true || unavailable} onClick={() => void scan()}><Icon name={discovered ? "refresh" : "plus"} width="15" height="15" />{busy ? (kind === "wifi" ? "Scanning…" : "Searching…") : discovered ? "Scan again" : (kind === "wifi" ? "New connection" : "Pair new device")}</Button></div>
     {(operation || loading || notice) && <p role="status" className="wireless-status">{operation || (loading ? `Loading ${kind === "wifi" ? "networks" : "devices"}…` : notice)}</p>}
-    {error && !network && !profile && !confirmation && <p className="settings-error" role="alert">{error}</p>}
+    {error && !network && !profile && !confirmation && <p className="settings-error" role="alert">{error} <Button disabled={disabled} onClick={() => void load().catch(e => setError(errorMessage(e)))}>Retry</Button></p>}
     {kind === "wifi" ? <>
       <div className="wireless-list-heading"><h3>Connected network</h3><span>{value === true ? connectedNetworks.length : 0} connected</span></div>
       <div className="settings-card wireless-list">{value === true && wifiRows(connectedNetworks)}{(!value || !connectedNetworks.length) && <div className="wireless-empty"><Icon name="wifi" width="28" height="28" /><strong>{loading ? "Loading connection…" : value === null ? "No Wi-Fi adapter" : !value ? "Wi-Fi is off" : "Not connected"}</strong><p>{value === true ? "Your active Wi-Fi connection will appear here." : "Turn on Wi-Fi to view your connection."}</p></div>}</div>
       {discovered && <><div className="wireless-list-heading"><h3>Nearby networks</h3><span>{value === true ? nearbyNetworks.length : 0} found</span></div><div className="settings-card wireless-list">{value === true && wifiRows(nearbyNetworks)}{(!value || !nearbyNetworks.length) && <div className="wireless-empty"><Icon name="wifi" width="28" height="28" /><strong>{loading ? "Looking for networks…" : value === null ? "No Wi-Fi adapter" : !value ? "Wi-Fi is off" : query ? "No matching networks" : "No networks found"}</strong><p>{value === true ? "Try scanning again or move closer to your router." : "Turn on Wi-Fi to see nearby networks."}</p></div>}</div></>}
+      {profileError && <p role="alert" className="settings-error">{profileError}</p>}
       <div className="wireless-list-heading"><h3>Saved networks</h3><span>{visibleProfiles.length} saved</span></div><p className="section-caption">Manage automatic connections, metered usage, IPv4 and DNS for networks you’ve joined.</p>
-      <div className="settings-card wireless-list">{visibleProfiles.map(p => <div className="settings-row wireless-row" key={p.uuid}><span className="wireless-symbol"><Icon name="lock" /></span><div className="device-name"><strong>{p.name}</strong><small className="row-detail">{p.device && value ? `Active on ${p.device}` : "Saved connection"}</small></div><div className="wireless-row-actions"><Button disabled={disabled || value !== true} onClick={() => void profileAction(p, p.device ? "disconnect" : "connect")}>{p.device && value ? "Disconnect" : "Connect"}</Button><Button aria-label={`Configure ${p.name}`} disabled={disabled} onClick={() => void openConfig(p)}><Icon name="settings" width="15" height="15" />Configure</Button></div></div>)}{!visibleProfiles.length && <p className="device-empty">{loading ? "Loading saved networks…" : query ? "No saved networks match your search." : "Networks you join will appear here."}</p>}</div>
+      <div className="settings-card wireless-list">{visibleProfiles.map(p => <div className="settings-row wireless-row" key={p.uuid}><span className="wireless-symbol"><Icon name="lock" /></span><div className="device-name"><strong>{p.name}</strong><small className="row-detail">{p.device && value ? `Active on ${p.device}` : "Saved connection"}</small></div><div className="wireless-row-actions"><Button disabled={disabled || value !== true || unavailable} onClick={() => void profileAction(p, p.device ? "disconnect" : "connect")}>{p.device && value ? "Disconnect" : "Connect"}</Button><Button aria-label={`Configure ${p.name}`} disabled={disabled} onClick={() => void openConfig(p)}><Icon name="settings" width="15" height="15" />Configure</Button></div></div>)}{!visibleProfiles.length && <p className="device-empty">{loading ? "Loading saved networks…" : query ? "No saved networks match your search." : "Networks you join will appear here."}</p>}</div>
     </> : <>
       <div className="wireless-list-heading"><h3>Your devices</h3><span>{paired.length} saved</span></div><div className="settings-card wireless-list">{bluetoothRows(paired)}{!paired.length && <p className="device-empty">{query ? "No saved devices match your search." : "Paired devices will appear here for easy reconnection."}</p>}</div>
       <div className="wireless-list-heading"><h3>Nearby devices</h3><span>{discovered && value === true ? nearby.length : "—"}</span></div><p className="section-caption">Put your headphones, keyboard or other accessory in pairing mode, then choose Pair new device.</p><div className="settings-card wireless-list">{discovered && value === true && bluetoothRows(nearby)}{(!discovered || value !== true || !nearby.length) && <div className="wireless-empty"><Icon name="bluetooth" width="28" height="28" /><strong>{loading ? "Loading paired devices…" : value === null ? "No Bluetooth adapter" : !value ? "Bluetooth is off" : !discovered ? "Ready to pair" : query ? "No matching devices" : "No nearby devices found"}</strong><p>{value === true ? !discovered ? "Nearby discovery starts only when you click Pair new device." : "Keep your device nearby and make sure it is discoverable." : "Turn on Bluetooth to discover and connect devices."}</p></div>}</div>

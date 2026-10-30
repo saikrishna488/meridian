@@ -41,13 +41,60 @@ impl Shell {
                 }))
             }
 
-            Request::SettingsDisplays => Ok(Reply::Later(Box::pin(async move {
-                let outputs = crate::files::blocking(|| {
-                    meridian_services::displays::list().map_err(|e| ErrorBody::new(ErrorCode::Unavailable, e))
-                })
-                .await?;
-                proto::reply_ok(&outputs).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            Request::SettingsCapability(query) => Ok(Reply::Later(Box::pin(async move {
+                let value = crate::capabilities::query(query.feature).await;
+                proto::reply_ok(&value).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
             }))),
+            Request::SettingsStorage => Ok(Reply::Later(Box::pin(async move {
+                let value = crate::files::blocking(crate::storage::list).await?;
+                proto::reply_ok(&value).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
+            Request::SettingsStorageAction(choice) => Ok(Reply::Later(Box::pin(async move {
+                crate::storage::perform(choice).await?;
+                proto::reply_ok(&()).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
+            Request::SettingsDisplays => {
+                // GDK's wl_output inventory remains useful on compositors without
+                // wlr-output-management, including virtual and EDID-less outputs.
+                let fallback: Vec<proto::DisplayOutput> = gdk::Display::default()
+                    .map(|d| {
+                        d.monitors()
+                            .iter::<gdk::Monitor>()
+                            .filter_map(Result::ok)
+                            .map(|m| {
+                                let geometry = m.geometry();
+                                proto::DisplayOutput {
+                                    name: m
+                                        .connector()
+                                        .map(|s| s.to_string())
+                                        .unwrap_or_else(|| "Virtual output".into()),
+                                    description: m.model().map(|s| s.to_string()).unwrap_or_default(),
+                                    enabled: true,
+                                    x: geometry.x(),
+                                    y: geometry.y(),
+                                    scale: f64::from(m.scale_factor()),
+                                    transform: 0,
+                                    current: Some(proto::DisplayMode {
+                                        width: geometry.width(),
+                                        height: geometry.height(),
+                                        refresh: m.refresh_rate(),
+                                        preferred: false,
+                                    }),
+                                    modes: vec![],
+                                }
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                Ok(Reply::Later(Box::pin(async move {
+                    let outputs = crate::files::blocking(|| {
+                        meridian_services::displays::list().map_err(|e| ErrorBody::new(ErrorCode::Unavailable, e))
+                    })
+                    .await
+                    .unwrap_or(fallback);
+                    proto::reply_ok(&outputs).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+                })))
+            }
             Request::SettingsDisplayApply(choice) => Ok(Reply::Later(Box::pin(async move {
                 let trial =
                     crate::files::blocking(move || crate::settings_devices::display_apply(choice.outputs)).await?;
@@ -211,10 +258,10 @@ impl Shell {
                 })))
             }
             Request::SettingsGet => serialize(proto::reply_ok(&self.settings.state())),
-            Request::SettingsSetWifi(v) => {
-                self.settings.set_wifi(v.enabled)?;
-                serialize(ok())
-            }
+            Request::SettingsSetWifi(v) => Ok(Reply::Later(Box::pin(async move {
+                crate::settings_devices::wifi_enabled(v.enabled).await?;
+                proto::reply_ok(&()).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
             Request::SettingsSetBluetooth(v) => {
                 self.settings.set_bluetooth(v.enabled)?;
                 serialize(ok())

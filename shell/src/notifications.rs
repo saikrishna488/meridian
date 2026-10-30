@@ -22,6 +22,7 @@ struct Entry {
     sender: String,
     active: bool,
     generation: u64,
+    expiry: Option<glib::SourceId>,
 }
 pub struct Notifications {
     entries: RefCell<Vec<Entry>>,
@@ -145,6 +146,9 @@ impl Notifications {
         let mut changed = false;
         for entry in self.entries.borrow_mut().iter_mut().filter(|entry| entry.sender == sender && entry.active) {
             entry.active = false;
+            if let Some(timer) = entry.expiry.take() {
+                timer.remove();
+            }
             entry.item.actions.clear();
             changed = true;
         }
@@ -164,6 +168,9 @@ impl Notifications {
         let mut entries = self.entries.borrow_mut();
         if let Some(index) = entries.iter().position(|e| e.item.id == id) {
             let entry = &mut entries[index];
+            if let Some(timer) = entry.expiry.take() {
+                timer.remove();
+            }
             let active = entry.active;
             entry.active = false;
             if active {
@@ -183,6 +190,9 @@ impl Notifications {
     pub fn clear(&self) {
         let entries = std::mem::take(&mut *self.entries.borrow_mut());
         for entry in entries {
+            if let Some(timer) = entry.expiry {
+                timer.remove();
+            }
             if entry.active {
                 self.signal(&entry.sender, "NotificationClosed", (entry.item.id, 2u32).to_variant());
             }
@@ -246,7 +256,9 @@ impl Notifications {
                 };
                 let actions = params.child_value(5).get::<Vec<String>>().unwrap_or_default();
                 let actions = actions
-                    .chunks_exact(2)
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
                     .take(8)
                     .map(|a| (a[0].chars().take(128).collect(), a[1].chars().take(128).collect()))
                     .collect();
@@ -261,20 +273,32 @@ impl Notifications {
                     unread: !self.do_not_disturb.get(),
                     actions,
                 };
-                self.entries.borrow_mut().retain(|e| e.item.id != id);
+                let mut entries = self.entries.borrow_mut();
+                if let Some(index) = entries.iter().position(|e| e.item.id == id)
+                    && let Some(timer) = entries.remove(index).expiry
+                {
+                    timer.remove();
+                }
+                drop(entries);
                 if self.entries.borrow().len() >= 100 {
                     let old = self.entries.borrow()[0].item.id;
                     self.close(old, 4, true);
                 }
-                self.entries.borrow_mut().push(Entry { item, sender: sender.into(), active: true, generation });
+                self.entries.borrow_mut().push(Entry {
+                    item,
+                    sender: sender.into(),
+                    active: true,
+                    generation,
+                    expiry: None,
+                });
                 self.publish();
                 invocation.return_value(Some(&(id,).to_variant()));
                 let expiry = params.child_value(7).get::<i32>().unwrap_or(-1);
                 // Keep a history entry after expiry, but close its action channel.
-                if expiry > 0 {
-                    let ms = expiry.min(86_400_000) as u64;
+                if expiry != 0 {
+                    let ms = if expiry < 0 { 5000 } else { expiry.min(86_400_000) as u64 };
                     let weak = Rc::downgrade(self);
-                    glib::timeout_add_local_once(Duration::from_millis(ms), move || {
+                    let timer = glib::timeout_add_local_once(Duration::from_millis(ms), move || {
                         if let Some(service) = weak.upgrade() {
                             let current = service
                                 .entries
@@ -282,10 +306,16 @@ impl Notifications {
                                 .iter()
                                 .any(|e| e.item.id == id && e.generation == generation && e.active);
                             if current {
+                                if let Some(entry) = service.entries.borrow_mut().iter_mut().find(|e| e.item.id == id) {
+                                    entry.expiry.take();
+                                }
                                 service.close(id, 1, false);
                             }
                         }
                     });
+                    if let Some(entry) = self.entries.borrow_mut().iter_mut().find(|e| e.item.id == id) {
+                        entry.expiry = Some(timer);
+                    }
                 }
             }
             _ => invocation.return_dbus_error("org.freedesktop.DBus.Error.UnknownMethod", "Unknown method"),
@@ -295,6 +325,11 @@ impl Notifications {
 
 impl Drop for Notifications {
     fn drop(&mut self) {
+        for entry in self.entries.get_mut() {
+            if let Some(timer) = entry.expiry.take() {
+                timer.remove();
+            }
+        }
         self.sender_subscription.get_mut().take();
         if let Some(id) = self.registration.get_mut().take()
             && let Some(connection) = self.connection.get_mut().as_ref()
@@ -340,6 +375,7 @@ mod tests {
             sender: ":1.2".into(),
             active: true,
             generation: 1,
+            expiry: None,
         }
     }
     #[test]

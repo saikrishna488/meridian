@@ -126,7 +126,9 @@ impl WebSurface {
             }
         };
         add(bounds.x, bounds.y, bounds.width, bounds.height);
-        if let Some(rect) = &bounds.preview { add(rect.x, rect.y, rect.width, rect.height); }
+        if let Some(rect) = &bounds.preview {
+            add(rect.x, rect.y, rect.width, rect.height);
+        }
         surface.set_input_region(Some(&region));
     }
     pub fn new(
@@ -310,6 +312,61 @@ impl WebSurface {
         lock_down(&view, env.dev, kind);
         let overlay = gtk::Overlay::new();
         overlay.set_child(Some(&view));
+        if matches!(
+            kind,
+            SurfaceKind::Wallpaper
+                | SurfaceKind::Panel
+                | SurfaceKind::Topbar
+                | SurfaceKind::Applications
+                | SurfaceKind::Options
+                | SurfaceKind::DesktopMenu
+                | SurfaceKind::Notifications
+        ) {
+            // A transparent WebKit software surface can initially snapshot to
+            // no GSK node. Then GTK never submits its first Wayland buffer, no
+            // output-enter arrives, and WebKit never paints at the output scale.
+            // Submit a transparent Cairo node for the first frame to break that
+            // cycle. It changes neither pixels nor the surface's input region.
+            let bootstrap = gtk::DrawingArea::new();
+            bootstrap.set_size_request(1, 1);
+            bootstrap.set_halign(gtk::Align::Start);
+            bootstrap.set_valign(gtk::Align::Start);
+            bootstrap.set_can_target(false);
+            bootstrap.set_draw_func(|_, context, _, _| {
+                context.set_operator(gtk::cairo::Operator::Source);
+                context.set_source_rgba(0., 0., 0., 0.);
+                let _ = context.paint();
+            });
+            overlay.add_overlay(&bootstrap);
+            let tick: Rc<RefCell<Option<gtk::TickCallbackId>>> = Rc::default();
+            let map_tick = tick.clone();
+            window.connect_map(move |window| {
+                if let Some(old) = map_tick.borrow_mut().take() {
+                    old.remove();
+                }
+                bootstrap.set_visible(true);
+                let bootstrap = bootstrap.clone();
+                let frames = Cell::new(0);
+                let finished = map_tick.clone();
+                let id = window.add_tick_callback(move |_, _| {
+                    frames.set(frames.get() + 1);
+                    if frames.get() >= 2 {
+                        bootstrap.set_visible(false);
+                        finished.borrow_mut().take();
+                        glib::ControlFlow::Break
+                    } else {
+                        glib::ControlFlow::Continue
+                    }
+                });
+                *map_tick.borrow_mut() = Some(id);
+            });
+            window.connect_unmap(move |_| {
+                if let Some(id) = tick.borrow_mut().take() {
+                    id.remove();
+                }
+            });
+        }
+
         let fallback = gtk::Box::new(gtk::Orientation::Vertical, 12);
         fallback.add_css_class("meridian-recovery");
         fallback.set_visible(false);
@@ -324,8 +381,11 @@ impl WebSurface {
             motion.connect_leave(move |_| {
                 if let Some(view) = weak_view.upgrade() {
                     view.evaluate_javascript(
-                        "window.dispatchEvent(new Event('meridian-panel-leave'))", None, None,
-                        gio::Cancellable::NONE, |_| {},
+                        "window.dispatchEvent(new Event('meridian-panel-leave'))",
+                        None,
+                        None,
+                        gio::Cancellable::NONE,
+                        |_| {},
                     );
                 }
             });
@@ -335,7 +395,10 @@ impl WebSurface {
             window.connect_map(|window| {
                 if let Some(surface) = window.surface() {
                     let region = gtk::cairo::Region::create_rectangle(&gtk::cairo::RectangleInt::new(
-                        0, (surface.height() - PANEL_HEIGHT).max(0), surface.width(), PANEL_HEIGHT,
+                        0,
+                        (surface.height() - PANEL_HEIGHT).max(0),
+                        surface.width(),
+                        PANEL_HEIGHT,
                     ));
                     surface.set_input_region(Some(&region));
                 }
@@ -720,6 +783,11 @@ fn lock_down(view: &WebView, dev: bool, surface: SurfaceKind) {
 
 impl Drop for WebSurface {
     fn drop(&mut self) {
+        // Stop renderer messages before tearing down the manager/window. Late
+        // IPC during monitor replacement otherwise reaches a destroyed manager.
+        if let Some(manager) = self.view.user_content_manager() {
+            manager.unregister_script_message_handler("meridian", None);
+        }
         // GtkApplication also owns its windows; dropping the Rust wrapper alone
         // does not release a removed monitor's or an old lock screen's widgets.
         // gtk4-session-lock owns lock-window teardown. Destroying one here can

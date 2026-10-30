@@ -154,6 +154,7 @@ test("Control Center displays availability and updates settings without duplicat
   await waitFor(() => !ui.get("#menu").classList.contains("hidden"));
   assert.equal(ui.get("#wifi").getAttribute("aria-checked"), "true");
   assert.equal(ui.get("#bluetooth").disabled, true);
+  await waitFor(() => ui.get("#brightness-value").textContent === "65%");
   assert.equal(ui.get("#brightness-value").textContent, "65%");
   ui.get("#wifi").click();
   await waitFor(() => ui.requests.some(request => request.method === "settings.set_wifi"));
@@ -294,26 +295,21 @@ test("settings search finds common terms and opens window shortcuts", async t =>
   assert.match(ui.get(".shortcut-card").textContent, /Snap left \/ right/);
 });
 
-test("Device Manager groups hardware and confirms device-specific actions", async t => {
-  const devices = [
-    { id: "net:wlan0", category: "Wi-Fi adapters", name: "Wi-Fi adapter", status: "Connected", properties: [["Driver", "iwlwifi"]], actions: ["disconnect"] },
-    { id: "storage:nvme0n1", category: "Storage", name: "SSD", status: "Connected", properties: [["Driver", "nvme"]], actions: ["storage"] },
-  ];
-  const ui = await surface(t, "settings", req => req.method === "settings.devices" ? devices : req.method === "settings.device_action" ? { error: { code: "failed", message: "Permission denied" } } : null);
-  assert.ok(!ui.get('nav [aria-label="Driver Manager"]'));
-  ui.get('nav [aria-label="Device Manager"]').click();
-  await waitFor(() => ui.get(".device-properties h3")?.textContent === "Wi-Fi adapter");
-  assert.equal(ui.window.document.querySelectorAll(".device-tree details").length, 2);
-  assert.ok(ui.get(".device-properties").textContent.includes("iwlwifi"));
-  [...ui.window.document.querySelectorAll(".device-properties button")].find(b => b.textContent === "Disconnect").click();
+test("Storage replaces Device Manager and confirms safe volume operations", async t => {
+  const state = { total: 100e9, available: 40e9, source: "/dev/vda1", filesystem: "ext4", warning: null, volumes: [
+    { path: "/dev/sdb1", name: "USB", kind: "part", size: 10e9, filesystem: "exfat", mount_points: ["/run/media/test/USB"], read_only: false, removable: true, parent: "/dev/sdb", actions: ["open", "unmount"] }
+  ] };
+  const ui = await surface(t, "settings", req => req.method === "settings.storage" ? state : req.method === "settings.storage_action" ? { error: { code: "failed", message: "Volume is busy. Close files and retry." } } : null);
+  assert.equal(ui.get('nav [aria-label="Device Manager"]'), null);
+  ui.get('nav [aria-label="Storage"]').click();
+  await waitFor(() => ui.get('.storage-volume'));
+  assert.match(ui.get('.storage-overview').textContent, /60%/);
+  [...ui.window.document.querySelectorAll('.storage-volume button')].find(b => b.textContent === 'Unmount').click();
   await waitFor(() => ui.get('[role="dialog"]'));
-  assert.ok(!ui.requests.some(r => r.method === "settings.device_action"));
-  [...ui.get('[role="dialog"]').querySelectorAll("button")].find(b => b.textContent === "Disconnect").click();
-  await waitFor(() => ui.get('[role="alert"]')?.textContent.includes("Permission denied"));
-  assert.deepEqual(ui.requests.find(r => r.method === "settings.device_action").params, { id: "net:wlan0", action: "disconnect" });
-  [...ui.window.document.querySelectorAll(".device-tree button")].find(b => b.textContent === "SSD").click();
-  await waitFor(() => ui.get(".device-properties").textContent.includes("nvme"));
-  assert.ok([...ui.window.document.querySelectorAll(".device-properties button")].some(b => b.textContent === "Open Disks"));
+  assert.equal(ui.requests.some(r => r.method === 'settings.storage_action'), false);
+  [...ui.get('[role="dialog"]').querySelectorAll('button')].find(b => b.textContent === 'Continue').click();
+  await waitFor(() => ui.get('[role="alert"]')?.textContent.includes('Volume is busy'));
+  assert.deepEqual(ui.requests.find(r => r.method === 'settings.storage_action').params, { id: '/dev/sdb1', action: 'unmount', identity: null });
 });
 
 test("users protect current account and confirm deletion while keeping home files", async t => {
@@ -574,7 +570,7 @@ test("turning Wi-Fi off hides stale nearby results while saved configurations re
 
 test("hidden native menus release DOM input while preserving the host close handshake", async t => {
   for (const name of ["applications", "options", "notifications", "desktop-menu"]) {
-    const ui = await surface(t, name, request => request.method === "notifications.read"
+    const ui = await surface(t, name, request => request.method === "notifications.get"
       ? { available: true, items: [], do_not_disturb: false }
       : request.method === "search.query" ? searchResult(request.params.serial, []) : null);
     const menu = ui.get('section[role="dialog"], section[role="menu"]');
@@ -590,4 +586,51 @@ test("hidden native menus release DOM input while preserving the host close hand
     assert.equal(scrim.hidden, true, `${name}: scrim released during close`);
     await waitFor(() => ui.requests.some(request => request.method === "popover.close"));
   }
+});
+
+test("Wi-Fi distinguishes missing hardware from virtual Ethernet connectivity", async t => {
+  const ui = await surface(t, "settings", req => req.method === 'settings.capability'
+    ? { state: req.params.feature === 'wifi' ? 'hardware_unavailable' : 'ready', message: req.params.feature === 'wifi' ? 'No Wi-Fi adapter detected. Ethernet and virtual network connections remain available.' : 'An active network connection is available.', adapters: [] }
+    : req.method === 'settings.wifi_networks' || req.method === 'settings.wifi_profiles' ? [] : null);
+  ui.get('nav [aria-label="Wi-Fi"]').click();
+  await waitFor(() => ui.get('.wireless-page')?.textContent.includes('An active network connection'));
+  assert.equal(ui.get('.wireless-summary [aria-label="Wi-Fi"]').disabled, true);
+  assert.match(ui.get('.wireless-summary').textContent, /No Wi-Fi adapter/);
+});
+
+test("wireless reports unavailable services and retains independently loaded saved profiles", async t => {
+  const ui = await surface(t, "settings", req => req.method === 'settings.capability'
+    ? { state: 'service_unavailable', message: req.params.feature === 'bluetooth' ? 'BlueZ unavailable. Start the service and retry.' : 'NetworkManager unavailable. Start the service and retry.', adapters: [] }
+    : req.method === 'settings.wifi_networks' || req.method === 'settings.bluetooth_devices' ? { error: { code: 'unavailable', message: 'Service unavailable' } }
+    : req.method === 'settings.wifi_profiles' ? [{ uuid: 'profile', name: 'Saved office', device: '' }] : null);
+  ui.get('nav [aria-label="Wi-Fi"]').click();
+  await waitFor(() => ui.get('.wireless-page')?.textContent.includes('Saved office'));
+  assert.match(ui.get('.wireless-summary').textContent, /NetworkManager unavailable/);
+  ui.get('nav [aria-label="Bluetooth"]').click();
+  await waitFor(() => ui.get('.wireless-summary')?.textContent.includes('BlueZ unavailable'));
+  assert.equal(ui.get('.wireless-summary [role="switch"]').disabled, true);
+  assert.ok(ui.get('[role="alert"]'));
+});
+
+test("Displays keeps unsupported compositor output information read-only", async t => {
+  const ui = await surface(t, 'settings', req => req.method === 'settings.capability'
+    ? { state: 'unsupported', message: 'Compositor does not support configuration', adapters: [] }
+    : req.method === 'settings.displays' ? [{ name: 'Virtual-1', description: '', enabled: true, x: 0, y: 0, scale: 1, transform: 0, modes: [], current: { width: 1280, height: 720, refresh: 60000, preferred: false } }] : null);
+  ui.get('nav [aria-label="Displays"]').click();
+  await waitFor(() => ui.get('.display-tile'));
+  assert.match(ui.get('.settings-content').textContent, /read-only/);
+  assert.equal(ui.get('[aria-label="Enable display"]').disabled, true);
+  assert.equal([...ui.window.document.querySelectorAll('button')].find(b => b.textContent === 'Apply changes').disabled, true);
+  assert.equal(ui.requests.some(r => r.method === 'settings.display_apply'), false);
+});
+
+test("Storage error has a retry and recovers without unrelated hardware probes", async t => {
+  let count = 0;
+  const ui = await surface(t, 'settings', req => req.method === 'settings.storage'
+    ? ++count === 1 ? { error: { code: 'unavailable', message: 'lsblk is unavailable' } } : { total: 0, available: 0, filesystem: '', source: '', warning: 'Capacity unavailable', volumes: [] } : null);
+  ui.get('nav [aria-label="Storage"]').click();
+  await waitFor(() => ui.get('[role="alert"]'));
+  [...ui.get('[role="alert"]').querySelectorAll('button')].find(b => b.textContent === 'Retry').click();
+  await waitFor(() => ui.get('.storage-overview'));
+  assert.equal(ui.requests.some(r => r.method === 'settings.devices'), false);
 });

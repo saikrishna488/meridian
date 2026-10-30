@@ -14,7 +14,7 @@ pub const SETTINGS: &[(&str, Page, &str, &str)] = &[
     ("applications", Page::Applications, "Applications", "installed apps software programs launch uninstall"),
     ("general", Page::General, "General", "about updates kernel version memory processor"),
     ("users", Page::Users, "Users", "account password administrator"),
-    ("device-manager", Page::DeviceManager, "Device Manager", "hardware driver usb pci"),
+    ("storage", Page::Storage, "Storage", "disk volume filesystem mount usb removable capacity"),
     ("search", Page::Search, "Search", "launcher providers calculator privacy"),
 ];
 pub fn page(id: &str) -> Option<Page> {

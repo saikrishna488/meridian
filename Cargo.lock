@@ -884,6 +884,7 @@ dependencies = [
  "gio-unix",
  "glib",
  "glib-unix",
+ "libc",
  "log",
  "meridian-protocol",
  "wayland-client",

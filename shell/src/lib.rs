@@ -94,3 +94,6 @@ pub fn install_app_css() {
         gtk::style_context_add_provider_for_display(&display, &css, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
     }
 }
+
+mod capabilities;
+mod storage;

@@ -1,6 +1,3 @@
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
 /* Development fixtures only. Never calls the native bridge or touches files. */
 (() => {
   const previewPage = new URLSearchParams(location.search).get("page");
@@ -8,7 +5,7 @@ Failed to create stream fd: Operation not permitted
   const apps = [
     ["meridian-pulse.desktop", "Pulse"], ["meridian-finder.desktop", "Orbit"], ["meridian-terminal.desktop", "Meridian Terminal"], ["meridian-settings.desktop", "Settings"], ["firefox.desktop", "Firefox"], ["code.desktop", "Code"], ["calendar.desktop", "Calendar"], ["mail.desktop", "Mail"],
   ].map(([id, title]) => ({ id, title, subtitle: "Application", icon: null }));
-  const desktop = { appearance: mode, dock_style: "floating", font: "Inter", wallpaper: "meridian-dusk", wallpaper_uri: "/assets/wallpapers/meridian-dusk.svg", wallpapers: ["dusk", "tide", "alpine", "aurora"].map(id => ({ id: `meridian-${id}`, name: id[0].toUpperCase() + id.slice(1), uri: `/assets/wallpapers/meridian-${id}.svg` })), items: [] };
+  const desktop = { appearance: mode, dock_style: "floating", hover_background: "auto", font: "Inter", wallpaper: "meridian-dusk", wallpaper_uri: "/assets/wallpapers/meridian-dusk.svg", wallpapers: ["dusk", "tide", "alpine", "aurora"].map(id => ({ id: `meridian-${id}`, name: id[0].toUpperCase() + id.slice(1), uri: `/assets/wallpapers/meridian-${id}.svg` })), items: [] };
   const settings = { wifi: true, bluetooth: true, brightness: 75, volume: 42 };
   const locations = ["Home", "Desktop", "Documents", "Downloads", "Pictures", "Music", "Videos"].map(name => ({ name, path: name === "Home" ? "/home/alex" : `/home/alex/${name}` }));
   let pins = ["meridian-terminal.desktop", "meridian-finder.desktop", "firefox.desktop"], layout = [], terminalSent = false, nextTerminal = 1;
@@ -41,6 +38,7 @@ Failed to create stream fd: Operation not permitted
       case "calendar.list": result = calendarEvents; break;
       case "calendar.save": calendarEvents = params; break;
       case "desktop.get": result = desktop; break;
+      case "desktop.hover_background_set": desktop.hover_background = params.value; result = desktop; emit("desktop.changed", desktop); break;
       case "desktop.dock_style_set": desktop.dock_style = params.id; result = desktop; emit("desktop.changed", desktop); break;
       case "desktop.font_set": desktop.font = params.id; emit("desktop.changed", desktop); result = desktop; break;
       case "desktop.appearance_set": desktop.appearance = params.id; emit("desktop.changed", desktop); result = desktop; break;
@@ -52,10 +50,17 @@ Failed to create stream fd: Operation not permitted
       case "dock.layout_get": result = layout; break;
       case "dock.layout_set": layout = params.items; emit("dock.layout_changed", layout); break;
       case "dock.pin": pins = [...pins.filter(id => id !== params.id), ...(params.pinned ? [params.id] : [])]; emit("dock.changed", pins); break;
+      case "notifications.do_not_disturb": notificationState.do_not_disturb = params.enabled; result = notificationState; emit("notifications.changed", notificationState); break;
       case "notifications.get": result = notificationState; break;
       case "notifications.read": notificationState.items.forEach(i => { i.unread = false; }); result = notificationState; emit("notifications.changed", notificationState); break;
       case "notifications.dismiss": case "notifications.action": notificationState.items = notificationState.items.filter(i => i.id !== params.id); result = notificationState; emit("notifications.changed", notificationState); break;
       case "notifications.clear": notificationState.items = []; result = notificationState; emit("notifications.changed", notificationState); break;
+      case "settings.capability": result = { state: "ready", message: "Preview fixture · service available", adapters: params.feature === "bluetooth" ? [{ path: "/org/bluez/hci0", name: "Bluetooth adapter", enabled: true }] : [] }; break;
+      case "settings.storage": result = { total: 512e9, available: 300e9, filesystem: "btrfs", source: "/dev/nvme0n1p2", warning: null, volumes: [
+        { path: "/dev/nvme0n1p2", name: "System", kind: "part", size: 512e9, filesystem: "btrfs", mount_points: ["/"], read_only: false, removable: false, parent: "/dev/nvme0n1", actions: ["open"] },
+        { path: "/dev/sdb1", name: "USB Drive", kind: "part", size: 32e9, filesystem: "exfat", mount_points: ["/run/media/alex/USB"], read_only: false, removable: true, parent: "/dev/sdb", actions: ["open", "unmount"] }
+      ] }; break;
+      case "settings.storage_action": throw new Error("Storage operations are unavailable in this read-only preview.");
       case "settings.devices": result = [
         { id: "net:wlan0", category: "Wi-Fi adapters", name: "Wireless adapter", status: "Connected", properties: [["Driver", "iwlwifi"], ["Interface", "wlan0"]], actions: ["disconnect"] },
         { id: "bluetooth:hci0", category: "Bluetooth", name: "hci0", status: "On", properties: [["Driver", "btusb"]], actions: ["off"] },

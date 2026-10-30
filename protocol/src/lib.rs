@@ -239,7 +239,8 @@ pub enum PreferencesPage {
     Applications,
     General,
     Users,
-    DeviceManager,
+    DeviceManager, // Legacy deep links resolve to Storage.
+    Storage,
     Search,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -270,11 +271,28 @@ pub struct WallpaperChoice {
 pub struct DesktopState {
     pub appearance: String,
     pub dock_style: String,
+    pub hover_background: HoverBackground,
     pub font: String,
     pub wallpaper: String,
     pub wallpaper_uri: String,
     pub wallpapers: Vec<WallpaperChoice>,
     pub items: Vec<DesktopItem>,
+}
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "lowercase")]
+#[ts(export)]
+pub enum HoverBackground {
+    #[default]
+    Auto,
+    Green,
+    Blue,
+    Grey,
+}
+#[derive(Debug, Clone, PartialEq, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct HoverBackgroundSet {
+    pub value: HoverBackground,
 }
 #[derive(Debug, Clone, PartialEq, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
@@ -668,6 +686,8 @@ pub enum Request {
     DesktopAppearanceSet(WallpaperSet),
     #[serde(rename = "desktop.dock_style_set")]
     DesktopDockStyleSet(WallpaperSet),
+    #[serde(rename = "desktop.hover_background_set")]
+    DesktopHoverBackgroundSet(HoverBackgroundSet),
     #[serde(rename = "desktop.font_set")]
     DesktopFontSet(WallpaperSet),
     #[serde(rename = "desktop.wallpaper_set")]
@@ -829,6 +849,12 @@ pub enum Request {
 
     #[serde(rename = "settings.displays")]
     SettingsDisplays,
+    #[serde(rename = "settings.capability")]
+    SettingsCapability(CapabilityQuery),
+    #[serde(rename = "settings.storage")]
+    SettingsStorage,
+    #[serde(rename = "settings.storage_action")]
+    SettingsStorageAction(StorageAction),
     #[serde(rename = "settings.primary_display")]
     SettingsPrimaryDisplay,
     #[serde(rename = "settings.primary_display_set")]
@@ -1049,7 +1075,12 @@ pub struct DockInputRegion {
 #[derive(Debug, Clone, PartialEq, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
 #[ts(export)]
-pub struct DockInputRect { pub x: i32, pub y: i32, pub width: i32, pub height: i32 }
+pub struct DockInputRect {
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+}
 
 #[derive(Debug, Clone, PartialEq, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
@@ -1115,6 +1146,7 @@ impl Request {
             Request::DesktopGet => None,
             Request::PowerStatus => Some(Capability::PowerStatus),
             Request::DesktopFontSet(_)
+            | Request::DesktopHoverBackgroundSet(_)
             | Request::DesktopDockStyleSet(_)
             | Request::DesktopAppearanceSet(_)
             | Request::DesktopWallpaperSet(_)
@@ -1164,9 +1196,11 @@ impl Request {
                 Some(Capability::AppManagement)
             }
             Request::MenuOpen(_) | Request::SystemInfo => Some(Capability::Popovers),
-            Request::DockInputRegion(_) | Request::DockLayoutGet | Request::DockLayoutSet(_) | Request::DockList | Request::DockPin(_) => {
-                Some(Capability::Dock)
-            }
+            Request::DockInputRegion(_)
+            | Request::DockLayoutGet
+            | Request::DockLayoutSet(_)
+            | Request::DockList
+            | Request::DockPin(_) => Some(Capability::Dock),
             Request::SearchQuery(_) | Request::SearchActivate(_) => Some(Capability::Search),
             Request::PopoverToggle(_) | Request::PopoverClose => Some(Capability::Popovers),
             Request::WindowsList | Request::WindowsActivate(_) | Request::WindowsClose(_) => Some(Capability::Windows),
@@ -1188,6 +1222,9 @@ impl Request {
             | Request::SettingsPrimaryDisplaySet(_)
             | Request::SettingsSearch
             | Request::SettingsSearchSet(_)
+            | Request::SettingsCapability(_)
+            | Request::SettingsStorage
+            | Request::SettingsStorageAction(_)
             | Request::SettingsDisplays
             | Request::SettingsIdle
             | Request::SettingsIdleSet(_)
@@ -1348,6 +1385,8 @@ pub enum Event {
     /// To the Options menu: settings changed.
     #[serde(rename = "settings.changed")]
     SettingsChanged(SettingsState),
+    #[serde(rename = "displays.changed")]
+    DisplaysChanged,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
@@ -1874,6 +1913,75 @@ mod pulse_tests {
     }
 }
 
+/// Availability is based on the actual service and devices, never CPU architecture.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum CapabilityState {
+    Ready,
+    Disabled,
+    HardwareUnavailable,
+    ServiceUnavailable,
+    Unsupported,
+    PermissionDenied,
+    TemporarilyUnavailable,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct RadioAdapter {
+    pub path: String,
+    pub name: String,
+    pub enabled: bool,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct SystemCapability {
+    pub adapters: Vec<RadioAdapter>,
+    pub state: CapabilityState,
+    pub message: String,
+}
+#[derive(Debug, Clone, PartialEq, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum SettingsFeature {
+    Wifi,
+    Network,
+    Bluetooth,
+    Displays,
+    Brightness,
+    Storage,
+}
+#[derive(Debug, Clone, PartialEq, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct CapabilityQuery {
+    pub feature: SettingsFeature,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct StorageVolume {
+    pub identity: Option<String>,
+    pub path: String,
+    pub name: String,
+    pub kind: String,
+    pub filesystem: String,
+    pub size: f64,
+    pub mount_points: Vec<String>,
+    pub read_only: bool,
+    pub removable: bool,
+    pub actions: Vec<String>,
+    pub parent: Option<String>,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct StorageState {
+    pub volumes: Vec<StorageVolume>,
+    pub total: f64,
+    pub available: f64,
+    pub filesystem: String,
+    pub source: String,
+    pub warning: Option<String>,
+}
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[ts(export)]
 pub struct ManagedDevice {
@@ -1890,6 +1998,16 @@ pub struct ManagedDevice {
 pub struct DeviceAction {
     pub id: String,
     pub action: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct StorageAction {
+    pub id: String,
+    pub action: String,
+    #[serde(default)]
+    pub identity: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, TS)]
@@ -2017,5 +2135,29 @@ mod reliability_tests {
             assert!(!error.message.contains(secret));
             assert!(error.message.len() < 256);
         }
+    }
+}
+
+#[cfg(test)]
+mod settings_overhaul_tests {
+    use super::*;
+    #[test]
+    fn new_settings_requests_are_scoped_and_hover_values_are_closed() {
+        for raw in [
+            r#"{"method":"settings.storage"}"#,
+            r#"{"method":"settings.storage_action","params":{"id":"/dev/sdb1","action":"unmount"}}"#,
+            r#"{"method":"settings.capability","params":{"feature":"wifi"}}"#,
+        ] {
+            let request: Request = serde_json::from_str(raw).unwrap();
+            assert_eq!(request.required_capability(), Some(Capability::Settings));
+            assert!(!SurfaceKind::Notifications.has(Capability::Settings));
+        }
+        let request: Request =
+            serde_json::from_str(r#"{"method":"desktop.hover_background_set","params":{"value":"green"}}"#).unwrap();
+        assert_eq!(request.required_capability(), Some(Capability::Appearance));
+        assert!(
+            serde_json::from_str::<Request>(r#"{"method":"desktop.hover_background_set","params":{"value":"orange"}}"#)
+                .is_err()
+        );
     }
 }

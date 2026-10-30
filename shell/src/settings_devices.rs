@@ -108,6 +108,9 @@ fn run(args: &[&str], input: Option<&str>) -> Result<String, ErrorBody> {
     run_timeout(args, input, Duration::from_secs(40))
 }
 pub(crate) fn run_timeout(args: &[&str], input: Option<&str>, timeout: Duration) -> Result<String, ErrorBody> {
+    if args.is_empty() || input.is_some_and(|s| s.len() > 65536) {
+        return Err(error("Invalid device operation"));
+    }
     let mut child = Command::new(args[0])
         .args(&args[1..])
         .env("LC_ALL", "C")
@@ -116,40 +119,110 @@ pub(crate) fn run_timeout(args: &[&str], input: Option<&str>, timeout: Duration)
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|_| error(format!("{} is unavailable", args[0])))?;
-    let stdout = child.stdout.take().ok_or_else(|| error("No command output"))?;
-    let stderr = child.stderr.take().ok_or_else(|| error("No command error stream"))?;
-    let output = std::thread::spawn(move || {
-        let mut bytes = vec![];
-        stdout.take(1024 * 1024).read_to_end(&mut bytes).map(|_| bytes)
-    });
-    let errors = std::thread::spawn(move || {
-        let mut bytes = vec![];
-        stderr.take(1024 * 1024).read_to_end(&mut bytes).map(|_| ())
-    });
-    if let Some(mut stdin) = child.stdin.take()
-        && let Some(input) = input
-        && let Err(e) = stdin.write_all(input.as_bytes())
+    let mut stdout = child.stdout.take().ok_or_else(|| error("No command output"))?;
+    let mut stderr = child.stderr.take().ok_or_else(|| error("No command error stream"))?;
+    let mut stdin = child.stdin.take();
+    use std::os::fd::AsRawFd;
+    for fd in [Some(stdout.as_raw_fd()), Some(stderr.as_raw_fd()), stdin.as_ref().map(AsRawFd::as_raw_fd)]
+        .into_iter()
+        .flatten()
     {
-        let _ = child.kill();
-        let _ = child.wait();
-        return Err(error(e));
+        // SAFETY: these descriptors are owned pipes; preserve existing flags.
+        let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
+        if flags < 0 || unsafe { libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) } < 0 {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(error("Could not configure device operation output"));
+        }
+    }
+    let input = input.unwrap_or_default().as_bytes();
+    let mut written = 0;
+    if input.is_empty() {
+        stdin.take();
+    }
+    fn drain(pipe: &mut impl Read, bytes: &mut Vec<u8>) -> std::io::Result<()> {
+        let mut buffer = [0; 8192];
+        // Bound each turn even if the child writes continuously.
+        for _ in 0..32 {
+            match pipe.read(&mut buffer) {
+                Ok(0) => break,
+                Ok(n) => {
+                    let keep = n.min((1024 * 1024usize).saturating_sub(bytes.len()));
+                    bytes.extend_from_slice(&buffer[..keep]);
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(())
     }
     let deadline = Instant::now() + timeout;
-    while child.try_wait().map_err(error)?.is_none() {
+    let mut bytes = vec![];
+    let mut diagnostics = vec![];
+    let status = loop {
+        if let Some(pipe) = &mut stdin {
+            match pipe.write(&input[written..]) {
+                Ok(n) => {
+                    written += n;
+                    if written == input.len() {
+                        stdin.take();
+                    }
+                }
+                Err(e) if matches!(e.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::Interrupted) => {}
+                Err(e) => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(error(e));
+                }
+            }
+        }
+        if let Err(e) = drain(&mut stdout, &mut bytes).and_then(|_| drain(&mut stderr, &mut diagnostics)) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(error(e));
+        }
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Err(e) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(error(e));
+            }
+            _ => {}
+        }
         if Instant::now() >= deadline {
             let _ = child.kill();
             let _ = child.wait();
-            return Err(error("Device operation timed out"));
+            log::warn!("component=settings event=command_timeout program={}", args[0]);
+            return Err(error("Device operation timed out. Check the service and retry."));
         }
-        std::thread::sleep(Duration::from_millis(50));
-    }
-    let status = child.wait().map_err(error)?;
-    let bytes = output.join().map_err(|_| error("Could not read command output"))?.map_err(error)?;
-    let _ = errors.join();
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    // Do not join reader threads or wait for inherited pipes held by descendants.
+    drain(&mut stdout, &mut bytes).map_err(error)?;
+    drain(&mut stderr, &mut diagnostics).map_err(error)?;
     if !status.success() {
-        return Err(error(
-            "The system service could not complete this operation. Check the password, device availability, and permissions.",
-        ));
+        let text = String::from_utf8_lossy(&diagnostics).to_ascii_lowercase();
+        let (code, message) = if text.contains("permission")
+            || text.contains("not authorized")
+            || text.contains("not permitted")
+        {
+            (ErrorCode::PermissionDenied, "Permission denied. Check system authorization and retry.")
+        } else if text.contains("not running") || text.contains("serviceunknown") || text.contains("could not connect")
+        {
+            (ErrorCode::Unavailable, "System service unavailable. Start the service and retry.")
+        } else if text.contains("secrets") || text.contains("password") || text.contains("authentication") {
+            (ErrorCode::Failed, "Authentication failed. Check the password and retry.")
+        } else {
+            (
+                ErrorCode::Failed,
+                "The system service could not complete this operation. Refresh and check device availability and permissions.",
+            )
+        };
+        // Never log arguments or raw stderr: both may contain credentials.
+        log::warn!("component=settings event=command_failed program={} status={status}", args[0]);
+        return Err(ErrorBody::new(code, message));
     }
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
@@ -374,8 +447,32 @@ fn mac(s: &str) -> bool {
         && s.split(':').count() == 6
         && s.split(':').all(|b| b.len() == 2 && b.chars().all(|c| c.is_ascii_hexdigit()))
 }
+pub(crate) async fn system_bus() -> Result<gio::DBusConnection, glib::Error> {
+    glib::future_with_timeout(Duration::from_secs(5), gio::bus_get_future(gio::BusType::System))
+        .await
+        .map_err(|_| glib::Error::new(gio::IOErrorEnum::TimedOut, "System bus connection timed out"))?
+}
+pub async fn wifi_enabled(enabled: bool) -> Result<(), ErrorBody> {
+    use glib::variant::ToVariant;
+    system_bus()
+        .await
+        .map_err(error)?
+        .call_future(
+            Some("org.freedesktop.NetworkManager"),
+            "/org/freedesktop/NetworkManager",
+            "org.freedesktop.DBus.Properties",
+            "Set",
+            Some(&("org.freedesktop.NetworkManager", "WirelessEnabled", enabled.to_variant()).to_variant()),
+            None,
+            gio::DBusCallFlags::NONE,
+            10000,
+        )
+        .await
+        .map_err(error)?;
+    Ok(())
+}
 async fn objects() -> Result<glib::Variant, ErrorBody> {
-    let bus = gio::bus_get_future(gio::BusType::System).await.map_err(error)?;
+    let bus = system_bus().await.map_err(error)?;
     bus.call_future(
         Some("org.bluez"),
         "/",
@@ -427,10 +524,12 @@ pub async fn bluetooth_scan() -> Result<(), ErrorBody> {
     let path = (0..data.n_children())
         .find_map(|i| {
             let object = data.child_value(i);
-            interface(&object, "org.bluez.Adapter1").map(|_| object.child_value(0).str().unwrap_or_default().to_owned())
+            interface(&object, "org.bluez.Adapter1")
+                .filter(|properties| prop::<bool>(properties, "Powered") == Some(true))
+                .map(|_| object.child_value(0).str().unwrap_or_default().to_owned())
         })
         .ok_or_else(|| error("No Bluetooth adapter"))?;
-    let bus = gio::bus_get_future(gio::BusType::System).await.map_err(error)?;
+    let bus = system_bus().await.map_err(error)?;
     bus.call_future(
         Some("org.bluez"),
         &path,
@@ -444,21 +543,74 @@ pub async fn bluetooth_scan() -> Result<(), ErrorBody> {
     .await
     .map_err(error)?;
     glib::timeout_future(Duration::from_secs(6)).await;
-    let _ = bus
-        .call_future(
-            Some("org.bluez"),
-            &path,
-            "org.bluez.Adapter1",
-            "StopDiscovery",
-            None,
-            None,
-            gio::DBusCallFlags::NONE,
-            10000,
-        )
-        .await;
+    bus.call_future(
+        Some("org.bluez"),
+        &path,
+        "org.bluez.Adapter1",
+        "StopDiscovery",
+        None,
+        None,
+        gio::DBusCallFlags::NONE,
+        10000,
+    )
+    .await
+    .map_err(error)?;
     Ok(())
 }
 pub async fn bluetooth_action(choice: BluetoothAction, parent: Option<gtk::Window>) -> Result<(), ErrorBody> {
+    if ["on", "off", "discover"].contains(&choice.action.as_str()) {
+        use glib::variant::ToVariant;
+        let data = objects().await?.child_value(0);
+        let present = (0..data.n_children()).any(|i| {
+            let o = data.child_value(i);
+            o.child_value(0).str() == Some(&choice.path) && interface(&o, "org.bluez.Adapter1").is_some()
+        });
+        if !present {
+            return Err(error("Bluetooth adapter removed. Refresh and retry."));
+        }
+        let bus = system_bus().await.map_err(error)?;
+        if choice.action == "discover" {
+            bus.call_future(
+                Some("org.bluez"),
+                &choice.path,
+                "org.bluez.Adapter1",
+                "StartDiscovery",
+                None,
+                None,
+                gio::DBusCallFlags::NONE,
+                10000,
+            )
+            .await
+            .map_err(error)?;
+            glib::timeout_future(Duration::from_secs(6)).await;
+            bus.call_future(
+                Some("org.bluez"),
+                &choice.path,
+                "org.bluez.Adapter1",
+                "StopDiscovery",
+                None,
+                None,
+                gio::DBusCallFlags::NONE,
+                10000,
+            )
+            .await
+            .map_err(error)?;
+        } else {
+            bus.call_future(
+                Some("org.bluez"),
+                &choice.path,
+                "org.freedesktop.DBus.Properties",
+                "Set",
+                Some(&("org.bluez.Adapter1", "Powered", (choice.action == "on").to_variant()).to_variant()),
+                None,
+                gio::DBusCallFlags::NONE,
+                10000,
+            )
+            .await
+            .map_err(error)?;
+        }
+        return Ok(());
+    }
     let devices = bluetooth_devices().await?;
     let device =
         devices.iter().find(|d| d.path == choice.path).ok_or_else(|| error("Device is no longer available"))?;
@@ -469,7 +621,7 @@ pub async fn bluetooth_action(choice: BluetoothAction, parent: Option<gtk::Windo
         "trust" | "untrust" | "forget" => "",
         _ => return Err(error("Unknown Bluetooth action")),
     };
-    let bus = gio::bus_get_future(gio::BusType::System).await.map_err(error)?;
+    let bus = system_bus().await.map_err(error)?;
     if choice.action == "trust" || choice.action == "untrust" {
         use glib::variant::ToVariant;
         bus.call_future(
@@ -526,6 +678,7 @@ struct Trial {
     token: String,
     before: Vec<DisplayConfig>,
     after: Vec<DisplayConfig>,
+    deadline: Instant,
 }
 static TRIAL: std::sync::Mutex<Option<Trial>> = std::sync::Mutex::new(None);
 static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -533,7 +686,11 @@ fn restore(before: &[DisplayConfig]) -> Result<(), ErrorBody> {
     let current = meridian_services::displays::list().map_err(error)?;
     let mut edits = meridian_services::displays::snapshot(&current);
     for e in &mut edits {
-        if let Some(old) = before.iter().find(|old| old.name == e.name) {
+        if let Some(old) = before.iter().find(|old| old.name == e.name)
+            && current.iter().find(|o| o.name == e.name).is_some_and(|o| {
+                o.modes.iter().any(|m| m.width == old.width && m.height == old.height && m.refresh == old.refresh)
+            })
+        {
             *e = old.clone();
         }
     }
@@ -545,23 +702,29 @@ fn restore(before: &[DisplayConfig]) -> Result<(), ErrorBody> {
     meridian_services::displays::apply(&edits).map_err(error)
 }
 pub fn display_apply(edits: Vec<DisplayConfig>) -> Result<DisplayTrial, ErrorBody> {
-    let mut pending = TRIAL.lock().map_err(error)?;
+    let mut pending =
+        TRIAL.try_lock().map_err(|_| error("Another display operation is in progress. Retry shortly."))?;
     if pending.is_some() {
         return Err(error("Keep or revert the current display changes first"));
     }
     let before = meridian_services::displays::snapshot(&meridian_services::displays::list().map_err(error)?);
-    meridian_services::displays::apply(&edits).map_err(error)?;
+    if let Err(e) = meridian_services::displays::apply(&edits) {
+        if let Err(rollback) = restore(&before) {
+            log::warn!("Display recovery failed: {}", rollback.message);
+        }
+        return Err(error(e));
+    }
     let token = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed).to_string();
-    *pending = Some(Trial { token: token.clone(), before, after: edits });
+    *pending =
+        Some(Trial { token: token.clone(), before, after: edits, deadline: Instant::now() + Duration::from_secs(15) });
     let id = token.clone();
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_secs(15));
         if let Ok(mut pending) = TRIAL.lock()
             && pending.as_ref().is_some_and(|t| t.token == id)
-            && let Some(trial) = pending.take()
-            && let Err(e) = restore(&trial.before)
+            && let Err(e) = revert_trial(&mut pending, &id, restore)
         {
-            log::error!("Display rollback failed: {e:?}");
+            log::error!("Display rollback failed; retained trial for retry: {e:?}");
         }
     });
     Ok(DisplayTrial { token, seconds: 15 })
@@ -573,12 +736,35 @@ fn take_trial(pending: &mut Option<Trial>, token: &str, keep: bool) -> Result<Op
         _ => Err(error("This display trial has already ended")),
     }
 }
+fn revert_trial(
+    pending: &mut Option<Trial>,
+    token: &str,
+    restore: impl FnOnce(&[DisplayConfig]) -> Result<(), ErrorBody>,
+) -> Result<(), ErrorBody> {
+    let Some(trial) = pending.as_ref() else {
+        return Ok(());
+    };
+    if trial.token != token {
+        return Err(error("This display trial has already ended"));
+    }
+    restore(&trial.before).map_err(|e| error(format!("{} The display trial is retained. Retry Revert.", e.message)))?;
+    pending.take();
+    Ok(())
+}
 pub fn display_decide(choice: DisplayDecision) -> Result<(), ErrorBody> {
-    let mut pending = TRIAL.lock().map_err(error)?;
+    let mut pending =
+        TRIAL.try_lock().map_err(|_| error("Another display operation is in progress. Retry shortly."))?;
+    if !choice.keep {
+        return revert_trial(&mut pending, &choice.token, restore);
+    }
     let Some(trial) = take_trial(&mut pending, &choice.token, choice.keep)? else {
         return Ok(());
     };
     if choice.keep {
+        if Instant::now() >= trial.deadline {
+            *pending = Some(trial);
+            return Err(error("This display trial has expired. Revert the changes before trying again."));
+        }
         let directory = glib::user_config_dir().join("meridian");
         let saved = (|| {
             std::fs::create_dir_all(&directory).map_err(error)?;
@@ -587,11 +773,12 @@ pub fn display_decide(choice: DisplayDecision) -> Result<(), ErrorBody> {
             std::fs::rename(temporary, directory.join("displays.json")).map_err(error)
         })();
         if let Err(e) = saved {
-            let _ = restore(&trial.before);
+            if let Err(rollback) = restore(&trial.before) {
+                *pending = Some(trial);
+                return Err(error(format!("{} Rollback failed: {}. Retry Revert.", e.message, rollback.message)));
+            }
             return Err(e);
         }
-    } else {
-        restore(&trial.before)?;
     }
     Ok(())
 }
@@ -608,12 +795,48 @@ mod tests {
     use super::*;
     #[test]
     fn display_decisions_reject_stale_tokens_and_reverting_twice_is_safe() {
-        let mut pending = Some(Trial { token: "new".into(), before: vec![], after: vec![] });
+        let mut pending = Some(Trial {
+            token: "new".into(),
+            before: vec![],
+            after: vec![],
+            deadline: Instant::now() + Duration::from_secs(15),
+        });
         assert!(take_trial(&mut pending, "old", true).is_err());
         assert!(pending.is_some());
         assert!(take_trial(&mut pending, "new", false).unwrap().is_some());
         assert!(take_trial(&mut pending, "new", false).unwrap().is_none());
         assert!(take_trial(&mut pending, "new", true).is_err());
+    }
+    #[test]
+    fn failed_display_rollback_retains_recovery_state_for_retry() {
+        let mut pending =
+            Some(Trial { token: "trial".into(), before: vec![], after: vec![], deadline: Instant::now() });
+        assert!(revert_trial(&mut pending, "trial", |_| Err(error("Compositor disconnected"))).is_err());
+        assert!(pending.is_some());
+        assert!(revert_trial(&mut pending, "stale", |_| Ok(())).is_err());
+        revert_trial(&mut pending, "trial", |_| Ok(())).unwrap();
+        assert!(pending.is_none());
+    }
+    #[test]
+    fn blocked_command_stdin_is_also_bounded() {
+        let start = Instant::now();
+        let result = run_timeout(&["/bin/sleep", "2"], Some(&"x".repeat(65536)), Duration::from_millis(30));
+        assert!(result.unwrap_err().message.contains("timed out"));
+        assert!(start.elapsed() < Duration::from_secs(1));
+    }
+    #[test]
+    fn command_timeout_and_inherited_pipes_do_not_hang() {
+        let start = Instant::now();
+        assert!(
+            run_timeout(&["/bin/sleep", "2"], None, Duration::from_millis(30))
+                .unwrap_err()
+                .message
+                .contains("timed out")
+        );
+        assert!(start.elapsed() < Duration::from_secs(1));
+        let start = Instant::now();
+        run_timeout(&["/bin/sh", "-c", "sleep 1 & exit 0"], None, Duration::from_millis(100)).unwrap();
+        assert!(start.elapsed() < Duration::from_millis(500));
     }
     #[test]
     fn command_runner_keeps_secrets_on_stdin_and_drains_large_output() {

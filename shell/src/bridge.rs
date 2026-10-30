@@ -43,6 +43,12 @@ pub enum Reply {
 /// Executes an already-authorized request for a surface.
 pub type Dispatch = Rc<dyn Fn(&Rc<WebSurface>, Request) -> Result<Reply, ErrorBody>>;
 
+#[cfg(any(test, feature = "integration-tests"))]
+thread_local! { static REQUEST_COUNTS: std::cell::RefCell<std::collections::BTreeMap<String, u64>> = Default::default(); }
+#[cfg(any(test, feature = "integration-tests"))]
+pub(crate) fn request_counts() -> std::collections::BTreeMap<String, u64> {
+    REQUEST_COUNTS.with(|counts| counts.borrow().clone())
+}
 pub fn content_manager() -> UserContentManager {
     let ucm = UserContentManager::new();
     // Main world: the UI is first-party code, there are no page scripts to
@@ -109,6 +115,13 @@ fn handle(surface: &Rc<WebSurface>, value: &javascriptcore::Value, dispatch: &Di
     }
     let request = proto::parse_request(&value.to_str())?;
     authorize_kind(surface.kind, &request)?;
+    #[cfg(any(test, feature = "integration-tests"))]
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(&value.to_str())
+        && let Some(method) = value["method"].as_str()
+    {
+        REQUEST_COUNTS
+            .with(|counts| *counts.borrow_mut().entry(format!("{:?}/{method}", surface.kind)).or_default() += 1);
+    }
     log::trace!("component=bridge surface={:?} capability={:?}", surface.kind, request.required_capability());
     dispatch(surface, request)
 }

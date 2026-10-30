@@ -15,3 +15,5 @@ glib.workspace = true
 log.workspace = true
 wayland-client.workspace = true
 wayland-protocols-wlr.workspace = true
+
+libc = "0.2"

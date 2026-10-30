@@ -109,24 +109,30 @@ fn sys_devices(sys: &Path) -> Vec<ManagedDevice> {
     out
 }
 // lsblk includes nested partitions, mapper devices, mounts and active swap.
-fn safe_mounts(node: &serde_json::Value) -> bool {
-    let mounts_safe = node["mountpoints"].as_array().is_none_or(|mounts| {
-        mounts.iter().all(|m| {
-            m.as_str().is_none_or(|p| {
-                if p.starts_with("/run/media/") {
-                    return true;
-                }
-                p.starts_with('/')
-                    && p != "/"
-                    && ![
-                        "/boot", "/home", "/usr", "/var", "/etc", "/opt", "/bin", "/sbin", "/lib", "/lib64", "/run",
-                        "/tmp", "/dev", "/proc", "/sys", "/root",
-                    ]
-                    .iter()
-                    .any(|prefix| p == *prefix || p.starts_with(&format!("{prefix}/")))
+pub(crate) fn safe_mounts(node: &serde_json::Value) -> bool {
+    // Unknown leaf metadata must never authorize an unmount/eject. Aggregate
+    // containers used by the recursive check may have children but no own mounts.
+    let mounts_safe = node["mountpoints"].as_array().map_or_else(
+        || node["children"].as_array().is_some_and(|c| !c.is_empty()),
+        |mounts| {
+            mounts.iter().all(|m| {
+                m.is_null()
+                    || m.as_str().is_some_and(|p| {
+                        if p.starts_with("/run/media/") {
+                            return true;
+                        }
+                        p.starts_with('/')
+                            && p != "/"
+                            && ![
+                                "/boot", "/home", "/usr", "/var", "/etc", "/opt", "/bin", "/sbin", "/lib", "/lib64",
+                                "/run", "/tmp", "/dev", "/proc", "/sys", "/root",
+                            ]
+                            .iter()
+                            .any(|prefix| p == *prefix || p.starts_with(&format!("{prefix}/")))
+                    })
             })
-        })
-    });
+        },
+    );
     mounts_safe && node["children"].as_array().is_none_or(|items| items.iter().all(safe_mounts))
 }
 fn storage_tree() -> Result<serde_json::Value, ErrorBody> {
@@ -211,14 +217,19 @@ fn unmount_tree(node: &serde_json::Value) -> Result<(), ErrorBody> {
     }
     Ok(())
 }
-fn eject_disk(name: &str) -> Result<(), ErrorBody> {
+pub(crate) fn eject_disk(name: &str) -> Result<(), ErrorBody> {
+    eject_disk_checked(name, None)
+}
+pub(crate) fn eject_disk_checked(name: &str, identity: Option<&str>) -> Result<(), ErrorBody> {
     let tree = storage_tree()?;
     let path = format!("/dev/{name}");
     let node = tree["blockdevices"]
         .as_array()
         .and_then(|items| items.iter().find(|n| n["name"] == path && n["type"] == "disk" && n["tran"] == "usb"))
         .ok_or_else(|| error("USB disk is no longer available"))?;
+    crate::storage::validate_identity(identity, crate::storage::disk_identity(&path).as_deref())?;
     unmount_tree(node)?;
+    crate::storage::validate_identity(identity, crate::storage::disk_identity(&path).as_deref())?;
     run(&["udisksctl", "power-off", "--block-device", &path])?;
     Ok(())
 }
@@ -277,6 +288,11 @@ fn printer_devices(output: &str) -> Vec<ManagedDevice> {
         .collect()
 }
 pub fn action(choice: DeviceAction) -> Result<(), ErrorBody> {
+    let _guard = if choice.id.starts_with("storage:") || choice.id.starts_with("usb:") {
+        Some(crate::storage::operation_guard()?)
+    } else {
+        None
+    };
     let device = list()?
         .into_iter()
         .find(|d| d.id == choice.id)
@@ -359,6 +375,17 @@ mod tests {
         assert_eq!(devices.len(), 2);
         assert_eq!(devices[0].actions, ["pause"]);
         assert_eq!(devices[1].actions, ["resume"]);
+    }
+    #[test]
+    fn incomplete_mount_metadata_fails_closed() {
+        for node in [
+            serde_json::json!({}),
+            serde_json::json!({"mountpoints":null}),
+            serde_json::json!({"mountpoints":[42]}),
+            serde_json::json!({"mountpoints":[null],"children":[{}]}),
+        ] {
+            assert!(!safe_mounts(&node));
+        }
     }
     #[test]
     fn system_mounts_and_swap_are_protected_recursively() {

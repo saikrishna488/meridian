@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createRoot } from "react-dom/client";
 import { afterTransition, BridgeError, cssDuration, hello, nextFrame, on, request } from "./bridge";
-import { applyAppearance, applyFont } from "./appearance";
+import { applyAppearance, applyFont, applyHoverBackground } from "./appearance";
 
 export function mount(element: ReactNode): void {
   const root = document.getElementById("root");
@@ -15,11 +15,11 @@ export function mount(element: ReactNode): void {
   }, true);
   applyAppearance("dark");
   let appearanceRevision = 0;
-  on("desktop.changed", event => { appearanceRevision++; applyAppearance(event.data.appearance); applyFont(event.data.font); });
+  on("desktop.changed", event => { appearanceRevision++; applyAppearance(event.data.appearance); applyFont(event.data.font); applyHoverBackground(event.data.hover_background); });
   // Each app window is its own WebView. Read the persisted value so newly
   // opened windows match the rest of the desktop before waiting for updates.
   void request({ method: "desktop.get" }).then(state => {
-    if (appearanceRevision === 0 && state) { applyAppearance(state.appearance); applyFont(state.font); }
+    if (appearanceRevision === 0 && state) { applyAppearance(state.appearance); applyFont(state.font); applyHoverBackground(state.hover_background); }
   }).catch(error => console.warn("Could not read Meridian appearance:", error));
   createRoot(root).render(element);
 }
@@ -73,7 +73,8 @@ export function usePopover(
         // Paint and focus immediately; optional services may take seconds to
         // reply. Existing state stays usable while the refresh completes.
         void loadLatest().catch(error => { if (mine === generation.current && open.current) reportLatest(error); });
-        await nextFrame();
+        // Unhide before waiting for a frame. WebKit may throttle animation
+        // frames for a completely transparent/occluded layer surface.
         if (mine !== generation.current || !open.current) return;
         setVisible(true);
         await nextFrame();

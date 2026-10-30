@@ -16,6 +16,7 @@ bash tools/tests/power.sh
 bash tools/tests/session.sh
 bash tools/tests/install-transaction.sh
 python3 tools/tests/profile-desktop.py
+python3 tools/tests/check-bindings.py
 
 step "rustfmt"
 cargo fmt --all --check
@@ -23,15 +24,11 @@ cargo fmt --all --check
 step "clippy"
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 
+step "generated protocol bindings match clean deterministic exports"
+python3 tools/check-bindings.py
+
 step "tests (also regenerates ui/src/lib/generated)"
 cargo test --workspace
-
-step "generated protocol types are committed"
-if git rev-parse --verify -q HEAD >/dev/null && [ -n "$(git status --porcelain -- ui/src/lib/generated)" ]; then
-    git status --short -- ui/src/lib/generated
-    echo "error: generated TypeScript differs from the committed copy; commit it" >&2
-    exit 1
-fi
 
 step "UI type-check, build, and interaction tests"
 (cd ui && { [ -d node_modules ] || npm ci --no-fund --no-audit; } && npm test)

@@ -78,3 +78,9 @@ export function subscribeFontEffects(callback: (effects: FontEffects) => void): 
   window.addEventListener("storage", onStorage);
   return () => { window.removeEventListener(fontEffectsEvent, onLocal); window.removeEventListener("storage", onStorage); };
 }
+
+/** Shared hover preference uses the existing semantic surface token. */
+export function applyHoverBackground(value: string | undefined): void {
+  const root = document.documentElement;
+  root.dataset.hoverBackground = ["green", "blue", "grey"].includes(value ?? "") ? value : "auto";
+}

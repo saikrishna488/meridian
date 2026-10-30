@@ -18,6 +18,7 @@ struct Config {
     primary_display: Option<String>,
     appearance: String,
     dock_style: String,
+    hover_background: meridian_protocol::HoverBackground,
     font: String,
     wallpaper: String,
     custom: Option<String>,
@@ -30,6 +31,7 @@ impl Default for Config {
             primary_display: None,
             appearance: "dark".into(),
             dock_style: "floating".into(),
+            hover_background: Default::default(),
             font: "Inter".into(),
             wallpaper: "meridian-dusk".into(),
             custom: None,
@@ -72,6 +74,7 @@ fn state(config: &Config) -> DesktopState {
     DesktopState {
         appearance: config.appearance.clone(),
         dock_style: config.dock_style.clone(),
+        hover_background: config.hover_background.clone(),
         font: config.font.clone(),
         wallpaper: config.wallpaper.clone(),
         wallpaper_uri,
@@ -82,8 +85,17 @@ fn state(config: &Config) -> DesktopState {
 pub fn get() -> DesktopState {
     state(&load())
 }
+pub fn set_hover_background(value: meridian_protocol::HoverBackground) -> Result<DesktopState, ErrorBody> {
+    let _guard = CONFIG_LOCK.lock().map_err(error)?;
+    let mut config = load();
+    config.hover_background = value;
+    save(&config)?;
+    Ok(state(&config))
+}
 pub fn set_dock_style(style: &str) -> Result<DesktopState, ErrorBody> {
-    if !["floating", "full-width", "minimal"].contains(&style) { return Err(error("Unknown dock style")); }
+    if !["floating", "full-width", "minimal"].contains(&style) {
+        return Err(error("Unknown dock style"));
+    }
     let _guard = CONFIG_LOCK.lock().map_err(error)?;
     let mut config = load();
     config.dock_style = style.into();
@@ -447,5 +459,18 @@ mod tests {
     fn invalid_wallpaper_id_cannot_become_a_filesystem_path() {
         let config = Config { wallpaper: "../../etc/passwd".into(), ..Config::default() };
         assert!(state(&config).wallpaper_uri.ends_with("meridian-dusk.svg"));
+    }
+}
+
+#[cfg(test)]
+mod hover_tests {
+    use super::*;
+    #[test]
+    fn hover_preference_is_backwards_compatible_and_round_trips() {
+        let old: Config = serde_json::from_str("{}").unwrap();
+        assert_eq!(old.hover_background, meridian_protocol::HoverBackground::Auto);
+        let config = Config { hover_background: meridian_protocol::HoverBackground::Blue, ..Config::default() };
+        let restored: Config = serde_json::from_slice(&serde_json::to_vec(&config).unwrap()).unwrap();
+        assert_eq!(state(&restored).hover_background, meridian_protocol::HoverBackground::Blue);
     }
 }

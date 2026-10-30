@@ -37,12 +37,9 @@ common tradeoffs, not per-device measurements.
 
 Settings includes three additional categories:
 
-- **Device Manager** groups hardware by category, with properties and relevant
-  controls in a right-hand pane. Network adapters use NetworkManager; Bluetooth
-  adapters use BlueZ; printer queue controls use CUPS with authentication. Storage
-  shows driver details and opens the selected disk in GNOME Disks. USB and PCI
-  devices expose their bindings and hardware IDs. Unavailable services do not
-  offer controls. Kernel modules are not unloaded from this UI.
+- **Storage** shows root filesystem usage, disk/partition topology and mounted
+  volumes. Open, mount, unmount and safe USB ejection use GIO and UDisks2; system
+  mounts and active swap are protected. See [integration details and qualification](SETTINGS-INTEGRATION-OVERHAUL.md).
 - **Users** uses AccountsService over the system D-Bus for local accounts, account
   creation, standard/administrator roles, login lock/unlock, password changes and
   deletion. Delete keeps home files. Current-account deletion, locking and
@@ -84,8 +81,8 @@ session. No reboot is required for these shell changes.
 Verify with **Super+I**:
 
 1. **General:** inspect system details, select Check for updates, and open releases.
-2. **Device Manager:** select adapters, printers and storage; inspect their driver
-   details and exercise the relevant controls using nonessential devices.
+2. **Storage:** inspect root usage and volumes; mount/unmount/eject nonessential
+   removable devices. Exercise adapter controls on Wi-Fi and Bluetooth.
 3. **Users:** use a temporary standard account to exercise creation, password reset,
    lock/unlock and deletion. Verify the delete dialog says home files are kept.
 4. **Kitty:** use Super+Enter to open the installed terminal and confirm it

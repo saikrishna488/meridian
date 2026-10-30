@@ -215,8 +215,16 @@ impl Shell {
 
         let monitors = gdk::Display::default().expect("GTK is initialized").monitors();
         let weak = Rc::downgrade(&shell);
-        monitors.connect_items_changed(move |_, _, _, _| {
+        for monitor in monitors.iter::<gdk::Monitor>().filter_map(Result::ok) {
+            shell.watch_monitor(&monitor);
+        }
+        monitors.connect_items_changed(move |list, position, _, added| {
             if let Some(shell) = weak.upgrade() {
+                for index in position..position + added {
+                    if let Some(monitor) = list.item(index).and_downcast::<gdk::Monitor>() {
+                        shell.watch_monitor(&monitor);
+                    }
+                }
                 shell.reconcile_monitors();
             }
         });
@@ -349,6 +357,11 @@ impl Shell {
                 })))
             }
             Request::DesktopGet => serialize(proto::reply_ok(&crate::desktop::get())),
+            Request::DesktopHoverBackgroundSet(choice) => {
+                let state = crate::desktop::set_hover_background(choice.value)?;
+                self.desktop_changed(&state);
+                serialize(proto::reply_ok(&state))
+            }
             Request::DesktopDockStyleSet(choice) => {
                 let state = crate::desktop::set_dock_style(&choice.id)?;
                 self.desktop_changed(&state);
@@ -356,7 +369,10 @@ impl Shell {
             }
             Request::DockInputRegion(bounds) => {
                 if surface.kind != SurfaceKind::Panel {
-                    return Err(ErrorBody::new(ErrorCode::PermissionDenied, "Only the panel can change its input region"));
+                    return Err(ErrorBody::new(
+                        ErrorCode::PermissionDenied,
+                        "Only the panel can change its input region",
+                    ));
                 }
                 surface.set_dock_input_region(&bounds);
                 serialize(ok())
@@ -916,6 +932,9 @@ impl Shell {
             | Request::SettingsPrimaryDisplaySet(_)
             | Request::SettingsSearch
             | Request::SettingsSearchSet(_)
+            | Request::SettingsCapability(_)
+            | Request::SettingsStorage
+            | Request::SettingsStorageAction(_)
             | Request::SettingsDisplays
             | Request::SettingsDisplayApply(_)
             | Request::SettingsDisplayDecide(_)
@@ -1253,11 +1272,6 @@ impl Shell {
         gtk4_layer_shell::LayerShell::set_monitor(&surface.window, primary.as_ref());
         surface.window.present();
         surface.send(&Event::PopoverShown);
-        if popover == Popover::Notifications
-            && let Some(service) = self.notifications.borrow().as_ref()
-        {
-            service.mark_read();
-        }
         if popover == Popover::Options {
             self.settings.refresh();
         }
@@ -1314,7 +1328,20 @@ impl Shell {
 
     /// Create/destroy per-output surfaces to match the current outputs:
     /// every output gets a wallpaper; the primary output also gets the bar.
+    fn watch_monitor(&self, monitor: &gdk::Monitor) {
+        let weak = self.weak_self.clone();
+        monitor.connect_notify_local(Some("geometry"), move |_, _| {
+            if let Some(shell) = weak.upgrade()
+                && let Some(surface) = &shell.state.borrow().preferences
+            {
+                surface.send(&Event::DisplaysChanged);
+            }
+        });
+    }
     fn reconcile_monitors(&self) {
+        if let Some(surface) = &self.state.borrow().preferences {
+            surface.send(&Event::DisplaysChanged);
+        }
         let display = gdk::Display::default().expect("GTK is initialized");
         let monitors: Vec<gdk::Monitor> = display.monitors().iter::<gdk::Monitor>().filter_map(Result::ok).collect();
         let removed_locks: Vec<_> = {

@@ -1,7 +1,11 @@
 //! Monitor configuration through the compositor's output-management protocol.
 use meridian_protocol::{DisplayConfig, DisplayMode, DisplayOutput};
 use std::collections::HashMap;
-use wayland_client::globals::{GlobalListContents, registry_queue_init};
+use std::{
+    os::fd::AsRawFd,
+    time::{Duration, Instant},
+};
+use wayland_client::protocol::wl_callback::{Event as CallbackEvent, WlCallback};
 use wayland_client::protocol::{wl_output::Transform, wl_registry::WlRegistry};
 use wayland_client::{Connection, Dispatch, Proxy, QueueHandle, WEnum, event_created_child};
 use wayland_protocols_wlr::output_management::v1::client::{
@@ -18,17 +22,81 @@ struct State {
     current: HashMap<Head, Mode>,
     serial: u32,
     result: Option<bool>,
+    manager: Option<Manager>,
+    synced: bool,
 }
-impl Dispatch<WlRegistry, GlobalListContents> for State {
+impl Dispatch<WlRegistry, ()> for State {
     fn event(
-        _: &mut Self,
-        _: &WlRegistry,
-        _: <WlRegistry as Proxy>::Event,
-        _: &GlobalListContents,
+        state: &mut Self,
+        registry: &WlRegistry,
+        event: <WlRegistry as Proxy>::Event,
+        _: &(),
         _: &Connection,
-        _: &QueueHandle<Self>,
+        qh: &QueueHandle<Self>,
     ) {
+        if let wayland_client::protocol::wl_registry::Event::Global { name, interface, version } = event
+            && interface == "zwlr_output_manager_v1"
+            && state.manager.is_none()
+        {
+            state.manager = Some(registry.bind(name, version.min(2), qh, ()));
+        }
     }
+}
+impl Dispatch<WlCallback, ()> for State {
+    fn event(state: &mut Self, _: &WlCallback, _: CallbackEvent, _: &(), _: &Connection, _: &QueueHandle<Self>) {
+        state.synced = true;
+    }
+}
+// Every protocol wait, including initial registry discovery, shares a deadline.
+// prepare_read + poll avoids blocking_dispatch's unbounded socket read.
+fn wait(
+    queue: &mut wayland_client::EventQueue<State>,
+    state: &mut State,
+    done: impl Fn(&State) -> bool,
+) -> Result<(), String> {
+    wait_for(queue, state, done, Duration::from_secs(5))
+}
+fn wait_for(
+    queue: &mut wayland_client::EventQueue<State>,
+    state: &mut State,
+    done: impl Fn(&State) -> bool,
+    timeout: Duration,
+) -> Result<(), String> {
+    let deadline = Instant::now() + timeout;
+    loop {
+        queue.dispatch_pending(state).map_err(|e| e.to_string())?;
+        if done(state) {
+            return Ok(());
+        }
+        let remaining = deadline
+            .checked_duration_since(Instant::now())
+            .ok_or("Display operation timed out; check the compositor and retry")?;
+        queue.flush().map_err(|e| e.to_string())?;
+        if let Some(guard) = queue.prepare_read() {
+            let mut fd = libc::pollfd { fd: guard.connection_fd().as_raw_fd(), events: libc::POLLIN, revents: 0 };
+            // SAFETY: fd points to one valid pollfd for the duration of poll.
+            let result = unsafe { libc::poll(&mut fd, 1, remaining.as_millis().min(i32::MAX as u128) as i32) };
+            if result < 0 {
+                let e = std::io::Error::last_os_error();
+                if e.kind() == std::io::ErrorKind::Interrupted {
+                    continue;
+                }
+                return Err(e.to_string());
+            }
+            if result > 0 {
+                guard.read().map_err(|e| e.to_string())?;
+            }
+        }
+    }
+}
+fn roundtrip(
+    connection: &Connection,
+    queue: &mut wayland_client::EventQueue<State>,
+    state: &mut State,
+) -> Result<(), String> {
+    state.synced = false;
+    connection.display().sync(&queue.handle(), ());
+    wait(queue, state, |s| s.synced)
 }
 impl Dispatch<Manager, ()> for State {
     fn event(state: &mut Self, _: &Manager, event: manager::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {
@@ -85,6 +153,8 @@ impl Dispatch<Head, ()> for State {
             }
             head::Event::Finished => {
                 state.heads.remove(proxy);
+                state.current.remove(proxy);
+                state.modes.retain(|_, (owner, _)| owner != proxy);
             }
             _ => {}
         }
@@ -132,13 +202,13 @@ impl Dispatch<ConfigHead, ()> for State {
 }
 fn connect() -> Result<(wayland_client::EventQueue<State>, Manager, State), String> {
     let connection = Connection::connect_to_env().map_err(|e| e.to_string())?;
-    let (globals, mut queue) = registry_queue_init::<State>(&connection).map_err(|e| e.to_string())?;
-    let manager = globals
-        .bind(&queue.handle(), 1..=2, ())
-        .map_err(|_| "This compositor does not support monitor configuration".to_string())?;
+    let mut queue = connection.new_event_queue();
     let mut state = State::default();
-    queue.roundtrip(&mut state).map_err(|e| e.to_string())?;
-    queue.roundtrip(&mut state).map_err(|e| e.to_string())?;
+    connection.display().get_registry(&queue.handle(), ());
+    roundtrip(&connection, &mut queue, &mut state)?;
+    let manager = state.manager.clone().ok_or("This compositor does not support monitor configuration")?;
+    roundtrip(&connection, &mut queue, &mut state)?;
+    roundtrip(&connection, &mut queue, &mut state)?;
     Ok((queue, manager, state))
 }
 fn outputs(state: &State) -> Vec<DisplayOutput> {
@@ -211,6 +281,7 @@ pub fn apply(edits: &[DisplayConfig]) -> Result<(), String> {
     let (mut queue, manager, mut state) = connect()?;
     validate(edits, &outputs(&state))?;
     for testing in [true, false] {
+        validate(edits, &outputs(&state))?;
         let configuration = manager.create_configuration(state.serial, &queue.handle(), ());
         for (head, output) in &state.heads {
             let edit = edits.iter().find(|e| e.name == output.name).ok_or("Monitor disconnected")?;
@@ -238,10 +309,7 @@ pub fn apply(edits: &[DisplayConfig]) -> Result<(), String> {
         } else {
             configuration.apply();
         }
-        queue.roundtrip(&mut state).map_err(|e| e.to_string())?;
-        while state.result.is_none() {
-            queue.blocking_dispatch(&mut state).map_err(|e| e.to_string())?;
-        }
+        wait(&mut queue, &mut state, |s| s.result.is_some())?;
         configuration.destroy();
         if state.result != Some(true) {
             return Err("The compositor rejected this display configuration".into());
@@ -252,6 +320,32 @@ pub fn apply(edits: &[DisplayConfig]) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn unresponsive_compositor_has_a_bounded_wait() {
+        let (client, _server) = std::os::unix::net::UnixStream::pair().unwrap();
+        let connection = Connection::from_socket(client).unwrap();
+        let mut queue = connection.new_event_queue();
+        let mut state = State::default();
+        let started = Instant::now();
+        let result = wait_for(&mut queue, &mut state, |_| false, Duration::from_millis(20));
+        assert!(result.unwrap_err().contains("timed out"));
+        assert!(started.elapsed() < Duration::from_secs(1));
+    }
+    #[test]
+    fn hotplug_invalidates_old_configurations() {
+        let edits = vec![DisplayConfig {
+            name: "removed".into(),
+            enabled: true,
+            x: 0,
+            y: 0,
+            scale: 1.,
+            transform: 0,
+            width: 1920,
+            height: 1080,
+            refresh: 60000,
+        }];
+        assert!(validate(&edits, &[]).is_err());
+    }
     #[test]
     fn rejects_dark_desktop_unsupported_modes_and_invalid_scaling() {
         let mode = DisplayMode { width: 1920, height: 1080, refresh: 60000, preferred: true };
