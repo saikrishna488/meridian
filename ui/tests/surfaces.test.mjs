@@ -1,3 +1,4 @@
+import { installBrowserMocks } from "./browser-mocks.mjs";
 import { surfaceScript } from "./bundle.mjs";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -17,6 +18,7 @@ async function surface(t, name, respond = () => null) {
   const dom = new JSDOM(html, { url: `https://meridian.test/surfaces/${name}/`, runScripts: "outside-only", pretendToBeVisual: true });
   t.after(() => dom.window.close());
   const { window } = dom;
+  installBrowserMocks(window);
   window.TextEncoder = TextEncoder;
   window.HTMLElement.prototype.scrollIntoView = function () {};
   window.HTMLElement.prototype.scrollTo = function () {};
@@ -60,7 +62,7 @@ test("dock follows host windows and activates the selected window", async t => {
   ui.emit("popover.state", { applications: true, options: false });
   await waitFor(() => ui.get("#applications").getAttribute("aria-expanded") === "true");
   assert.equal(ui.get(".system-tray"), null);
-  assert.ok(ui.get(".dock-trash #trash"));
+  assert.ok(ui.get("#applications"));
 });
 
 test("applications preserve keyboard selection, launching, and dismissal", async t => {
@@ -170,11 +172,11 @@ test("top bar hosts Meridian and Control Center while the dock hosts application
   const ui = await surface(t, "topbar");
   assert.ok(ui.get(".topbar > .menu-brand"));
   assert.equal(ui.get(".bar"), null);
-  ui.get(".system-tray #options").click();
+  ui.get(".system-tray .tray-indicator").click();
   await waitFor(() => ui.requests.some(r => r.method === "popover.toggle"));
   assert.deepEqual(ui.requests.at(-1), { method: "popover.toggle", params: { popover: "options" } });
   ui.emit("popover.state", { options: true, applications: false });
-  await waitFor(() => ui.get("#options").getAttribute("aria-expanded") === "true");
+  await waitFor(() => ui.get(".system-tray .tray-indicator").getAttribute("aria-expanded") === "true");
 });
 
 test("dock groups app windows and keeps pinned apps after their windows close", async t => {
@@ -351,17 +353,15 @@ test("Clock switches between local time, stopwatch and timer", async t => {
 });
 
 
-test("launcher list view retains descriptions and launches the keyboard selection", async t => {
+test("launcher grid exposes descriptions and launches the keyboard selection", async t => {
   const items = [{ ...app("terminal", "Terminal"), subtitle: "Command line" }, app("browser", "Browser")];
   const ui = await surface(t, "applications", req => req.method === "search.query" ? searchResult(req.params.serial, items) : null);
   ui.emit("popover.shown");
   await waitFor(() => ui.get("#row-1"));
-  ui.get('[aria-label="List view"]').click();
-  await waitFor(() => ui.get(".list-view .app-description"));
-  assert.equal(ui.get(".app-description").textContent, "Command line");
-  assert.equal(ui.window.localStorage.getItem("meridian.launcher.view"), "list");
+  assert.ok(ui.get(".grid-view"));
+  assert.match(ui.get("#row-0").title, /Command line/);
   ui.get("#search").focus();
-  ui.key("ArrowDown"); ui.key("ArrowDown");
+  ui.key("ArrowRight"); ui.key("ArrowRight");
   await waitFor(() => ui.get("#row-1").getAttribute("aria-selected") === "true");
   ui.key("Enter");
   await waitFor(() => ui.requests.some(req => req.method === "search.activate"));
@@ -409,19 +409,21 @@ test("focused app name updates and its menu quits all app windows", async t => {
   await waitFor(() => !ui.get(".focused-app"));
 });
 
-test("dock context offers only quit and remove, including unpinned running apps", async t => {
+test("dock forwards running window context to the native menu", async t => {
   const ui = await surface(t, "panel", r => r.method === "windows.list" ? [{ id: 7, name: "Terminal", title: "Shell", active: true }] : null);
   await waitFor(() => ui.get('[aria-label="Terminal"]'));
   ui.get('[aria-label="Terminal"]').dispatchEvent(new ui.window.MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
-  await waitFor(() => ui.get('.dock-context'));
-  const buttons = [...ui.window.document.querySelectorAll('.dock-context button')];
-  assert.deepEqual(buttons.map(b => b.textContent), ["Quit", "Remove from panel"]);
-  assert.equal(buttons[1].disabled, true);
-  buttons[0].click();
-  await waitFor(() => ui.requests.some(r => r.method === "windows.close"));
-  assert.deepEqual(ui.requests.find(r => r.method === "windows.close").params, { id: 7 });
+  await waitFor(() => ui.requests.some(r => r.method === "menu.open"));
+  const params = ui.requests.find(r => r.method === "menu.open").params;
+  assert.equal(params.menu, "DockItem"); assert.equal(params.window_id, 7); assert.equal(params.item_name, "Terminal"); assert.equal(params.pinned, false);
+  const menu = await surface(t, "desktop-menu", r => r.method === "windows.list" ? [{ id: 7, name: "Terminal", title: "Shell", active: true }] : null);
+  menu.emit("popover.shown"); menu.emit("menu.opened", params);
+  await waitFor(() => menu.get('.dock-item-menu'));
+  await waitFor(() => buttonWithText(menu, "Quit") && !buttonWithText(menu, "Quit").disabled);
+  buttonWithText(menu, "Quit").click();
+  await waitFor(() => menu.requests.some(r => r.method === "windows.close"));
+  assert.deepEqual(menu.requests.find(r => r.method === "windows.close").params, { id: 7 });
 });
-
 
 test("Control Center becomes interactive while an optional service is slow", async t => {
   let complete;
@@ -452,7 +454,9 @@ test("Wi-Fi exposes access point details and edits saved configuration without r
   ui.get('[aria-label="Configure Studio"]').click();
   await waitFor(() => ui.get('[aria-label="DNS servers"]'));
   assert.equal(ui.get('[aria-label="IPv4 addresses"]').value, "192.168.1.20/24");
+  await waitFor(() => ui.window.glisseSwitchReady(ui.get("#wifi-autoconnect")));
   ui.get('#wifi-autoconnect').click();
+  await waitFor(() => ui.get('#wifi-autoconnect').getAttribute('aria-checked') === 'false');
   ui.type('[aria-label="DNS servers"]', "9.9.9.9, 1.1.1.1");
   ui.get('[role="dialog"]').dispatchEvent(new ui.window.Event("submit", { bubbles: true, cancelable: true }));
   await waitFor(() => ui.requests.some(r => r.method === "settings.wifi_config_set"));
@@ -492,6 +496,8 @@ test("Bluetooth groups paired devices, shows battery and address, and supports t
   const nearby = { ...paired, path: "/org/bluez/hci0/dev_CC_DD", name: "Keyboard", paired: false, connected: false, icon: "input-keyboard", battery: null };
   const ui = await surface(t, "settings", r => r.method === "settings.get" ? wirelessState : r.method === "settings.bluetooth_devices" ? [paired, nearby] : null);
   ui.get('nav [aria-label="Bluetooth"]').click();
+  await waitFor(() => buttonWithText(ui, "Pair new device") && !buttonWithText(ui, "Pair new device").disabled);
+  buttonWithText(ui, "Pair new device").click();
   await waitFor(() => ui.window.document.querySelectorAll(".wireless-item").length === 2 && !buttonWithText(ui, "Pair").disabled);
   assert.match(ui.window.document.querySelectorAll(".wireless-list")[0].textContent, /Studio headphones/);
   assert.match(ui.window.document.querySelectorAll(".wireless-list")[1].textContent, /Keyboard/);
@@ -518,7 +524,7 @@ test("turning Wi-Fi off hides stale nearby results while saved configurations re
   ui.emit("settings.changed", { ...wirelessState, wifi: false });
   await waitFor(() => !ui.get(".wireless-item"));
   assert.ok(ui.get('[aria-label="Configure Studio"]'));
-  assert.equal(buttonWithText(ui, "Scan again").disabled, true);
+  assert.equal(buttonWithText(ui, "New connection").disabled, true);
   assert.match(ui.get(".wireless-empty").textContent, /Wi-Fi is off/);
 });
 

@@ -1,30 +1,17 @@
-/* Low specificity lets existing surfaces retain their geometry during migration. */
-:where(.ui-button) {
-  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
-  min-height: var(--control-height); padding: 6px var(--space-3);
-  border: 1px solid var(--line); border-radius: var(--radius-sm);
-  background: var(--surface); color: var(--ink); font-size: var(--text-sm);
-  font-weight: var(--weight-medium); cursor: pointer;
-}
-:where(.ui-button:hover:not(:disabled)) { background: var(--surface-hover); }
-.ui-button[data-variant="primary"] { background: var(--button-primary); color: var(--on-primary); border-color: transparent; }
-.ui-button[data-variant="primary"]:hover:not(:disabled) { background: var(--button-primary-hover); }
-.ui-button[data-variant="danger"] { background: var(--button-danger); color: var(--on-danger); border-color: transparent; }
-.ui-button[data-variant="danger"]:hover:not(:disabled) { background: var(--button-danger-hover); }
-.ui-button[data-variant="ghost"] { background: transparent; border-color: transparent; }
-:where(.ui-button[data-size="small"]) { min-height: var(--control-height-small); padding: 4px var(--space-2); }
-:where(.ui-button[data-size="icon"]) { width: var(--control-height); padding: 0; }
-:where(.ui-button:disabled, .ui-slider:disabled, .ui-checkbox:disabled) { opacity: .45; cursor: default; }
-:where(.ui-button:focus-visible, .ui-slider:focus-visible, .ui-checkbox:focus-visible, .ui-tab-panel:focus-visible) { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
-:where(.ui-card) { border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); color: var(--ink); box-shadow: var(--shadow-card); }
-:where(.ui-slider, .ui-progress) { accent-color: var(--button-primary); }
-:where(.ui-slider) { min-width: 0; }
+/* Glisse supplies the button material and interaction. */
+.ui-button[data-size="small"] { min-height: var(--control-height-small); padding: 4px var(--space-2); }
+.ui-button[data-size="icon"] { width: var(--control-height); padding: 0; }
+.ui-button-ghost { background-color: transparent; }
+:where(.ui-button:disabled, .ui-checkbox:disabled) { opacity: .45; cursor: default; }
+:where(.ui-button:focus-visible, .ui-checkbox:focus-visible, .ui-tab-panel:focus-visible) { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+:where(.ui-card) { border: 1px solid var(--line); border-radius: var(--radius-md); color: var(--ink); }
+:where(.ui-progress) { accent-color: var(--button-primary); }
 :where(.ui-checkbox) { width: 16px; height: 16px; accent-color: var(--button-primary); vertical-align: middle; }
 :where(.ui-dialog-scrim) { position: fixed; inset: 0; z-index: var(--layer-dialog); display: grid; place-items: center; padding: var(--space-5); background: var(--scrim); }
 :where(.ui-dialog) { width: min(460px, 100%); max-height: calc(100vh - 40px); overflow: auto; overscroll-behavior: contain; padding: var(--space-6); border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface-raised); color: var(--ink); box-shadow: var(--shadow-lg); }
 :where(.ui-tabs) { display: flex; gap: var(--space-1); padding: var(--space-1); width: fit-content; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-subtle); }
 :where(.ui-tabs [role="tab"]) { border-color: transparent; background: transparent; color: var(--ink-muted); }
-:where(.ui-tabs [aria-selected="true"]) { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-card); }
+:where(.ui-tabs [aria-selected="true"]) { color: var(--ink); }
 /* Surface-specific hiding rules must never make an inert surface interactive. */
 [inert] { pointer-events: none; }
 

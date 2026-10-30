@@ -1,3 +1,4 @@
+import { Slider } from "../../components/ui/slider";
 import { Button } from "../../components/ui/button";
 import { SearchSettings } from "./search";
 import { ApplicationsSettings } from "./applications";
@@ -7,6 +8,7 @@ import { hello, on, request } from "../../lib/bridge";
 import { mount, errorMessage } from "../../lib/react";
 import { useDesktop } from "../../lib/desktop";
 import { useSystemSettings } from "../../lib/settings";
+import { getFontEffects, saveFontEffects, subscribeFontEffects, type FontEffects } from "../../lib/appearance";
 import { General } from "./general";
 import { Startup } from "./startup";
 import { Sound } from "./sound";
@@ -53,6 +55,26 @@ const searchTerms: Record<string, string> = {
   Displays: "monitor screen resolution scaling rotation brightness",
   Sound: "audio volume speaker mute microphone input output headphones recording",
 };
+function FontEffectsPanel() {
+  const [effects, setEffects] = useState<FontEffects>(getFontEffects);
+  useEffect(() => subscribeFontEffects(setEffects), []);
+  function update(key: keyof FontEffects, value: number) {
+    const next = { ...effects, [key]: value };
+    setEffects(next);
+    saveFontEffects(next);
+  }
+  const controls: { key: keyof FontEffects; label: string; max: number; step: number; unit: string }[] = [
+    { key: "stroke", label: "Text stroke", max: 1, step: 0.1, unit: "px" },
+    { key: "shadow", label: "Text shadow", max: 8, step: 0.5, unit: "px" },
+    { key: "blur", label: "Text blur", max: 2, step: 0.1, unit: "px" },
+  ];
+  return <section className="settings-card font-effects" aria-labelledby="font-effects-title">
+    <div className="font-effects-heading"><h3 id="font-effects-title">Font effects</h3><p>Fine tune text appearance across Meridian apps. Settings are saved automatically.</p></div>
+    {controls.map(({ key, label, max, step, unit }) => <label className="font-effect-row" key={key}><span>{label}</span><Slider min={0} max={max} step={step} value={effects[key]} aria-label={label} onValueChange={value => update(key, value)} /><output>{effects[key] === 0 ? "Off" : `${effects[key]} ${unit}`}</output></label>)}
+    <div className="font-effect-preview">The quick brown fox jumps over Meridian.</div>
+  </section>;
+}
+
 function Settings() {
   const [section, setSection] = useState("Home");
   const [search, setSearch] = useState("");
@@ -95,7 +117,7 @@ function Settings() {
       </> : section === "Search" ? <SearchSettings /> : section === "Applications" ? <ApplicationsSettings /> : section === "Power & Lock" ? <Power /> : section === "Startup Apps" ? <Startup /> : section === "General" ? <General /> : section === "Device Manager" ? <DeviceManager navigate={navigate} /> : section === "Users" ? <Users /> : section === "Displays" ? <Displays /> : section === "Wi-Fi" || section === "Bluetooth" ? <Wireless key={section} kind={section === "Wi-Fi" ? "wifi" : "bluetooth"} /> : section === "Wallpaper" ? <>
         <div className="settings-card">{desktop ? <img className="wallpaper-current" src={desktop.wallpaper_uri} alt="Current desktop wallpaper" /> : <div className="wallpaper-loading" role="status">Loading wallpaper…</div>}<div className="wallpaper-choices" aria-label="Wallpapers">{desktop?.wallpapers.map(choice => <Button className="wallpaper-choice" key={choice.id} aria-pressed={desktop.wallpaper === choice.id} disabled={busy} onClick={() => void wallpaper(choice.id)}><img src={choice.uri} alt="" /><span>{choice.name}{desktop.wallpaper === choice.id && <Icon name="check" width="14" height="14" />}</span></Button>)}</div><div className="wallpaper-custom"><Button disabled={busy} onClick={() => void wallpaper()}><Icon name="image" width="16" height="16" />{busy ? "Updating…" : "Choose custom image…"}</Button><small>PNG, JPEG or WebP · up to 20 MB</small></div></div>
       </> : section === "Appearance" ? <>
-        <div className="settings-card"><div className="settings-row"><strong>Dark mode</strong><small className="row-detail">Meridian always uses its dark, high-contrast interface.</small></div><div className="settings-row"><label htmlFor="system-font">Font</label><Select id="system-font" aria-label="System font" value={desktop?.font ?? "Inter"} disabled={busy || !desktop} onChange={e => void font(e.target.value)}>{["Inter", "Noto Sans", "DejaVu Sans", "Liberation Sans"].map(name => <option key={name} value={name}>{name}</option>)}</Select></div></div>
+        <div className="settings-card"><div className="settings-row"><strong>Dark mode</strong><small className="row-detail">Meridian always uses its dark, high-contrast interface.</small></div><div className="settings-row"><label htmlFor="system-font">Font</label><Select id="system-font" aria-label="System font" value={desktop?.font ?? "Inter"} disabled={busy || !desktop} onChange={e => void font(e.target.value)}>{["Inter", "Noto Sans", "DejaVu Sans", "Liberation Sans"].map(name => <option key={name} value={name}>{name}</option>)}</Select></div></div><FontEffectsPanel />
       </> : section === "Sound" ? <Sound /> : null}
       {error && <p className="settings-error" role="alert">{error}</p>}
     </section>

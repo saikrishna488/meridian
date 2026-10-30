@@ -29,7 +29,8 @@
   --control-height-small: 30px;
   --row-height: 52px;
   --icon-size: 18px;
-  --dock-surface-height: 64px; /* matches native PANEL_HEIGHT */
+  --dock-surface-height: 64px; /* exclusive zone and clickable dock */
+  --dock-animation-overflow: 20px; /* native panel surface extends upward */
   --topbar-height: 44px; /* matches native TOPBAR_HEIGHT */
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -121,75 +122,40 @@
   :root { --dur-fast: 0ms; --dur-med: 0ms; --dur-slow: 0ms; }
 }
 
-/* Dark-only contract. Keep legacy token names for component compatibility, but
-   make every owned surface black and every UI text token strictly white/black. */
+/* Glisse's dark material palette is the shared basis for Meridian surfaces. */
 :root, :root[data-theme="dark"] {
   color-scheme: dark;
-  --canvas: #000000;
-  --surface: #000000;
-  --surface-raised: #000000;
-  --surface-subtle: #000000;
-  --surface-hover: #247CFF;
-  --ink: #FFFFFF;
-  --ink-muted: #FFFFFF;
-  --line: rgb(255 255 255 / .14);
-  --selection: #247CFF;
-  --selection-ink: #FFFFFF;
-  --action: #FFFFFF;
-  --action-hover: #FFFFFF;
-  --button-primary: #247CFF;
-  --button-primary-hover: #247CFF;
-  --on-primary: #FFFFFF;
-  --focus-ring: #FFFFFF;
-  --danger: #FFFFFF;
-  --button-danger: #000000;
-  --button-danger-hover: #000000;
-  --on-danger: #FFFFFF;
-  --success: #FFFFFF;
-  --chrome-bg: #000000;
-  --chrome-ink: #FFFFFF;
-  --chrome-line: rgb(255 255 255 / .14);
-  --chrome-hover: #247CFF;
-  --glass-background: #000000;
-  --glass-background-strong: #000000;
-  --glass-border: rgb(255 255 255 / .14);
-  --glass-blur: 0px;
-  --tile-bg: #000000;
-  --tile-bg-hover: #247CFF;
-  --tile-bg-active: #247CFF;
-  --tile-fg-active: #FFFFFF;
-}
-
-/* Meridian high-contrast desktop refresh, 2026-10 */
-:root {
-  --ink: #000;
-  --ink-muted: #000;
-  --selection: #123b75;
-  --selection-ink: #fff;
-  --surface-hover: #123b75;
-  --tile-bg-hover: #123b75;
-  --tile-bg-active: #123b75;
-  --tile-fg-active: #fff;
-  --action: #000;
-  --action-hover: #000;
-  --success: #000;
-  --danger: #000;
-  --button-danger: #000;
-  --chrome-ink: #000;
-}
-:root[data-theme="dark"] {
+  --canvas: #000;
+  --surface: #151517;
+  --surface-raised: #1c1c1f;
+  --surface-subtle: #242426;
+  --surface-hover: rgb(255 255 255 / .12);
   --ink: #fff;
-  --ink-muted: #fff;
-  --selection: #123b75;
+  --ink-muted: rgb(235 235 245 / .72);
+  --line: rgb(255 255 255 / .14);
+  --selection: rgb(255 255 255 / .16);
   --selection-ink: #fff;
-  --surface-hover: #123b75;
-  --tile-bg-hover: #123b75;
-  --tile-bg-active: #123b75;
+  --action: #80c4ff;
+  --action-hover: #afd9ff;
+  --button-primary: #0091ff;
+  --button-primary-hover: #38aaff;
+  --focus-ring: #a8d7ff;
+  --danger: #ff686b;
+  --button-danger: #c73136;
+  --button-danger-hover: #e13f44;
+  --success: #30d158;
+  --chrome-bg: rgb(28 28 31 / .92);
+  --chrome-ink: var(--ink);
+  --chrome-line: var(--line);
+  --chrome-hover: var(--surface-hover);
+  --glass-bg: rgb(40 40 40 / .82);
+  --glass-bg-strong: rgb(28 28 31 / .94);
+  --glass-background: var(--glass-bg);
+  --glass-background-strong: var(--glass-bg-strong);
+  --glass-border: rgb(255 255 255 / .16);
+  --glass-blur: 12px;
+  --tile-bg: rgb(255 255 255 / .06);
+  --tile-bg-hover: var(--surface-hover);
+  --tile-bg-active: var(--selection);
   --tile-fg-active: #fff;
-  --action: #fff;
-  --action-hover: #fff;
-  --success: #fff;
-  --danger: #fff;
-  --button-danger: #000;
-  --chrome-ink: #fff;
 }

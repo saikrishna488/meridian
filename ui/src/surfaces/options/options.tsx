@@ -23,7 +23,7 @@ function Options() {
  useEffect(()=>on("settings.changed",event=>{revision.current++;setSettings(event.data);}),[]);
  useEffect(()=>on("notifications.changed",event=>{notificationRevision.current++;setNotifications(event.data);}),[]);
  useWindowKey(event=>{if(event.key==="Escape"){event.preventDefault();void dismiss().catch(report);}});
- useDialogFocus(menu, visible, () => { void dismiss().catch(report); });
+ useDialogFocus(menu, visible, () => { void dismiss().catch(report); }, false);
  async function toggle(key:"wifi"|"bluetooth",enabled:boolean){const previous=settings[key];if(previous===null)return;const mine=revision.current;setSettings(s=>({...s,[key]:enabled}));setStatus("");try{await request({method:key==="wifi"?"settings.set_wifi":"settings.set_bluetooth",params:{enabled}});}catch(e){if(mine===revision.current)setSettings(s=>({...s,[key]:previous}));report(e);}}
  async function doNotDisturb(enabled:boolean) {
   if(dndPending.current)return;

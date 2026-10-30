@@ -1,3 +1,4 @@
+import { Button as GlisseButton } from "glisse";
 import type { ComponentProps } from "react";
 
 export type ButtonProps = ComponentProps<"button"> & {
@@ -5,7 +6,8 @@ export type ButtonProps = ComponentProps<"button"> & {
   size?: "default" | "small" | "icon";
 };
 
-/** Native button semantics and refs; variants use Meridian's semantic tokens. */
+/** Preserve Meridian's existing button API while using Glisse's interaction and material. */
 export function Button({ type = "button", variant = "default", size = "default", className = "", ...props }: ButtonProps) {
-  return <button {...props} type={type} data-variant={variant} data-size={size} className={`ui-button ${className}`} />;
+  return <GlisseButton {...props} type={type} variant={variant === "primary" ? "filled" : "glass"}
+    destructive={variant === "danger"} data-size={size} className={`ui-button ui-button-${variant} ${className}`} />;
 }

@@ -1,3 +1,4 @@
+import { SearchField } from "glisse";
 import { Button } from "../../components/ui/button";
 import { useEffect, useRef, useState } from "react";
 import { Icon, type IconName } from "../../components/Icon";
@@ -10,8 +11,6 @@ import type { BluetoothDevice } from "../../lib/generated/BluetoothDevice";
 import type { WifiNetwork } from "../../lib/generated/WifiNetwork";
 import type { WifiProfile } from "../../lib/generated/WifiProfile";
 import type { WifiConfig } from "../../lib/generated/WifiConfig";
-import type { BluetoothAudioMode } from "../../lib/generated/BluetoothAudioMode";
-import type { BluetoothAudioState } from "../../lib/generated/BluetoothAudioState";
 
 function deviceIcon(device: BluetoothDevice): IconName {
   if (device.icon?.includes("audio")) return "sound";
@@ -29,7 +28,6 @@ export function Wireless({ kind }: { kind: "wifi" | "bluetooth" }) {
   const [networks, setNetworks] = useState<WifiNetwork[]>([]);
   const [profiles, setProfiles] = useState<WifiProfile[]>([]);
   const [devices, setDevices] = useState<BluetoothDevice[]>([]);
-  const [bluetoothAudio, setBluetoothAudio] = useState<BluetoothAudioState>({ mode: "auto", active_codec: null, active_device: null });
   const [discovered, setDiscovered] = useState(false);
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false);
   const [operation, setOperation] = useState(""), [error, setError] = useState(""), [notice, setNotice] = useState("");
@@ -57,12 +55,8 @@ export function Wireless({ kind }: { kind: "wifi" | "bluetooth" }) {
       const failed = results.find(result => result.status === "rejected");
       if (failed?.status === "rejected") throw failed.reason;
     } else {
-      const [found, audio] = await Promise.all([
-        request({ method: "settings.bluetooth_devices" }),
-        request({ method: "settings.bluetooth_audio" }),
-      ]);
+      const found = await request({ method: "settings.bluetooth_devices" });
       setDevices(found ?? []);
-      setBluetoothAudio(audio);
     }
   }
   useEffect(() => {
@@ -72,7 +66,7 @@ export function Wireless({ kind }: { kind: "wifi" | "bluetooth" }) {
   }, [kind]);
   useEffect(() => {
     if (kind !== "bluetooth") return;
-    const refresh = () => { void request({ method: "settings.bluetooth_audio" }).then(setBluetoothAudio).catch(() => {}); };
+    const refresh = () => { if (!document.hidden) void load().catch(() => {}); };
     const timer = window.setInterval(refresh, 4000);
     return () => window.clearInterval(timer);
   }, [kind]);
@@ -111,12 +105,6 @@ export function Wireless({ kind }: { kind: "wifi" | "bluetooth" }) {
     await perform(`${action === "pair" ? "Pairing with" : "Updating"} ${device.name}…${action === "pair" ? " Confirm any pairing request." : ""}`, async () => {
       await request({ method: "settings.bluetooth_action", params: { path: device.path, action } });
       setConfirmation(null); await load();
-    });
-  }
-  async function bluetoothQuality(mode: BluetoothAudioMode) {
-    await perform("Applying Bluetooth audio preference…", async () => {
-      setBluetoothAudio(await request({ method: "settings.bluetooth_audio_set", params: { mode } }));
-      setNotice("Preference saved. Bluetooth audio may briefly reconnect while WirePlumber restarts.");
     });
   }
   async function profileAction(item: WifiProfile, action: string) {
@@ -175,7 +163,7 @@ export function Wireless({ kind }: { kind: "wifi" | "bluetooth" }) {
   }
   return <div className="wireless-page" aria-busy={disabled}>
     <div className="settings-card wireless-summary"><span className={`wireless-summary-icon${value ? " enabled" : ""}`}><Icon name={kind} width="25" height="25" /></span><div><h3>{name}</h3><p>{value === null ? "No adapter available" : !value ? `${name} is turned off` : kind === "wifi" ? networks.find(n => n.connected)?.ssid ? `Connected to ${networks.find(n => n.connected)!.ssid}` : "Ready to connect" : `${devices.filter(d => d.connected).length} connected · Discover and manage your devices`}</p></div><Toggle id={kind} label={name} checked={value === true} disabled={disabled || value === null} onChange={v => void toggle(v)} /></div>
-    <div className="wireless-toolbar"><label className="wireless-search"><Icon name="search" width="16" height="16" /><input aria-label={kind === "wifi" ? "Filter networks" : "Filter Bluetooth devices"} placeholder={kind === "wifi" ? "Find a network" : "Find a device"} value={query} onChange={e => setQuery(e.target.value)} /></label><Button variant="primary" className="primary" disabled={disabled || value !== true} onClick={() => void scan()}><Icon name={discovered ? "refresh" : "plus"} width="15" height="15" />{busy ? (kind === "wifi" ? "Scanning…" : "Searching…") : discovered ? "Scan again" : (kind === "wifi" ? "New connection" : "Pair new device")}</Button></div>
+    <div className="wireless-toolbar"><SearchField className="wireless-search" aria-label={kind === "wifi" ? "Filter networks" : "Filter Bluetooth devices"} placeholder={kind === "wifi" ? "Find a network" : "Find a device"} value={query} onValueChange={setQuery} /><Button variant="primary" className="primary" disabled={disabled || value !== true} onClick={() => void scan()}><Icon name={discovered ? "refresh" : "plus"} width="15" height="15" />{busy ? (kind === "wifi" ? "Scanning…" : "Searching…") : discovered ? "Scan again" : (kind === "wifi" ? "New connection" : "Pair new device")}</Button></div>
     {(operation || loading || notice) && <p role="status" className="wireless-status">{operation || (loading ? `Loading ${kind === "wifi" ? "networks" : "devices"}…` : notice)}</p>}
     {error && !network && !profile && !confirmation && <p className="settings-error" role="alert">{error}</p>}
     {kind === "wifi" ? <>
@@ -187,12 +175,7 @@ export function Wireless({ kind }: { kind: "wifi" | "bluetooth" }) {
     </> : <>
       <div className="wireless-list-heading"><h3>Your devices</h3><span>{paired.length} saved</span></div><div className="settings-card wireless-list">{bluetoothRows(paired)}{!paired.length && <p className="device-empty">{query ? "No saved devices match your search." : "Paired devices will appear here for easy reconnection."}</p>}</div>
       <div className="wireless-list-heading"><h3>Nearby devices</h3><span>{discovered && value === true ? nearby.length : "—"}</span></div><p className="section-caption">Put your headphones, keyboard or other accessory in pairing mode, then choose Pair new device.</p><div className="settings-card wireless-list">{discovered && value === true && bluetoothRows(nearby)}{(!discovered || value !== true || !nearby.length) && <div className="wireless-empty"><Icon name="bluetooth" width="28" height="28" /><strong>{loading ? "Loading paired devices…" : value === null ? "No Bluetooth adapter" : !value ? "Bluetooth is off" : !discovered ? "Ready to pair" : query ? "No matching devices" : "No nearby devices found"}</strong><p>{value === true ? !discovered ? "Nearby discovery starts only when you click Pair new device." : "Keep your device nearby and make sure it is discoverable." : "Turn on Bluetooth to discover and connect devices."}</p></div>}</div>
-      <section className="settings-card bluetooth-codecs"><div><h3>Bluetooth audio</h3><p>PipeWire negotiates a codec supported by both your system and headset. Availability depends on installed codec plugins and the connected device.</p></div>
-        <div className="bluetooth-active-codec"><span>Active codec</span><strong>{bluetoothAudio.active_codec ? bluetoothAudio.active_codec.toUpperCase().replaceAll("_", " ") : "No Bluetooth audio output"}</strong>{bluetoothAudio.active_device && <small>{bluetoothAudio.active_device}</small>}</div>
-        <div className="bluetooth-quality-setting"><div><strong>Quality preference</strong><small>Highest quality requests LDAC HQ when the headset and system support it. Otherwise PipeWire uses another available codec.</small></div><div className="bluetooth-quality-options" role="group" aria-label="Bluetooth audio quality preference"><Button disabled={disabled || value !== true || bluetoothAudio.mode === "auto"} aria-pressed={bluetoothAudio.mode === "auto"} onClick={() => void bluetoothQuality("auto")}>Auto</Button><Button disabled={disabled || value !== true || bluetoothAudio.mode === "highest-quality"} aria-pressed={bluetoothAudio.mode === "highest-quality"} onClick={() => void bluetoothQuality("highest-quality")}>Highest quality</Button></div></div>
-        <div className="codec-list">{([
-        ["SBC", "Medium quality", "Low stutter risk", "Broad compatibility"], ["SBC-XQ", "High quality", "Range sensitive", "Higher bitrate"], ["AAC", "Medium–high quality", "Device dependent", "Common on phones"], ["aptX", "High quality", "Low latency", "Device support required"], ["aptX HD", "Very high quality", "Range sensitive", "Higher bitrate"], ["aptX LL", "Medium quality", "Very low latency", "Gaming / video"], ["aptX LL Duplex", "Low quality", "Very low latency", "Two-way audio"], ["FastStream", "Medium quality", "Low latency", "Two-way audio"], ["FastStream Duplex", "Medium quality", "Low latency", "Two-way audio"], ["LDAC", "Very high quality", "Stutter possible at range", "High bitrate modes"], ["LC3", "High efficiency", "Low latency", "LE Audio devices"], ["LC3plus H3", "High quality", "Device dependent", "Hardware support required"], ["Opus 0.5", "High quality", "Low latency", "Stereo profile"], ["Opus 0.5 5.1", "High quality", "Device dependent", "5.1 profile"], ["Opus 0.5 7.1", "High quality", "Device dependent", "7.1 profile"], ["Opus 0.5 Duplex", "Medium quality", "Low latency", "Two-way audio"], ["Opus 0.5 Pro", "Very high quality", "Device dependent", "Pro profile"],
-      ] as const).map(([codec, quality, stability, detail]) => <div className="codec-row" key={codec}><strong>{codec}</strong><span>{quality}</span><span>{stability}</span><small>{detail}</small></div>)}</div><small className="codec-note">Codec names describe common tradeoffs. Actual sound quality, delay and connection stability vary by headset, radio conditions and system support. Auto uses adaptive LDAC quality; Highest quality requests the LDAC high quality bitrate when available, which can stutter at range.</small></section>
+
     </>}
     {network && <div className="device-dialog-scrim"><form ref={joinDialog} className="device-dialog wireless-dialog" role="dialog" aria-modal="true" aria-label="Connect to Wi-Fi" onSubmit={e => { e.preventDefault(); void connect(); }}><span className="wireless-dialog-icon"><Icon name="wifi" width="24" height="24" /></span><h3>Join {network.ssid}</h3><p>{security(network)} · {signal(network.signal)} signal</p>{security(network) !== "Open network" ? <><label>Password<input type={showPassword ? "text" : "password"} aria-label="Wi-Fi password" autoComplete="new-password" value={password} disabled={busy} onChange={e => setPassword(e.target.value)} data-autofocus /></label><label className="wireless-checkbox"><input type="checkbox" checked={showPassword} onChange={e => setShowPassword(e.target.checked)} />Show password</label></> : <p>This network is open. Traffic may be visible to other people on the network.</p>}{error && <p role="alert" className="settings-error">{error}</p>}{operation && <p role="status">{operation}</p>}<div className="settings-actions"><Button type="button" disabled={busy} onClick={closeJoin}>Cancel</Button><Button variant="primary" className="primary" disabled={busy} type="submit">{busy ? "Connecting…" : "Join"}</Button></div></form></div>}
     {profile && !confirmation && <div className="device-dialog-scrim"><form ref={configDialog} className="device-dialog wireless-dialog wireless-config" role="dialog" aria-modal="true" aria-label={`Configure ${profile.name}`} onSubmit={e => { e.preventDefault(); void saveConfig(); }}><h3>{profile.name}</h3><p>Saved network configuration</p>{configLoading && <p role="status">Loading configuration…</p>}{config && <>

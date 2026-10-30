@@ -85,7 +85,9 @@ fn align(token: &[char], candidate: &Prepared, start: usize) -> Option<i32> {
         let next = (pos..text.len()).find(|&i| text[i] == tc)?;
         let chosen = if prev.is_some_and(|p| next != p + 1) && !candidate.word_start[next] {
             (next..text.len())
-                .find(|&i| text[i] == tc && candidate.word_start[i] && matches_after(&token[token_index + 1..], candidate, i))
+                .find(|&i| {
+                    text[i] == tc && candidate.word_start[i] && matches_after(&token[token_index + 1..], candidate, i)
+                })
                 .unwrap_or(next)
         } else {
             next

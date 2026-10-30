@@ -1,3 +1,4 @@
+import { Button as GlisseButton } from "glisse";
 import { useEffect, useId, useRef, useState, type SelectHTMLAttributes } from "react";
 import { createPortal } from "react-dom";
 import { on } from "../lib/bridge";
@@ -55,7 +56,7 @@ export function Select(props: Props) {
   const triggerId = props.id ? `${props.id}-trigger` : `${id}-trigger`;
   return <span className="meridian-select" data-revision={revision}>
     <select {...props} ref={native} className="select-native" tabIndex={-1} aria-hidden="true" onFocus={() => button.current?.focus()} />
-    <button ref={button} type="button" id={triggerId} className="select-trigger" role="combobox" aria-label={labelledBy ? undefined : label || "Choose an option"} aria-labelledby={labelledBy} aria-describedby={props["aria-describedby"]} aria-invalid={props["aria-invalid"]} aria-required={props.required || undefined} aria-expanded={open} aria-controls={id} aria-haspopup="listbox" disabled={props.disabled} title={props.title} onClick={() => open ? close() : show()} onKeyDown={e => { if (["ArrowDown", "ArrowUp", "Enter", " "].includes(e.key)) { e.preventDefault(); e.stopPropagation(); show(); } }}><span>{selected?.label ?? options[0]?.label ?? "Choose…"}</span><svg viewBox="0 0 12 12" width="12" height="12" fill="none" aria-hidden="true"><path d="m3 4.5 3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
+    <GlisseButton ref={button} type="button" id={triggerId} className="select-trigger" role="combobox" aria-label={labelledBy ? undefined : label || "Choose an option"} aria-labelledby={labelledBy} aria-describedby={props["aria-describedby"]} aria-invalid={props["aria-invalid"]} aria-required={props.required || undefined} aria-expanded={open} aria-controls={id} aria-haspopup="listbox" disabled={props.disabled} title={props.title} onClick={() => open ? close() : show()} onKeyDown={e => { if (["ArrowDown", "ArrowUp", "Enter", " "].includes(e.key)) { e.preventDefault(); e.stopPropagation(); show(); } }}><span>{selected?.label ?? options[0]?.label ?? "Choose…"}</span><svg viewBox="0 0 12 12" width="12" height="12" fill="none" aria-hidden="true"><path d="m3 4.5 3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg></GlisseButton>
     {open && createPortal(<div id={id} ref={menu} className="select-menu" role="listbox" aria-label={labelledBy ? undefined : label || "Choose an option"} aria-labelledby={labelledBy} aria-activedescendant={`${id}-${cursor}`} tabIndex={-1} style={bounds} onKeyDown={e => {
       e.stopPropagation();
       if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); }

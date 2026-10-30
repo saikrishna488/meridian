@@ -1,29 +1,32 @@
 @import url("../../lib/desktop-gloss.css");
 
-/* The native layer-shell surface is bottom anchored and exactly 64px tall. */
+/* Native panel includes a small transparent area above the reserved dock strip. */
 html,
 body,
 #root {
   width: 100%;
-  height: var(--dock-surface-height);
+  height: calc(var(--dock-surface-height) + var(--dock-animation-overflow));
   min-height: 0;
   margin: 0;
   overflow: hidden;
-  background: #000;
+  background: transparent;
 }
 
 .taskbar {
-  position: relative;
+  position: fixed;
   z-index: var(--layer-listbox, 1000);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--dock-surface-height);
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: 100%;
   padding: 5px 10px;
   overflow: visible;
   color: #f8faff;
-  background: #000;
+  background: var(--glass-background-strong);
 }
 
 .bar {

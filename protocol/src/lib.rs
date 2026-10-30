@@ -434,7 +434,10 @@ pub struct BluetoothAction {
 #[ts(export)]
 pub enum BluetoothAudioMode {
     Auto,
-    HighestQuality,
+    LowQuality,
+    MediumQuality,
+    #[serde(alias = "highest-quality")]
+    HighQuality,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[ts(export)]
@@ -569,14 +572,9 @@ impl SurfaceKind {
                 Capability::Notifications,
                 Capability::Search,
             ],
-            SurfaceKind::DesktopMenu => &[
-                Capability::Popovers,
-                Capability::Windows,
-                Capability::Session,
-                Capability::Search,
-                Capability::Dock,
-                Capability::DesktopFiles,
-            ],
+            SurfaceKind::DesktopMenu => {
+                &[Capability::Popovers, Capability::Windows, Capability::Session, Capability::Search, Capability::Dock]
+            }
             SurfaceKind::Applications => &[
                 Capability::Search,
                 Capability::Popovers,

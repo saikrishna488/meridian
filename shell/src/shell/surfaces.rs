@@ -2,22 +2,6 @@
 use super::*;
 
 impl Shell {
-    pub(super) fn open_utility(&self, kind: SurfaceKind) {
-        let mut state = self.state.borrow_mut();
-        let slot = match kind {
-            SurfaceKind::Calendar => &mut state.calendar,
-            _ => &mut state.clock,
-        };
-        if slot.is_none() {
-            *slot = Some(WebSurface::new(&self.app, &self.env, kind, None, self.dispatcher()));
-        }
-        slot.as_ref().unwrap().window.present();
-        drop(state);
-        for popover in POPOVERS {
-            self.hide_popover(popover);
-        }
-    }
-
     pub(super) fn open_pulse(&self) {
         if self.state.borrow().pulse.is_none() {
             let surface = WebSurface::new(&self.app, &self.env, SurfaceKind::Pulse, None, self.dispatcher());
@@ -96,7 +80,9 @@ fn launch_kitty(cwd: Option<String>) {
     let refs: Vec<_> = argv.iter().map(|arg| arg.as_os_str()).collect();
     match gtk::gio::Subprocess::newv(&refs, gtk::gio::SubprocessFlags::NONE) {
         Ok(process) => process.wait_check_async(gtk::gio::Cancellable::NONE, |result| {
-            if let Err(error) = result { log::warn!("Kitty failed to start: {error}"); }
+            if let Err(error) = result {
+                log::warn!("Kitty failed to start: {error}");
+            }
         }),
         Err(error) => log::warn!("Could not start Kitty: {error}"),
     }

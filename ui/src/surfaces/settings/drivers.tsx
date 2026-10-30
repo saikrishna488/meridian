@@ -1,3 +1,5 @@
+import { SearchField } from "glisse";
+import { Select } from "../../components/Select";
 import { Dialog } from "../../components/ui/dialog";
 import { Button } from "../../components/ui/button";
 import { useEffect, useRef, useState } from "react";
@@ -31,7 +33,7 @@ export function Drivers() {
   const matches = drivers.filter(d => (filter === "all" || (filter === "loaded" ? d.loaded : !d.loaded)) && `${d.name} ${d.path} ${d.devices.join(" ")}`.toLowerCase().includes(search.trim().toLowerCase()));
   return <>
     <p className="section-caption">Manage kernel modules for the running kernel. Changes last until reboot or automatic hardware detection reloads a driver. Built-in drivers cannot be disabled here.</p>
-    <div className="settings-actions management-toolbar"><input aria-label="Search drivers" placeholder="Search driver, device or module path" value={search} onChange={e => setSearch(e.target.value)} /><select aria-label="Driver filter" value={filter} onChange={e => setFilter(e.target.value)}><option value="loaded">Enabled</option><option value="available">Not loaded</option><option value="all">All drivers</option></select><Button disabled={busy} onClick={() => void load()}>Refresh</Button></div>
+    <div className="settings-actions management-toolbar"><SearchField aria-label="Search drivers" placeholder="Search driver, device or module path" value={search} onValueChange={setSearch} /><Select aria-label="Driver filter" value={filter} onChange={e => setFilter(e.target.value)}><option value="loaded">Enabled</option><option value="available">Not loaded</option><option value="all">All drivers</option></Select><Button disabled={busy} onClick={() => void load()}>Refresh</Button></div>
     <p role="status" className="section-caption">{busy ? "Reading driver state…" : `${matches.length} drivers · ${drivers.filter(d => d.loaded).length} enabled`}{message && ` · ${message}`}</p>
     {error && <p role="alert" className="settings-error">{error}</p>}
     <div className="settings-card">{matches.slice(0, 100).map(d => <div className="settings-row" key={d.name}><div className="management-details"><strong>{d.name}</strong><small className="row-detail">{d.builtin ? "Built into kernel" : d.loaded ? `Enabled · ${d.users} references` : "Not loaded"}{d.devices.length > 0 && ` · ${d.devices.join(", ")}`}</small><small className="row-detail management-path">{d.path}</small></div><Button disabled={busy || d.builtin || (d.loaded && d.users > 0)} title={d.loaded && d.users > 0 ? "Driver is in use" : undefined} onClick={() => setChoice(d)}>{d.builtin ? "Built-in" : d.loaded ? "Disable…" : "Enable…"}</Button></div>)}{!busy && !matches.length && <p className="device-empty">No drivers match. Try another filter or search.</p>}</div>

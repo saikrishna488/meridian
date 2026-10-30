@@ -7,7 +7,7 @@ import { writeFile } from "node:fs/promises";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const watch = process.argv.includes("--watch");
-const surfaces = ["panel", "topbar", "applications", "options", "greeter", "locker", "wallpaper", "desktop-menu", "settings", "pulse", "notifications", "utilities"];
+const surfaces = ["panel", "topbar", "applications", "options", "greeter", "locker", "wallpaper", "desktop-menu", "settings", "pulse", "notifications", "utilities", "finder", "terminal"];
 const options = {
   absWorkingDir: root,
   entryPoints: surfaces.map(name => `src/surfaces/${name}/${name}.tsx`),

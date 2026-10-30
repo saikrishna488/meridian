@@ -10,12 +10,13 @@ import { useSystemSettings } from "../../lib/settings";
 import type { AudioState } from "../../lib/generated/AudioState";
 import type { AudioDevice } from "../../lib/generated/AudioDevice";
 import type { AudioAction } from "../../lib/generated/AudioAction";
+import { BluetoothAudioSettings } from "./bluetooth-audio";
 
 function AudioLevel({ label, value, disabled, save }: { label: string; value: number | null; disabled: boolean; save: (percent: number) => void }) {
   const [local, setLocal] = useState(value ?? 0), editing = useRef(false);
   useEffect(() => { if (!editing.current) setLocal(value ?? 0); }, [value]);
   function commit(percent: number) { editing.current = false; if (!disabled && percent !== value) save(percent); }
-  return <div className="audio-level"><Slider min="0" max="100" aria-label={label} disabled={disabled || value === null} value={local} onChange={e => { editing.current = true; setLocal(Number(e.target.value)); }} onPointerUp={e => commit(Number(e.currentTarget.value))} onKeyUp={e => { if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"].includes(e.key)) commit(Number(e.currentTarget.value)); }} onBlur={e => commit(Number(e.currentTarget.value))} /><output>{value === null ? "Unavailable" : `${local}%`}</output></div>;
+  return <div className="audio-level"><Slider min={0} max={100} aria-label={label} disabled={disabled || value === null} value={local} onValueChange={value => { editing.current = true; setLocal(value); }} onPointerUp={e => commit(Number(e.currentTarget.value))} onKeyUp={e => { if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"].includes(e.key)) commit(Number(e.currentTarget.value)); }} onBlur={e => commit(Number(e.currentTarget.value))} /><output>{value === null ? "Unavailable" : `${local}%`}</output></div>;
 }
 export function Sound() {
   const [audio, setAudio] = useState<AudioState | null>(null), [busy, setBusy] = useState(false), [loaded, setLoaded] = useState(false);
@@ -64,6 +65,7 @@ export function Sound() {
       </section>;
     }) : loaded ? <div className="settings-card"><div className="settings-row"><Icon name="sound" /><strong>Output volume</strong></div><SystemSlider name="volume" label="Volume" value={settings.volume} report={e => setError(errorMessage(e))} /><p className="section-caption card-caption">Device selection needs PipeWire and WirePlumber. Your existing volume control remains available when supported.</p></div> : null}
     {message && <p className="startup-message" role="status">{message}</p>}{error && <p className="settings-error" role="alert">{error}</p>}
+    <BluetoothAudioSettings />
     <p className="section-caption">Changes apply to the default devices. Applications with their own audio device selection may keep that choice.</p>
   </>;
 }

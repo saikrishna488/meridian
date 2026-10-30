@@ -64,10 +64,11 @@ pub fn install_css() {
         window.meridian-preferences.meridian-dark headerbar { background: #000000; color: #ffffff; border-bottom: 1px solid #ffffff; box-shadow: none; }
         .meridian-window-controls { display: flex; align-items: center; gap: 4px; margin-left: 12px; }
         .meridian-window-button { min-width: 34px; min-height: 28px; padding: 0; border-radius: 8px; border: 1px solid transparent; background: transparent; color: inherit; box-shadow: none; transition: background 120ms ease, border-color 120ms ease, color 120ms ease; }
-        .meridian-window-button:hover { background: #123b75; border-color: #247cff; color: #ffffff; }
+        .meridian-window-button:hover { background: #0066CC; border-color: #0066CC; color: #ffffff; }
         .meridian-window-button.close:hover { background: #b42332; border-color: #e85b6b; color: #ffffff; }
-        .meridian-window-button:active { background: #247cff; }
-        .meridian-window-button:focus-visible { outline: 2px solid #ffffff; outline-offset: 2px; }",
+        .meridian-window-button:active { background: #0066CC; }
+        .meridian-window-button:focus-visible { outline: 2px solid #ffffff; outline-offset: 2px; }
+        .meridian-window-button:focus:not(:focus-visible) { outline: none; box-shadow: none; }",
     );
     if let Some(display) = gdk::Display::default() {
         gtk::style_context_add_provider_for_display(&display, &css, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);

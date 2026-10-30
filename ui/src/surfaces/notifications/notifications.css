@@ -29,7 +29,7 @@
   width: min(480px, calc(100vw - 24px));
   padding: 24px;
   gap: 22px;
-  background: #000;
+  background: var(--glass-background-strong);
   color: #fff;
   border: 2px solid #fff;
   border-radius: 16px;
@@ -47,7 +47,7 @@
 .notification-center .notification-clear,
 .notification-center .notification-actions button { background: #111; color: #fff; border: 1px solid #fff; }
 .notification-center button:hover:not(:disabled),
-.notification-center .notification-actions button:hover:not(:disabled) { background: #123b75; color: #fff; }
+.notification-center .notification-actions button:hover:not(:disabled) { background: var(--surface-hover); color: #fff; }
 .notification-list { padding: 2px; }
 .notification-group { gap: 12px; }
 .notification { padding: 18px; }

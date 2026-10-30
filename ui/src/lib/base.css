@@ -1,4 +1,5 @@
 /* Base styles shared by every surface. */
+@import url("../vendor/glisse.css");
 @import url("tokens.css");
 @import url("../components/ui/components.css");
 @import url("motion.css");
@@ -65,14 +66,6 @@ button {
 .app-icon.generic-image { position: relative; }.generic-monogram { position: absolute; z-index: 1; font-size: 24px; font-weight: 600; color: #fff; }
 
 
-/* Shared switch, used by Settings and Control Center. */
-.meridian-toggle { position: relative; flex: none; width: 40px; height: 24px; padding: 2px; border: 0; border-radius: 999px; background: var(--control-track); cursor: pointer; transition: background var(--dur-fast) var(--ease-standard); }
-.meridian-toggle .toggle-thumb { display: block; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px #0003; transition: transform var(--dur-fast) var(--ease-out); }
-.meridian-toggle[aria-checked="true"] { background: var(--button-primary); }
-.meridian-toggle[aria-checked="true"] .toggle-thumb { transform: translateX(16px); }
-.meridian-toggle:disabled { opacity: .45; cursor: default; }
-@media (prefers-reduced-motion: reduce) { .meridian-toggle, .meridian-toggle .toggle-thumb { transition: none; } }
-
 .ui-icon { display: inline-block; flex: none; vertical-align: middle; pointer-events: none; }
 button:disabled { cursor: default; }
 input, select, textarea { accent-color: var(--action); }
@@ -101,7 +94,7 @@ input::selection, textarea::selection { background: var(--selection); color: var
 /* Shared dropdowns, including their popup, use the current desktop palette. */
 .meridian-select { display:inline-flex; min-width:110px; max-width:100%; position:relative; vertical-align:middle; }
 .select-native { position:absolute!important; width:1px!important; height:1px!important; padding:0!important; opacity:0; pointer-events:none; clip-path:inset(50%); }
-.meridian-select .select-trigger { display:flex; align-items:center; justify-content:space-between; gap:18px; min-height:var(--control-height); width:100%; padding:6px 10px; border:1px solid var(--line,#dce0e7); border-radius:var(--radius-sm); background:var(--surface,#fff); color:var(--ink,#252c3b); font:inherit; font-size:12px; cursor:pointer; text-align:left; }
+.meridian-select .select-trigger { display:flex; align-items:center; justify-content:space-between; gap:18px; min-height:var(--control-height); width:100%; padding:6px 10px; border:1px solid var(--line,#dce0e7); border-radius:var(--radius-sm); color:var(--ink); font:inherit; font-size:12px; cursor:pointer; text-align:left; }
 .select-trigger>span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.select-trigger svg { flex:none; color:var(--ink-muted,#788294); }.select-trigger:disabled { opacity:.45; cursor:default; }
 .select-menu { position:fixed; z-index:var(--layer-listbox); overflow:auto; padding:5px; border:1px solid var(--line,#dce0e7); border-radius:var(--radius-md); background:var(--surface-raised,#fff); color:var(--ink,#252c3b); box-shadow:var(--shadow-lg); font:12px var(--font-ui); outline:none; }
 .select-menu [role="option"] { display:flex; align-items:center; justify-content:space-between; gap:16px; min-height:var(--control-height); padding:7px 10px; border-radius:var(--radius-sm); cursor:pointer; }.select-menu [data-highlighted="true"] { background:var(--selection,#e6edfa); color:var(--selection-ink,#244b86); }.select-menu [aria-disabled="true"] { opacity:.4; cursor:default; }
@@ -152,18 +145,35 @@ button:focus-visible, [role="button"]:focus-visible { outline:2px solid var(--fo
 input::placeholder, textarea::placeholder { color: var(--ink-muted); opacity: 1; }
 .ui-icon { filter: none; }
 
-/* Meridian high-contrast desktop refresh, 2026-10 */
-/* Monochrome text with one unmistakable interaction color across surfaces. */
-:root button:hover:not(:disabled),
-:root .row:hover,
-:root .file-item:hover,
-:root [role="option"]:hover:not([aria-disabled="true"]) {
-  background: #123b75 !important;
-  color: #fff !important;
+/* User adjustable text effects, controlled from Settings > Appearance. */
+body :where(h1,h2,h3,h4,p,span,label,strong,small,button,a,li,dt,dd,output) {
+  text-shadow: var(--font-effect-shadow, none);
+  -webkit-text-stroke: var(--font-effect-stroke, 0px) currentColor;
+  filter: blur(var(--font-effect-blur, 0px));
 }
-:root button:hover:not(:disabled) *,
-:root .row:hover *,
-:root .file-item:hover * { color: #fff !important; }
-:root[data-theme="dark"] :is(.menu, .settings-content, .finder-content, .dialog, .ui-dialog) {
-  color: #fff;
+
+:focus:not(:focus-visible) { outline: none; }
+
+/* Shared Glisse surface treatment for native-positioned menus and dialogs.
+   These retain Meridian's focus and placement handling. */
+:root[data-theme="dark"] :is(.select-menu, .finder-context, .app-context, .desktop-context, .desktop-menu, .terminal-context, .ui-dialog, .device-dialog, .startup-dialog) {
+  color: var(--ink);
+  background: var(--glass-background-strong);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .1), var(--shadow-lg);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.5);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.5);
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
+  :root[data-theme="dark"] :is(.select-menu, .finder-context, .app-context, .desktop-context, .desktop-menu, .terminal-context, .ui-dialog, .device-dialog, .startup-dialog) {
+    background: Canvas; color: CanvasText; border-color: ButtonText;
+    -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none;
+  }
+}
+
+/* Closed overlay surfaces should not keep compositor blur active. */
+:root[data-theme] :is(.menu.hidden, .desktop-menu.hidden) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }

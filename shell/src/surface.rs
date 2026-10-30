@@ -119,6 +119,7 @@ impl WebSurface {
         dispatch: Dispatch,
     ) -> Rc<Self> {
         let window = gtk::Window::builder().application(app).decorated(false).build();
+        let close_animation = Rc::new(Cell::new(false));
         window.add_css_class("meridian-surface");
         // The locker is assigned to its monitor via `gtk4_session_lock`
         // instead (a different Wayland surface role; see ADR-0007). It must
@@ -226,8 +227,25 @@ impl WebSurface {
             } else {
                 window.set_default_size(840, 600);
             }
-            window.connect_close_request(|window| {
-                window.set_visible(false);
+            let closing = close_animation.clone();
+            window.connect_close_request(move |window| {
+                if closing.replace(true) {
+                    return glib::Propagation::Stop;
+                }
+                let weak = window.downgrade();
+                let started = std::time::Instant::now();
+                glib::timeout_add_local(std::time::Duration::from_millis(16), move || {
+                    let Some(window) = weak.upgrade() else { return glib::ControlFlow::Break };
+                    let progress = (started.elapsed().as_secs_f64() / 0.16).min(1.0);
+                    window.set_opacity(1.0 - progress);
+                    if progress >= 1.0 {
+                        window.set_visible(false);
+                        window.set_opacity(1.0);
+                        glib::ControlFlow::Break
+                    } else {
+                        glib::ControlFlow::Continue
+                    }
+                });
                 glib::Propagation::Stop
             });
         }
@@ -237,6 +255,31 @@ impl WebSurface {
         }
         let ucm = bridge::content_manager();
         let view = env.create_view(&ucm);
+        let windowed = matches!(
+            kind,
+            SurfaceKind::Preferences
+                | SurfaceKind::Finder
+                | SurfaceKind::Terminal
+                | SurfaceKind::Calendar
+                | SurfaceKind::Clock
+                | SurfaceKind::Pulse
+        );
+        if windowed {
+            view.set_opacity(0.0);
+            let animated_view = view.clone();
+            let opening_close_state = close_animation.clone();
+            window.connect_map(move |_| {
+                opening_close_state.set(false);
+                animated_view.set_opacity(0.0);
+                let animated_view = animated_view.clone();
+                let started = std::time::Instant::now();
+                glib::timeout_add_local(std::time::Duration::from_millis(16), move || {
+                    let progress = (started.elapsed().as_secs_f64() / 0.22).min(1.0);
+                    animated_view.set_opacity(progress);
+                    if progress >= 1.0 { glib::ControlFlow::Break } else { glib::ControlFlow::Continue }
+                });
+            });
+        }
         if kind == SurfaceKind::Terminal {
             // Avoid stale accelerated text layers when the terminal is maximized.
             webkit6::prelude::WebViewExt::settings(&view)
@@ -445,6 +488,7 @@ impl WebSurface {
 
 /// Full-width panel height; keep in sync with the UI token.
 pub const PANEL_HEIGHT: i32 = 64;
+pub const PANEL_ANIMATION_OVERFLOW: i32 = 20;
 pub const TOPBAR_HEIGHT: i32 = 44;
 
 fn entry_dir(kind: SurfaceKind) -> &'static str {
@@ -515,13 +559,13 @@ fn configure_layer(window: &gtk::Window, kind: SurfaceKind, monitor: Option<&gdk
             window.set_exclusive_zone(-1);
         }
         SurfaceKind::Panel => {
-            window.set_layer(Layer::Top);
+            window.set_layer(Layer::Bottom);
             window.set_keyboard_mode(KeyboardMode::None);
-            window.set_default_size(1, PANEL_HEIGHT);
+            window.set_default_size(1, PANEL_HEIGHT + PANEL_ANIMATION_OVERFLOW);
             window.set_exclusive_zone(PANEL_HEIGHT);
         }
         SurfaceKind::Topbar => {
-            window.set_layer(Layer::Top);
+            window.set_layer(Layer::Bottom);
             window.set_keyboard_mode(KeyboardMode::None);
             window.set_default_size(1, TOPBAR_HEIGHT);
             window.set_exclusive_zone(TOPBAR_HEIGHT);

@@ -35,4 +35,46 @@ export function applyFont(font: string | undefined): void {
   const selected = font && allowed.includes(font) ? font : "Inter";
   document.documentElement.style.setProperty("--font-ui", `"${selected}", sans-serif`);
   document.documentElement.style.setProperty("--font-display", "var(--font-ui)");
+  applyFontEffects();
+}
+
+export type FontEffects = { stroke: number; shadow: number; blur: number };
+const fontEffectsKey = "meridian.font-effects";
+const fontEffectsEvent = "meridian-font-effects";
+const defaultFontEffects: FontEffects = { stroke: 0, shadow: 0, blur: 0 };
+
+export function getFontEffects(): FontEffects {
+  try {
+    const value = JSON.parse(localStorage.getItem(fontEffectsKey) ?? "null") as Partial<FontEffects> | null;
+    return {
+      stroke: clampEffect(value?.stroke, 0, 1),
+      shadow: clampEffect(value?.shadow, 0, 8),
+      blur: clampEffect(value?.blur, 0, 2),
+    };
+  } catch { return { ...defaultFontEffects }; }
+}
+
+function clampEffect(value: unknown, min: number, max: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : 0;
+}
+
+export function applyFontEffects(effects: FontEffects = getFontEffects()): void {
+  const root = document.documentElement;
+  root.style.setProperty("--font-effect-stroke", `${effects.stroke}px`);
+  root.style.setProperty("--font-effect-shadow", effects.shadow ? `0 1px ${effects.shadow}px color-mix(in srgb, currentColor 55%, transparent)` : "none");
+  root.style.setProperty("--font-effect-blur", `${effects.blur}px`);
+}
+
+export function saveFontEffects(effects: FontEffects): void {
+  try { localStorage.setItem(fontEffectsKey, JSON.stringify(effects)); } catch {}
+  applyFontEffects(effects);
+  window.dispatchEvent(new CustomEvent<FontEffects>(fontEffectsEvent, { detail: effects }));
+}
+
+export function subscribeFontEffects(callback: (effects: FontEffects) => void): () => void {
+  const onLocal = (event: Event) => callback((event as CustomEvent<FontEffects>).detail ?? getFontEffects());
+  const onStorage = (event: StorageEvent) => { if (event.key === fontEffectsKey) callback(getFontEffects()); };
+  window.addEventListener(fontEffectsEvent, onLocal);
+  window.addEventListener("storage", onStorage);
+  return () => { window.removeEventListener(fontEffectsEvent, onLocal); window.removeEventListener("storage", onStorage); };
 }

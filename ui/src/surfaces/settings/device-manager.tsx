@@ -1,3 +1,4 @@
+import { SearchField } from "glisse";
 import { Dialog } from "../../components/ui/dialog";
 import { Button } from "../../components/ui/button";
 import { useEffect, useRef, useState } from "react";
@@ -37,7 +38,7 @@ export function DeviceManager({ navigate }: { navigate: (page: string) => void }
   const groups = [...new Set(matches.map(d => d.category))];
   const device = devices.find(d => d.id === selected && matches.some(m => m.id === d.id)) ?? matches[0];
   return <div className="device-manager">
-    <div className="device-toolbar"><input type="search" aria-label="Search devices" placeholder="Search devices" value={query} onChange={e => setQuery(e.target.value)} /><Button aria-label="Refresh devices" title="Refresh" disabled={busy} onClick={() => void load()}><Icon name="refresh" /></Button></div>
+    <div className="device-toolbar"><SearchField aria-label="Search devices" placeholder="Search devices" value={query} onValueChange={setQuery} /><Button aria-label="Refresh devices" title="Refresh" disabled={busy} onClick={() => void load()}><Icon name="refresh" /></Button></div>
     {message && <p role="status">{message}</p>}
     {error && <p role="alert" className="settings-error">{error}</p>}
     <div className="device-layout" aria-busy={busy}><nav className="device-tree" aria-label="Devices">{groups.map(group => <details key={group} open><summary>{group}</summary>{matches.filter(d => d.category === group).map(d => <Button key={d.id} aria-current={device?.id === d.id ? "true" : undefined} onClick={() => setSelected(d.id)}><DeviceGlyph category={d.category} />{d.name}</Button>)}</details>)}{!matches.length && <p role="status">{!loaded && busy ? "Loading…" : "No devices found."}</p>}</nav>

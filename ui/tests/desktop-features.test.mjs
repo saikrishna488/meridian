@@ -1,3 +1,4 @@
+import { installBrowserMocks } from "./browser-mocks.mjs";
 import { surfaceScript } from "./bundle.mjs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -14,8 +15,7 @@ async function surface(t, name, respond) {
   window.TextEncoder = TextEncoder;
   window.HTMLElement.prototype.scrollIntoView = () => {};
   window.HTMLElement.prototype.scrollTo = () => {};
-  window.matchMedia = () => ({ matches: false, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {} });
-  window.ResizeObserver = class { observe() {} disconnect() {} };
+  installBrowserMocks(window);
   window.HTMLCanvasElement.prototype.getContext = () => new Proxy({ measureText: text => ({ width: text.length * 8, actualBoundingBoxAscent: 10, actualBoundingBoxDescent: 3 }), createLinearGradient: () => ({ addColorStop() {} }), getImageData: (_x, _y, width, height) => ({ data: new Uint8ClampedArray(width * height * 4), width, height }) }, { get(target, key) { return key in target ? target[key] : () => {}; }, set(target, key, value) { target[key] = value; return true; } });
   window.fetch = async () => { throw new Error("Custom-scheme fetch is unavailable"); };
   window.webkit = { messageHandlers: { meridian: { async postMessage(json) { const req = JSON.parse(json); requests.push(req); const result = await respond(req); return JSON.stringify(result?.error && typeof result.error === "object" ? { ok: false, error: result.error } : { ok: true, result }); } } } };
@@ -25,31 +25,25 @@ async function surface(t, name, respond) {
   if (name !== "wallpaper") await waitFor(() => requests.some(req => req.method === "shell.hello"));
   return { window, requests, get: s => window.document.querySelector(s), emit: (event, data) => window.__meridianDispatch(JSON.stringify({ event, data })) };
 }
-function defaults(req) { if (["files.transfer_start", "files.transfer_status"].includes(req.method)) return { id: 1, bytes: 4, total: 4, entries: 1, done: true, error: null }; return req.method === "desktop.get" ? desktop : req.method === "search.query" ? { ...search, serial: req.params.serial } : req.method === "windows.list" ? [] : req.method === "dock.list" ? [app.id] : req.method === "dock.layout_get" ? [] : req.method === "shell.hello" ? { surface: "panel", capabilities: [] } : null; }
+function defaults(req) { if (req.method === "settings.bluetooth_audio") return { mode: "auto", active_codec: null, active_device: null }; if (["files.transfer_start", "files.transfer_status"].includes(req.method)) return { id: 1, bytes: 4, total: 4, entries: 1, done: true, error: null }; return req.method === "desktop.get" ? desktop : req.method === "search.query" ? { ...search, serial: req.params.serial } : req.method === "windows.list" ? [] : req.method === "dock.list" ? [app.id] : req.method === "dock.layout_get" ? [] : req.method === "shell.hello" ? { surface: "panel", capabilities: [] } : null; }
 function drag(window, element, type, data, clientX = 1) {
   const event = new window.Event(type, { bubbles: true, cancelable: true });
   Object.defineProperty(event, "dataTransfer", { value: { types: Object.keys(data), getData: key => data[key] ?? "", setData: (key, value) => { data[key] = value; }, effectAllowed: "", dropEffect: "" } });
   Object.defineProperty(event, "clientX", { value: clientX }); element.dispatchEvent(event);
 }
-test("launcher and apps reorder, and dragging to trash only requests confirmation", async t => {
+test("dock reorders apps and forwards context actions to the native menu", async t => {
   const ui = await surface(t, "panel", defaults);
   await waitFor(() => ui.get('[aria-label="Firefox"]'));
   const data = {};
   drag(ui.window, ui.get("#applications"), "dragstart", data);
   drag(ui.window, ui.get('[aria-label="Firefox"]'), "drop", data);
   await waitFor(() => ui.requests.some(r => r.method === "dock.layout_set"));
-  assert.deepEqual(ui.requests.find(r => r.method === "dock.layout_set").params.items, ["firefox.desktop", "@applications", "@trash"]);
-  drag(ui.window, ui.get("#trash"), "drop", { "application/x-meridian-app": app.id });
-  await waitFor(() => ui.requests.some(r => r.method === "apps.uninstall_prompt"));
-  assert.ok(!ui.requests.some(r => r.method === "apps.uninstall"));
+  assert.deepEqual(ui.requests.find(r => r.method === "dock.layout_set").params.items, ["firefox.desktop", "@applications"]);
   ui.get('[aria-label="Firefox"]').dispatchEvent(new ui.window.MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
-  await waitFor(() => ui.get('.dock-context [role="menuitem"]'));
-  const actions = [...ui.window.document.querySelectorAll('.dock-context button')];
-  assert.deepEqual(actions.map(b => b.textContent), ["Quit", "Remove from panel"]);
-  assert.equal(actions[0].disabled, true);
-  actions[1].click();
-  await waitFor(() => ui.requests.some(r => r.method === "dock.pin" && r.params.pinned === false));
-  assert.equal(ui.requests.filter(r => r.method === "apps.uninstall_prompt").length, 1);
+  await waitFor(() => ui.requests.some(r => r.method === "menu.open"));
+  const menu = ui.requests.find(r => r.method === "menu.open").params;
+  assert.equal(menu.menu, "DockItem"); assert.equal(menu.item_id, app.id); assert.equal(menu.pinned, true);
+  assert.ok(!ui.requests.some(r => r.method === "apps.uninstall"));
 });
 test("trash confirmation executes the reviewed target only after Uninstall", async t => {
   const ui = await surface(t, "applications", req => req.method === "apps.uninstall_plan" ? { id: app.id, name: "Firefox", target: "flatpak:--user:app/org.mozilla.firefox/x86_64/stable", detail: "Saved data is kept." } : defaults(req));
@@ -186,17 +180,14 @@ test("Terminal refits after fullscreen resize and keeps input focused", async t 
   assert.equal(ui.window.document.querySelectorAll('[role="tab"]').length, 1);
 });
 
-test("Settings saves appearance and responds to system theme broadcasts", async t => {
-  const ui = await surface(t, "settings", req => req.method === "desktop.appearance_set" ? { ...desktop, appearance: req.params.id } : defaults(req));
+test("Settings remains dark after system appearance broadcasts", async t => {
+  const ui = await surface(t, "settings", defaults);
   [...ui.window.document.querySelectorAll("nav button")].find(b => b.textContent.endsWith("Appearance")).click();
-  await waitFor(() => ui.get(".appearance-choice.dark"));
-  ui.get(".appearance-choice.dark").click();
-  await waitFor(() => ui.requests.some(r => r.method === "desktop.appearance_set"));
-  assert.equal(ui.requests.find(r => r.method === "desktop.appearance_set").params.id, "dark");
-  ui.emit("desktop.changed", { ...desktop, appearance: "dark" });
-  await waitFor(() => ui.window.document.documentElement.dataset.theme === "dark");
-  ui.emit("desktop.changed", desktop);
-  await waitFor(() => ui.window.document.documentElement.dataset.theme === "light");
+  await waitFor(() => ui.get('[aria-label="System font"]'));
+  for (const appearance of ["light", "dark"]) {
+    ui.emit("desktop.changed", { ...desktop, appearance });
+    assert.equal(ui.window.document.documentElement.dataset.theme, "dark");
+  }
 });
 test("Applications exposes the desktop while dragging and creates an app shortcut", async t => {
   const ui = await surface(t, "applications", defaults);
@@ -258,8 +249,8 @@ test("Terminal updates rendered plain and ANSI text colors when appearance chang
   await waitFor(() => ui.get(".xterm-rows")?.textContent.includes("BRIGHT_TEXT"));
   for (const mode of ["light", "dark", "light"]) {
     ui.emit("desktop.changed", { ...desktop, appearance: mode });
-    await waitFor(() => ui.window.document.documentElement.dataset.theme === mode);
-    const background = mode === "dark" ? "#171a20" : "#fafafa";
+    await waitFor(() => ui.window.document.documentElement.dataset.theme === "dark");
+    const background = "#171a20";
     assert.ok(contrast(ui.window.getComputedStyle(ui.get(".xterm-rows")).color, background) >= 7, `${mode} rendered default color`);
     for (const word of ["WHITE_TEXT", "BRIGHT_TEXT", "BLACK_TEXT", "TRUECOLOR_TEXT"]) {
       const span = [...ui.window.document.querySelectorAll(".xterm-rows span")].find(span => span.textContent.includes(word));
@@ -302,7 +293,8 @@ test("Display trial reverts when the UI confirmation expires", async t => {
 test("Wi-Fi joins a discovered network and clears the password after success", async t => {
   const network={ssid:"Office Wi-Fi",bssid:"AA:BB:CC:DD:EE:FF",device:"wlan0",signal:90,security:"WPA2",connected:false};
   const ui=await surface(t,"settings",r=>r.method==="settings.wifi_networks"?[network]:r.method==="settings.get"?{wifi:true,bluetooth:true,brightness:70,volume:50}:defaults(r));
-  [...ui.window.document.querySelectorAll("nav button")].find(b=>b.textContent.endsWith("Wi-Fi")).click();await waitFor(()=>ui.get(".device-name strong")?.textContent==="Office Wi-Fi");
+  [...ui.window.document.querySelectorAll("nav button")].find(b=>b.textContent.endsWith("Wi-Fi")).click(); await waitFor(() => [...ui.window.document.querySelectorAll("button")].some(b => b.textContent === "New connection" && !b.disabled));
+  [...ui.window.document.querySelectorAll("button")].find(b => b.textContent === "New connection").click(); await waitFor(()=>ui.get(".device-name strong")?.textContent==="Office Wi-Fi");
   [...ui.window.document.querySelectorAll(".settings-row button")].find(b=>b.textContent==="Connect").click();await waitFor(()=>ui.get('[aria-label="Wi-Fi password"]'));
   type(ui,'[aria-label="Wi-Fi password"]',"test-passphrase");
   ui.get(".device-dialog").dispatchEvent(new ui.window.Event("submit",{bubbles:true,cancelable:true}));
@@ -316,7 +308,7 @@ test("Bluetooth connects a paired device through its discovered BlueZ path", asy
   [...ui.window.document.querySelectorAll("nav button")].find(b=>b.textContent.endsWith("Bluetooth")).click();await waitFor(()=>ui.get(".device-name strong")?.textContent==="Headphones");
   [...ui.window.document.querySelectorAll(".settings-row button")].find(b=>b.textContent==="Connect").click();await waitFor(()=>ui.requests.some(r=>r.method==="settings.bluetooth_action"));
   assert.deepEqual(ui.requests.find(r=>r.method==="settings.bluetooth_action").params,{path:device.path,action:"connect"});
-  assert.equal(ui.get('#bluetooth').className,"meridian-toggle");
+  assert.ok(ui.get('#bluetooth').classList.contains("lg-switch"));
 });
 test("Settings does not offer nonfunctional sharing switches", async t => {
   const ui = await surface(t, "settings", defaults);
@@ -646,7 +638,7 @@ test("shared dropdown supports keyboard selection and four system fonts", async 
 
 test("top bar uses its logo and opens system notifications with unread state", async t => {
   const ui = await surface(t, "topbar", r => r.method === "notifications.get" ? { available: true, items: [] } : defaults(r));
-  assert.ok(ui.get(".menu-brand svg")); assert.equal(ui.get(".menu-brand").textContent, "");
+  assert.ok(ui.get(".menu-brand svg")); assert.equal(ui.get(".menu-brand").textContent, "Meridian");
   ui.emit("notifications.changed", { available: true, items: [{ id: 1, unread: true }] });
   await waitFor(() => ui.get('[aria-label="Notifications, 1 unread"]'));
   ui.get("#notifications").click();
@@ -680,6 +672,8 @@ test("missing third-party icons try the theme and retain a visible monogram", as
   ui.get('[aria-label="Firefox"] img').dispatchEvent(new ui.window.Event("error"));
   await waitFor(() => ui.get('[aria-label="Firefox"] img')?.src.split("?")[0] === "meridian://icons/firefox");
   ui.get('[aria-label="Firefox"] img').dispatchEvent(new ui.window.Event("error"));
+  await waitFor(() => ui.get('[aria-label="Firefox"] img')?.src.includes('/generic.svg'));
+  ui.get('[aria-label="Firefox"] img').dispatchEvent(new ui.window.Event("error"));
   await waitFor(() => !ui.get('[aria-label="Firefox"] img'));
   assert.equal(ui.get('[aria-label="Firefox"] .app-icon').textContent, "F");
 });
@@ -694,7 +688,8 @@ test("Startup Apps toggles a per-user entry and adds an installed app for next l
     return defaults(req);
   });
   ui.get('nav [aria-label="Startup Apps"]').click();
-  await waitFor(() => ui.get('[aria-label="Start Mail at sign-in"]'));
+  await waitFor(() => ui.get('[aria-label="Start Mail at sign-in"]') && !ui.get('[aria-label="Start Mail at sign-in"]').disabled);
+  await waitFor(() => ui.window.glisseSwitchReady(ui.get('[aria-label="Start Mail at sign-in"]')));
   ui.get('[aria-label="Start Mail at sign-in"]').click();
   await waitFor(() => ui.get('[aria-label="Start Mail at sign-in"]').getAttribute("aria-checked") === "true");
   assert.deepEqual(ui.requests.find(r => r.method === "settings.startup_set").params, { id: "mail.desktop", enabled: true });
@@ -712,7 +707,8 @@ test("Startup Apps reports errors without changing the saved switch", async t =>
   const entries = [{ id: "mail.desktop", name: "Mail", description: "", command: "mail", enabled: true, available: true, reason: "", user: true }];
   const ui = await surface(t, "settings", req => req.method === "settings.startup" ? entries : req.method === "settings.startup_set" ? { error: { code: "failed", message: "Startup folder is read-only" } } : defaults(req));
   ui.get('nav [aria-label="Startup Apps"]').click();
-  await waitFor(() => ui.get('[aria-label="Start Mail at sign-in"]'));
+  await waitFor(() => ui.get('[aria-label="Start Mail at sign-in"]') && !ui.get('[aria-label="Start Mail at sign-in"]').disabled);
+  await waitFor(() => ui.window.glisseSwitchReady(ui.get('[aria-label="Start Mail at sign-in"]')));
   ui.get('[aria-label="Start Mail at sign-in"]').click();
   await waitFor(() => ui.get('[role="alert"]'));
   assert.ok(ui.get('[role="alert"]').textContent.includes("read-only"));
@@ -739,18 +735,18 @@ test("Orbit opens read-only properties with Alt+Enter and navigates breadcrumb f
   await waitFor(() => ui.requests.some(r => r.method === "files.list" && r.params.path === "/home/test"));
 });
 
-test("launcher Pinned filters results and follows live taskbar changes", async t => {
+test("launcher refreshes its app results when the catalog changes", async t => {
   const other = { ...app, id: "mail.desktop", title: "Mail" };
-  const ui = await surface(t, "applications", req => req.method === "search.query" ? { serial: req.params.serial, sections: [{ provider: "apps", items: [app, other] }] } : defaults(req));
+  let items = [app, other];
+  const ui = await surface(t, "applications", req => req.method === "search.query" ? { serial: req.params.serial, sections: [{ provider: "apps", items }] } : defaults(req));
   ui.emit("popover.shown");
-  await waitFor(() => ui.get('#row-1'));
-  [...ui.window.document.querySelectorAll('.launcher-filters button')].find(b => b.textContent === "Pinned").click();
-  await waitFor(() => ui.get('#row-0')?.textContent.includes("Firefox") && !ui.get('#row-1'));
-  ui.emit("dock.changed", [other.id]);
-  await waitFor(() => ui.get('#row-0')?.textContent.includes("Mail"));
-  ui.emit("dock.changed", []);
+  await waitFor(() => ui.get('#row-1') && !ui.get('#menu').classList.contains('hidden'));
+  assert.match(ui.get('#row-0').textContent, /Firefox/);
+  items = [other]; ui.emit("search.invalidated");
+  await waitFor(() => ui.get('#row-0')?.textContent.includes("Mail") && !ui.get('#row-1'));
+  items = []; ui.emit("search.invalidated");
   await waitFor(() => ui.get('#empty'));
-  assert.ok(ui.get('#empty').textContent.includes("Your favorites go here"));
+  assert.match(ui.get('#empty').textContent, /No apps available/);
 });
 
 test("Sound selects a playback device and controls microphone mute and level", async t => {
@@ -815,11 +811,11 @@ test("Trash preserves the item and reports an original-location conflict", async
   assert.equal(ui.get('.restore-button').disabled, false);
 });
 
-test("top bar clock opens Meridian Calendar", async t => {
+test("top bar clock opens the configured Calendar application", async t => {
   const ui = await surface(t, "topbar", defaults);
   ui.get('[aria-label="Open Calendar"]').click();
   await waitFor(() => ui.requests.some(r => r.method === "search.activate"));
-  assert.deepEqual(ui.requests.find(r => r.method === "search.activate").params, { provider: "apps", item_id: "meridian-calendar.desktop" });
+  assert.deepEqual(ui.requests.find(r => r.method === "search.activate").params, { provider: "apps", item_id: "org.gnome.Calendar.desktop" });
 });
 
 test("Power preferences save supported lock timing and explain when it applies", async t => {
@@ -1016,6 +1012,7 @@ test("Settings persists launcher providers and opens typed settings search targe
     ? req.params ?? { settings: true, calculator: false } : defaults(req));
   ui.emit('preferences.page', { page: 'search' });
   await waitFor(() => ui.get('[aria-label="Search calculator"]')?.disabled === false);
+  await waitFor(() => ui.window.glisseSwitchReady(ui.get('[aria-label="Search calculator"]')));
   ui.get('[aria-label="Search calculator"]').click();
   await waitFor(() => ui.requests.some(req => req.method === 'settings.search_set'));
   assert.deepEqual(ui.requests.find(req => req.method === 'settings.search_set').params, { settings: true, calculator: true });

@@ -341,7 +341,7 @@ impl Shell {
                     let state = crate::files::blocking(move || crate::desktop::set_appearance(&choice.id)).await?;
                     if let Some(shell) = weak.upgrade() {
                         if let Some(settings) = gtk::Settings::default() {
-                        settings.set_gtk_application_prefer_dark_theme(true);
+                            settings.set_gtk_application_prefer_dark_theme(true);
                         }
                         shell.desktop_changed(&state);
                     }
@@ -461,9 +461,15 @@ impl Shell {
                         "meridian-settings.desktop" => self.open_preferences(),
                         "meridian-finder.desktop" => self.open_finder(),
                         "meridian-terminal.desktop" => self.open_terminal(),
-                        "meridian-calendar.desktop" => self.catalog.borrow().launch("org.gnome.Calendar.desktop", None)
+                        "meridian-calendar.desktop" => self
+                            .catalog
+                            .borrow()
+                            .launch("org.gnome.Calendar.desktop", None)
                             .map_err(|e| ErrorBody::new(ErrorCode::Failed, format!("{e:?}")))?,
-                        "meridian-clock.desktop" => self.catalog.borrow().launch("org.gnome.clocks.desktop", None)
+                        "meridian-clock.desktop" => self
+                            .catalog
+                            .borrow()
+                            .launch("org.gnome.clocks.desktop", None)
                             .map_err(|e| ErrorBody::new(ErrorCode::Failed, format!("{e:?}")))?,
                         "meridian-pulse.desktop" => self.open_pulse(),
                         id => self
@@ -476,17 +482,9 @@ impl Shell {
                 serialize(ok())
             }
             Request::MenuOpen(menu) => {
-                if ![
-                    "Meridian",
-                    "File",
-                    "Edit",
-                    "View",
-                    "Window",
-                    "Help",
-                    "Application",
-                    "DockItem",
-                ]
-                .contains(&menu.menu.as_str()) {
+                if !["Meridian", "File", "Edit", "View", "Window", "Help", "Application", "DockItem"]
+                    .contains(&menu.menu.as_str())
+                {
                     return Err(ErrorBody::new(ErrorCode::InvalidRequest, "unknown desktop menu"));
                 }
                 self.open_popover(Popover::DesktopMenu);
@@ -746,11 +744,7 @@ impl Shell {
             Request::DockList => serialize(proto::reply_ok(&read_dock())),
             Request::DockPin(pin) => {
                 if pin.pinned
-                    && ![
-                        "meridian-settings.desktop",
-                        "meridian-pulse.desktop",
-                    ]
-                    .contains(&pin.id.as_str())
+                    && !["meridian-settings.desktop", "meridian-pulse.desktop"].contains(&pin.id.as_str())
                     && !self.catalog.borrow().apps().iter().any(|app| app.id == pin.id)
                 {
                     return Err(ErrorBody::new(ErrorCode::NotFound, "no such application"));
@@ -784,9 +778,13 @@ impl Shell {
                 let items = builtins
                     .into_iter()
                     .filter_map(|(id, name, keywords, icon)| {
-                        let tokens: Vec<_> = query.split_whitespace().map(meridian_services::search::fuzzy::fold_token).collect();
+                        let tokens: Vec<_> =
+                            query.split_whitespace().map(meridian_services::search::fuzzy::fold_token).collect();
                         let candidate = meridian_services::search::fuzzy::Prepared::new(&format!("{name} {keywords}"));
-                        tokens.iter().all(|token| meridian_services::search::fuzzy::fuzzy(token, &candidate).is_some()).then_some((id, name, icon))
+                        tokens
+                            .iter()
+                            .all(|token| meridian_services::search::fuzzy::fuzzy(token, &candidate).is_some())
+                            .then_some((id, name, icon))
                     })
                     .map(|(id, name, icon)| proto::SearchItem {
                         id: id.into(),
@@ -834,12 +832,16 @@ impl Shell {
                     return serialize(ok());
                 }
                 if a.item_id == "meridian-calendar.desktop" {
-                    self.catalog.borrow().launch("org.gnome.Calendar.desktop", None)
+                    self.catalog
+                        .borrow()
+                        .launch("org.gnome.Calendar.desktop", None)
                         .map_err(|e| ErrorBody::new(ErrorCode::Failed, format!("{e:?}")))?;
                     return serialize(ok());
                 }
                 if a.item_id == "meridian-clock.desktop" {
-                    self.catalog.borrow().launch("org.gnome.clocks.desktop", None)
+                    self.catalog
+                        .borrow()
+                        .launch("org.gnome.clocks.desktop", None)
                         .map_err(|e| ErrorBody::new(ErrorCode::Failed, format!("{e:?}")))?;
                     return serialize(ok());
                 }

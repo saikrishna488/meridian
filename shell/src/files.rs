@@ -235,7 +235,9 @@ pub fn open_directory(path: &str) -> Result<(), ErrorBody> {
     let refs: Vec<_> = argv.iter().map(|s| s.as_os_str()).collect();
     let process = gio::Subprocess::newv(&refs, gio::SubprocessFlags::NONE).map_err(error)?;
     process.wait_check_async(gio::Cancellable::NONE, |result| {
-        if let Err(error) = result { log::warn!("GNOME Files failed to open: {error}"); }
+        if let Err(error) = result {
+            log::warn!("GNOME Files failed to open: {error}");
+        }
     });
     Ok(())
 }

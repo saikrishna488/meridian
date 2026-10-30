@@ -9,6 +9,11 @@ export function mount(element: ReactNode): void {
   // Meridian provides its own context actions. Suppress WebKit's native HTML
   // context menu globally while allowing React contextmenu handlers to run.
   document.addEventListener("contextmenu", event => event.preventDefault(), true);
+  document.addEventListener("pointerup", event => {
+    const button = event.target instanceof Element ? event.target.closest<HTMLButtonElement>("button") : null;
+    if (button) requestAnimationFrame(() => { if (document.activeElement === button) button.blur(); });
+  }, true);
+  applyAppearance("dark");
   let appearanceRevision = 0;
   on("desktop.changed", event => { appearanceRevision++; applyAppearance(event.data.appearance); applyFont(event.data.font); });
   // Each app window is its own WebView. Read the persisted value so newly
@@ -72,7 +77,7 @@ export function usePopover(
         if (mine !== generation.current || !open.current) return;
         setVisible(true);
         await nextFrame();
-        if (mine === generation.current) focusLatest();
+        if (mine === generation.current && (document.activeElement === document.body || document.activeElement === menu.current)) focusLatest();
       })();
     });
     const offDismiss = on("popover.dismiss", () => { void dismiss().catch(reportLatest); });
@@ -87,7 +92,7 @@ const dialogScopes: HTMLElement[] = [];
 const focusSelector = 'button, input, select, textarea, a[href], [tabindex], [contenteditable="true"]';
 
 /** Keep dialog focus contained, allow its owned listboxes, and restore its trigger. */
-export function useDialogFocus(ref: RefObject<HTMLElement | null>, open: boolean, close: () => void) {
+export function useDialogFocus(ref: RefObject<HTMLElement | null>, open: boolean, close: () => void, initialFocus = true) {
   const dismiss = useCallbackRef(close);
   useEffect(() => {
     const element = ref.current;
@@ -105,7 +110,7 @@ export function useDialogFocus(ref: RefObject<HTMLElement | null>, open: boolean
       const items = controls();
       (items.find(item => item.matches('[autofocus], [data-autofocus]')) ?? items[0] ?? element).focus();
     };
-    const owns = (target: Node) => element.contains(target) || Array.from(element.querySelectorAll('[aria-controls]')).some(control => {
+    const owns = (target: Node) => target === element || element.contains(target) || Array.from(element.querySelectorAll('[aria-controls]')).some(control => {
       const id = control.getAttribute("aria-controls");
       return id && document.getElementById(id)?.contains(target);
     });
@@ -121,7 +126,7 @@ export function useDialogFocus(ref: RefObject<HTMLElement | null>, open: boolean
         }
       }
     };
-    if (top()) focus();
+    if (top()) { if (initialFocus) focus(); else element.focus(); }
     document.addEventListener("keydown", keydown);
     document.addEventListener("focusin", focusin);
     return () => {
@@ -132,7 +137,7 @@ export function useDialogFocus(ref: RefObject<HTMLElement | null>, open: boolean
       if (originalTabIndex === null) element.removeAttribute("tabindex");
       if (previous?.isConnected && !previous.matches(":disabled") && !previous.closest('[inert], [hidden]')) previous.focus();
     };
-  }, [ref, open, dismiss]);
+  }, [ref, open, dismiss, initialFocus]);
 }
 
 /** Arrow navigation for an open context menu, including keyboard dismissal. */
@@ -142,8 +147,10 @@ export function useMenuFocus(ref: RefObject<HTMLElement | null>, open: boolean, 
     const element = ref.current;
     if (!open || !element) return;
     const previous = document.activeElement as HTMLElement | null;
+    const originalTabIndex = element.getAttribute("tabindex");
+    if (originalTabIndex === null) element.tabIndex = -1;
     const controls = () => Array.from(element.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
-    controls()[0]?.focus();
+    (controls()[0] ?? element).focus();
     const keydown = (event: KeyboardEvent) => {
       const items = controls(), index = items.indexOf(document.activeElement as HTMLButtonElement);
       if (event.key === "Escape" || event.key === "Tab") { event.preventDefault(); event.stopPropagation(); dismiss(); }
@@ -153,6 +160,6 @@ export function useMenuFocus(ref: RefObject<HTMLElement | null>, open: boolean, 
       }
     };
     element.addEventListener("keydown", keydown);
-    return () => { element.removeEventListener("keydown", keydown); if (previous?.isConnected) previous.focus(); };
+    return () => { element.removeEventListener("keydown", keydown); if (originalTabIndex === null) element.removeAttribute("tabindex"); if (previous?.isConnected) previous.focus(); };
   }, [ref, open, dismiss]);
 }

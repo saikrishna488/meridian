@@ -1,4 +1,5 @@
+import { Glass } from "glisse";
 import type { ComponentProps } from "react";
 export function Card({ className = "", ...props }: ComponentProps<"div">) {
-  return <div {...props} className={`ui-card ${className}`} />;
+  return <Glass {...props} className={`ui-card ${className}`} />;
 }

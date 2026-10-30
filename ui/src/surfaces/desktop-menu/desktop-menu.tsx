@@ -20,7 +20,7 @@ function DesktopMenu() {
   const [error, setError] = useState("");
   const first = useRef<HTMLButtonElement>(null);
   const report = (e: unknown) => setError(e instanceof Error ? e.message : "Couldn’t complete this action");
-  const { visible, menu, dismiss } = usePopover(async () => { setAbout(false); setError(""); }, () => first.current?.focus(), report);
+  const { visible, menu, dismiss } = usePopover(async () => { setAbout(false); setError(""); }, () => menu.current?.focus(), report);
   useEffect(() => on("menu.opened", e => {
     setWindowId(e.data.window_id);
     setDockItem(e.data.menu === "DockItem" ? e.data : null);
@@ -54,7 +54,7 @@ function DesktopMenu() {
   }
   return <>
     <div hidden={!visible} className="desktop-scrim" onClick={() => void dismiss().catch(report)} />
-    <section ref={menu} inert={!visible} aria-hidden={!visible} className={`desktop-menu${visible ? "" : " hidden"}${about ? " about" : ""}${label === "DockItem" ? " dock-item-menu" : ""}`}
+    <section ref={menu} inert={!visible} aria-hidden={!visible} className={`desktop-menu${visible ? "" : " hidden"}${about ? " about" : ""}${label === "DockItem" ? " dock-item-menu" : ""}`} tabIndex={-1}
       style={about ? undefined : {
         left: `min(${x}px, max(8px, calc(100vw - ${label === "DockItem" ? 236 : 280}px)))`,
       }}

@@ -168,8 +168,18 @@ fn active_bluetooth_codec() -> (Option<String>, Option<String>) {
 pub fn bluetooth_audio() -> BluetoothAudioState {
     let mode = std::fs::read_to_string(bluetooth_quality_config())
         .ok()
-        .filter(|text| text.contains("bluez5.a2dp.ldac.quality = \"hq\""))
-        .map_or(BluetoothAudioMode::Auto, |_| BluetoothAudioMode::HighestQuality);
+        .and_then(|text| {
+            if text.contains("bluez5.a2dp.ldac.quality = \"hq\"") {
+                Some(BluetoothAudioMode::HighQuality)
+            } else if text.contains("bluez5.a2dp.ldac.quality = \"sq\"") {
+                Some(BluetoothAudioMode::MediumQuality)
+            } else if text.contains("bluez5.a2dp.ldac.quality = \"mq\"") {
+                Some(BluetoothAudioMode::LowQuality)
+            } else {
+                None
+            }
+        })
+        .unwrap_or(BluetoothAudioMode::Auto);
     let (active_codec, active_device) = active_bluetooth_codec();
     BluetoothAudioState { mode, active_codec, active_device }
 }
@@ -177,7 +187,9 @@ pub fn bluetooth_audio() -> BluetoothAudioState {
 pub fn set_bluetooth_audio(choice: BluetoothAudioQuality) -> Result<BluetoothAudioState, ErrorBody> {
     let quality = match choice.mode {
         BluetoothAudioMode::Auto => "auto",
-        BluetoothAudioMode::HighestQuality => "hq",
+        BluetoothAudioMode::LowQuality => "mq",
+        BluetoothAudioMode::MediumQuality => "sq",
+        BluetoothAudioMode::HighQuality => "hq",
     };
     let path = bluetooth_quality_config();
     let parent = path.parent().ok_or_else(|| error("WirePlumber configuration folder is unavailable"))?;

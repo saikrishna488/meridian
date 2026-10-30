@@ -9,7 +9,7 @@ const STATIC = new Set([".html", ".css"]);
 mkdirSync(join(root, "dist"), { recursive: true });
 cpSync(join(root, "src"), join(root, "dist"), {
   recursive: true,
-  filter: (src) => !extname(src) || STATIC.has(extname(src)) || src.endsWith("vendor/README.md"),
+  filter: (src) => !extname(src) || STATIC.has(extname(src)) || src.endsWith("vendor/README.md") || src.endsWith("vendor/GLISSE-LICENSE.txt"),
 });
 
 // Native WebViews still load files from dist; CSS/HTML edits need copying too.
@@ -21,7 +21,7 @@ if (process.argv.includes("--watch")) {
     timer = setTimeout(() => {
       cpSync(join(root, "src"), join(root, "dist"), {
         recursive: true,
-        filter: (src) => !extname(src) || STATIC.has(extname(src)) || src.endsWith("vendor/README.md"),
+        filter: (src) => !extname(src) || STATIC.has(extname(src)) || src.endsWith("vendor/README.md") || src.endsWith("vendor/GLISSE-LICENSE.txt"),
       });
     }, 50);
   });

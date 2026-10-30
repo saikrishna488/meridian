@@ -1,3 +1,4 @@
+import { installBrowserMocks } from "./browser-mocks.mjs";
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { build } from 'esbuild';
@@ -10,9 +11,11 @@ const bundle = await build({
     import { createRoot } from 'react-dom/client';
     import { Button } from './src/components/ui/button';
     import { Dialog } from './src/components/ui/dialog';
+    import { Switch } from './src/components/ui/switch';
+    import { Slider } from './src/components/ui/slider';
     import { Tabs } from './src/components/ui/tabs';
     import { Select } from './src/components/ui/select';
-    window.fixture = { ...React, createRoot, Button, Dialog, Tabs, Select };
+    window.fixture = { ...React, createRoot, Button, Dialog, Tabs, Select, Switch, Slider };
   `, resolveDir: fileURLToPath(new URL('..', import.meta.url)), loader: 'tsx' },
   bundle: true, write: false, format: 'iife', platform: 'browser',
   define: { 'process.env.NODE_ENV': '"development"' }, logLevel: 'silent',
@@ -25,6 +28,7 @@ async function fixture(t) {
     port1 = { onmessage: null };
     port2 = { postMessage: () => w.setTimeout(() => this.port1.onmessage?.(), 0) };
   };
+  installBrowserMocks(w);
   w.IS_REACT_ACT_ENVIRONMENT = true;
   w.HTMLElement.prototype.scrollIntoView = function () {};
   w.eval(bundle.outputFiles[0].text);
@@ -148,4 +152,22 @@ test('modal unmount preserves pre-existing inert state and releases nested isola
   outside.inert = false;
   await ui.render(ui.h(ui.Dialog, { open: true, onClose: () => {}, 'aria-label': 'Again' }, ui.h(ui.Button, null, 'Cancel')));
   await ui.render(null); assert.equal(outside.inert, false);
+});
+
+test('Glisse switch and slider retain controlled values and callbacks', async t => {
+  const ui = await fixture(t); let switched = null, level = null;
+  function Controls() {
+    const [checked, setChecked] = ui.useState(false);
+    const [value, setValue] = ui.useState(25);
+    return ui.h('div', null,
+      ui.h(ui.Switch, { label: 'Wireless', checked, onChange: next => { switched = next; setChecked(next); } }),
+      ui.h(ui.Slider, { 'aria-label': 'Volume', value, onValueChange: next => { level = next; setValue(next); } }));
+  }
+  await ui.render(ui.h(Controls));
+  await ui.click(ui.get('[role="switch"]'));
+  assert.equal(switched, true);
+  assert.equal(ui.get('[role="switch"]').getAttribute('aria-checked'), 'true');
+  const input = ui.get('input[type="range"]');
+  await ui.act(() => { Object.getOwnPropertyDescriptor(ui.w.HTMLInputElement.prototype, 'value').set.call(input, '65'); input.dispatchEvent(new ui.w.Event('input', { bubbles: true })); input.dispatchEvent(new ui.w.Event('change', { bubbles: true })); });
+  assert.equal(level, 65);
 });
