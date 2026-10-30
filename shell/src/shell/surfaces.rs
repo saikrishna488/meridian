@@ -23,7 +23,7 @@ impl Shell {
     }
 
     pub(super) fn open_terminal(&self) {
-        launch_kitty(None);
+        if !crate::default_apps::launch_terminal() { launch_kitty(None); }
         for popover in POPOVERS {
             self.hide_popover(popover);
         }
@@ -50,6 +50,13 @@ impl Shell {
     }
 
     pub(super) fn open_finder_at(&self, path: &str) {
+        if !path.starts_with("@") {
+            match crate::default_apps::launch_file_manager(path) {
+                Ok(true) => return,
+                Ok(false) => {},
+                Err(error) => log::warn!("Default file manager unavailable; opening Meridian Files: {}", error.message),
+            }
+        }
         self.open_finder();
         if let Some(surface) = &self.state.borrow().finder {
             surface.send(&Event::FinderLocation(proto::FilePath { path: path.to_owned() }));
