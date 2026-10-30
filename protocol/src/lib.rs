@@ -91,6 +91,21 @@ pub struct FileName {
 }
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[ts(export)]
+pub struct DefaultAppSetting {
+    pub purpose: String,
+    pub app_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct DefaultAppChoice {
+    pub purpose: String,
+    pub app_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export)]
 pub struct FileLocation {
     pub name: String,
     pub path: String,
@@ -906,6 +921,10 @@ pub enum Request {
     SettingsAudio,
     #[serde(rename = "settings.audio_action")]
     SettingsAudioAction(AudioAction),
+    #[serde(rename = "settings.default_apps")]
+    SettingsDefaultApps,
+    #[serde(rename = "settings.default_app_set")]
+    SettingsDefaultAppSet(DefaultAppChoice),
     #[serde(rename = "settings.startup")]
     SettingsStartup,
     #[serde(rename = "settings.startup_set")]
@@ -1211,6 +1230,8 @@ impl Request {
             | Request::SettingsDeviceAction(_)
             | Request::SettingsDrivers
             | Request::SettingsDriverSet(_) => Some(Capability::SystemAdministration),
+            Request::SettingsDefaultApps
+            | Request::SettingsDefaultAppSet(_) => Some(Capability::AppManagement),
             Request::SettingsStartup
             | Request::SettingsStartupSet(_)
             | Request::SettingsStartupAdd(_)
