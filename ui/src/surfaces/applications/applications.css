@@ -97,3 +97,47 @@ body { height: 100%; padding: 0; }
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
   :root[data-theme="dark"] .menu { background: var(--surface-raised); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
+
+/* List-only application launcher. Exactly one icon and one app name per row. */
+.menu { width: min(580px, calc(100vw - 32px)); }
+.list, .list.list-view {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 16px 18px;
+}
+.list .row, .list.list-view .row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 13px;
+  min-height: 50px;
+  width: 100%;
+  padding: 7px 12px;
+  border-radius: 9px;
+  text-align: left;
+  transform: none;
+}
+.list .row .dock-icon, .list.list-view .row .dock-icon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  font-size: 17px;
+}
+.list .row .app-label { flex: 1 1 auto; min-width: 0; width: auto; }
+.list .row .name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 500;
+  text-align: left;
+}
+.list .row.launching { opacity: .65; }
+@media (max-width: 650px) {
+  .menu { width: calc(100vw - 20px); }
+  .list, .list.list-view { padding-inline: 10px; }
+}
