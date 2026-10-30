@@ -1181,3 +1181,20 @@ test("failed display rollback retains the dialog and permits a safe retry", asyn
   await waitFor(() => !ui.get('[aria-label="Keep display settings"]'));
   assert.equal(attempts, 2);
 });
+
+test("Meridian Files opens a Network page and browses mounted shares without launching Nautilus", async t => {
+  const mounts = [
+    { name: "Home", path: "/home/test" },
+    { name: "Network · fileserver/share", path: "/mnt/team" },
+  ];
+  const ui = await surface(t, "finder", request => request.method === "files.locations" ? mounts
+    : request.method === "files.list" ? { path: request.params.path, parent: "/mnt", entries: [], truncated: false }
+    : defaults(request));
+  await waitFor(() => ui.get('.finder-sidebar button[title="Network"]'));
+  ui.get('.finder-sidebar button[title="Network"]').click();
+  await waitFor(() => ui.get('.finder-network-row'));
+  assert.match(ui.get('.finder-network-row').textContent, /fileserver\/share/);
+  assert.equal(ui.requests.some(r => r.method === "files.list" && r.params.path === "@network"), false);
+  ui.get('.finder-network-row').click();
+  await waitFor(() => ui.requests.some(r => r.method === "files.list" && r.params.path === "/mnt/team"));
+});
