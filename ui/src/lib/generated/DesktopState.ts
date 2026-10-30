@@ -2,4 +2,4 @@
 import type { DesktopItem } from "./DesktopItem";
 import type { WallpaperChoice } from "./WallpaperChoice";
 
-export type DesktopState = { appearance: string, font: string, wallpaper: string, wallpaper_uri: string, wallpapers: Array<WallpaperChoice>, items: Array<DesktopItem>, };
+export type DesktopState = { appearance: string, dock_style: string, font: string, wallpaper: string, wallpaper_uri: string, wallpapers: Array<WallpaperChoice>, items: Array<DesktopItem>, };

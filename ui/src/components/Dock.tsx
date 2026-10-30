@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type DragEvent } from "react";
 import { on, request } from "../lib/bridge";
 import { isBuiltinApp } from "../lib/apps";
 import { AppIcon } from "./AppIcon";
+import { useDesktop } from "../lib/desktop";
 import type { WindowInfo } from "../lib/generated/WindowInfo";
 import type { SearchItem } from "../lib/generated/SearchItem";
 export const APP_DRAG = "application/x-meridian-app";
@@ -11,6 +12,14 @@ type Item = { key: string; name: string; app?: SearchItem; special?: "applicatio
 
 export function Dock() {
   const dock = useRef<HTMLElement>(null);
+  const list = useRef<HTMLUListElement>(null);
+  const preview = useRef<HTMLDivElement>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const { desktop } = useDesktop();
+  const [hovered, setHovered] = useState<string | null>(null);
+  const [previewKey, setPreviewKey] = useState<string | null>(null);
+  const [previewX, setPreviewX] = useState(0);
+  const [pending, setPending] = useState<string | null>(null);
   const [windows, setWindows] = useState<WindowInfo[]>([]);
   const [apps, setApps] = useState<SearchItem[]>([]);
   const [pins, setPins] = useState<string[]>([]);
@@ -45,6 +54,53 @@ export function Dock() {
     const ai = layout.indexOf(a.key), bi = layout.indexOf(b.key);
     return (ai < 0 ? layout.length + items.indexOf(a) : ai) - (bi < 0 ? layout.length + items.indexOf(b) : bi);
   });
+  useEffect(() => {
+    const update = () => {
+      const bar = dock.current;
+      if (!bar) return;
+      const bounds = bar.getBoundingClientRect();
+      const rect = preview.current?.getBoundingClientRect();
+      const box = (r: DOMRect) => ({ x: Math.floor(r.left), y: Math.floor(r.top), width: Math.ceil(r.right) - Math.floor(r.left), height: Math.ceil(r.bottom) - Math.floor(r.top) });
+      // Include the animation envelope, but leave the rest of the transparent surface click-through.
+      void request({ method: "dock.input_region", params: { x: Math.floor(bounds.left), y: Math.max(0, Math.floor(bounds.top - 20)), width: Math.ceil(bounds.width), height: Math.ceil(bounds.height + 20), preview: rect ? box(rect) : null } }).catch(report);
+    };
+    update();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
+    if (dock.current) observer?.observe(dock.current);
+    if (preview.current) observer?.observe(preview.current);
+    window.addEventListener("resize", update);
+    return () => { observer?.disconnect(); window.removeEventListener("resize", update); };
+  }, [ordered.length, previewKey, desktop?.dock_style]);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  useEffect(() => {
+    const element = list.current;
+    if (!element) return;
+    const scroll = (event: WheelEvent) => {
+      if (element.scrollWidth <= element.clientWidth || !event.deltaY || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+      const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? element.clientWidth : 1;
+      const previous = element.scrollLeft;
+      element.scrollLeft += event.deltaY * unit;
+      if (element.scrollLeft !== previous) event.preventDefault();
+    };
+    element.addEventListener("wheel", scroll, { passive: false });
+    return () => element.removeEventListener("wheel", scroll);
+  }, []);
+  function showPreview(item: Item, button: HTMLElement) {
+    clearTimeout(timer.current);
+    setHovered(item.key);
+    const rect = button.getBoundingClientRect();
+    setPreviewX(rect.left + rect.width / 2);
+    timer.current = setTimeout(() => setPreviewKey(item.key), 400);
+  }
+  function hidePreview() {
+    clearTimeout(timer.current);
+    setHovered(null);
+    timer.current = setTimeout(() => setPreviewKey(null), 220);
+  }
+  useEffect(() => {
+    window.addEventListener("meridian-panel-leave", hidePreview);
+    return () => window.removeEventListener("meridian-panel-leave", hidePreview);
+  }, []);
   const fail = (e: unknown) => { report(e); setStatus(e instanceof Error ? e.message : "Couldn’t update the panel"); };
   function start(event: DragEvent, item: Item) {
     event.dataTransfer.setData(DOCK_DRAG, item.key);
@@ -80,19 +136,26 @@ export function Dock() {
     const running = windows.filter(w => w.name.toLowerCase() === item.name.toLowerCase());
     const current = running.findIndex(w => w.active);
     const window = running[current < 0 ? 0 : (current + 1) % running.length];
-    void (window ? request({ method: "windows.activate", params: { id: window.id } }) : item.app ? request({ method: "search.activate", params: { provider: "apps", item_id: item.app.id } }) : Promise.resolve()).catch(fail);
+    if (!window && item.app) setPending(item.key);
+    void (window ? request({ method: "windows.activate", params: { id: window.id } }) : item.app ? request({ method: "search.activate", params: { provider: "apps", item_id: item.app.id } }) : Promise.resolve()).catch(fail).finally(() => setPending(null));
   }
-  return <nav ref={dock} className={`bar${dropping ? " drop-active" : ""}`} aria-label="Application panel"
+  const previewItem = ordered.find(item => item.key === previewKey);
+  const previewWindows = previewItem ? windows.filter(w => w.name.toLowerCase() === previewItem.name.toLowerCase()) : [];
+  return <nav ref={dock} className={`bar dock-${desktop?.dock_style ?? "floating"}${dropping ? " drop-active" : ""}`} aria-label="Application panel"
     onDragOver={event => over(event, "end")} onDrop={event => void drop(event)} onDragEnd={() => setDropping(null)}
     onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropping(null); }}
-    onKeyDown={event => { if (event.key === "Escape") { setStatus(""); event.stopPropagation(); } }}>
-    <ul className="windows dock-items" aria-label="Pinned and running applications">
-      {ordered.map(item => {
+    onKeyDown={event => { if (event.key === "Escape") { clearTimeout(timer.current); setPreviewKey(null); setStatus(""); (event.target as HTMLElement).blur(); event.stopPropagation(); } }}>
+    <ul ref={list} className="windows dock-items" aria-label="Pinned and running applications">
+      {ordered.map((item, index) => {
         const running = windows.filter(w => w.name.toLowerCase() === item.name.toLowerCase()), active = running.some(w => w.active);
-        return <li key={item.key} className={dropping === item.key ? "dock-drop-target" : ""}>
-          <button id={item.special} data-dock-key={item.key} className={item.special ? "bar-button" : `window${running.length ? " running" : ""}`}
-            title={running.length > 1 ? `${item.name} · ${running.length} windows` : item.name} aria-label={item.name} aria-description={running.length > 1 ? `${running.length} windows. Click to switch to the next window.` : undefined} aria-pressed={item.special ? undefined : active} aria-haspopup={item.special === "applications" ? "dialog" : undefined}
-            aria-expanded={item.special === "applications" ? expanded : undefined} data-tooltip={running.length > 1 ? `${item.name} · ${running.length} windows` : item.name}
+        const near = hovered !== null && Math.abs(ordered.findIndex(candidate => candidate.key === hovered) - index) === 1;
+        return <li key={item.key} className={`${dropping === item.key ? "dock-drop-target " : ""}${hovered === item.key ? "dock-hovered" : near ? "dock-neighbor" : ""}`}>
+          <button id={item.special} data-dock-key={item.key} className={item.special ? "bar-button" : `window${running.length ? " running" : ""}${pending === item.key ? " pending" : ""}`}
+            aria-label={item.name} aria-description={running.length > 1 ? `${running.length} windows. Click to switch to the next window.` : undefined} aria-pressed={item.special ? undefined : active} aria-haspopup={item.special === "applications" ? "dialog" : undefined}
+            aria-expanded={item.special === "applications" ? expanded : undefined}
+            onMouseEnter={event => showPreview(item, event.currentTarget)} onMouseLeave={hidePreview}
+            onFocus={event => showPreview(item, event.currentTarget)} onBlur={event => { if (!preview.current?.contains(event.relatedTarget as Node | null)) hidePreview(); }}
+            onKeyDown={event => { if (event.key === "ArrowUp" && running.length) { event.preventDefault(); clearTimeout(timer.current); const bounds = event.currentTarget.getBoundingClientRect(); setPreviewX(bounds.left + bounds.width / 2); setPreviewKey(item.key); requestAnimationFrame(() => preview.current?.querySelector<HTMLButtonElement>("button")?.focus()); } }}
             draggable onDragStart={event => start(event, item)} onDragOver={event => over(event, item.key)} onDrop={event => void drop(event, item)}
             onContextMenu={event => {
               event.preventDefault();
@@ -110,6 +173,12 @@ export function Dock() {
         </li>;
       })}
     </ul>
+    {previewItem && <div ref={preview} className={`dock-preview${previewWindows.length ? " has-windows" : ""}`} style={{ left: `clamp(8px, ${previewX - 125}px, max(8px, calc(100vw - 258px)))` }}
+      onMouseEnter={() => clearTimeout(timer.current)} onMouseLeave={hidePreview}
+      onKeyDown={event => { if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return; const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("button")); if (!buttons.length) return; event.preventDefault(); const index = buttons.indexOf(document.activeElement as HTMLButtonElement); buttons[event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (index + (event.key === "ArrowUp" ? -1 : 1) + buttons.length) % buttons.length]?.focus(); }}>
+      <div className="dock-preview-title">{previewItem.name}</div>
+      {previewWindows.map(window => <button key={window.id} className="dock-preview-window" onClick={() => { setPreviewKey(null); void request({ method: "windows.activate", params: { id: window.id } }).catch(fail); }}><AppIcon id={previewItem.app?.id} name={previewItem.name} icon={previewItem.app?.icon} /><span>{window.title || window.name}</span>{window.active && <span className="dock-preview-active" aria-label="Active window">●</span>}</button>)}
+    </div>}
     {status && <button className="dock-error" role="status" onClick={() => setStatus("")}>{status}</button>}
   </nav>;
 }

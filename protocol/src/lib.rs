@@ -269,6 +269,7 @@ pub struct WallpaperChoice {
 #[ts(export)]
 pub struct DesktopState {
     pub appearance: String,
+    pub dock_style: String,
     pub font: String,
     pub wallpaper: String,
     pub wallpaper_uri: String,
@@ -665,6 +666,8 @@ pub enum Request {
     DesktopGet,
     #[serde(rename = "desktop.appearance_set")]
     DesktopAppearanceSet(WallpaperSet),
+    #[serde(rename = "desktop.dock_style_set")]
+    DesktopDockStyleSet(WallpaperSet),
     #[serde(rename = "desktop.font_set")]
     DesktopFontSet(WallpaperSet),
     #[serde(rename = "desktop.wallpaper_set")]
@@ -786,6 +789,8 @@ pub enum Request {
 
     #[serde(rename = "dock.layout_get")]
     DockLayoutGet,
+    #[serde(rename = "dock.input_region")]
+    DockInputRegion(DockInputRegion),
     #[serde(rename = "dock.layout_set")]
     DockLayoutSet(DockLayout),
     #[serde(rename = "dock.list")]
@@ -1029,6 +1034,23 @@ pub struct DockPin {
     pub pinned: bool,
 }
 
+/// Panel input bounds in logical surface coordinates.
+#[derive(Debug, Clone, PartialEq, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct DockInputRegion {
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+    pub preview: Option<DockInputRect>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct DockInputRect { pub x: i32, pub y: i32, pub width: i32, pub height: i32 }
+
 #[derive(Debug, Clone, PartialEq, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
 #[ts(export)]
@@ -1093,6 +1115,7 @@ impl Request {
             Request::DesktopGet => None,
             Request::PowerStatus => Some(Capability::PowerStatus),
             Request::DesktopFontSet(_)
+            | Request::DesktopDockStyleSet(_)
             | Request::DesktopAppearanceSet(_)
             | Request::DesktopWallpaperSet(_)
             | Request::DesktopWallpaperChoose => Some(Capability::Appearance),
@@ -1141,7 +1164,7 @@ impl Request {
                 Some(Capability::AppManagement)
             }
             Request::MenuOpen(_) | Request::SystemInfo => Some(Capability::Popovers),
-            Request::DockLayoutGet | Request::DockLayoutSet(_) | Request::DockList | Request::DockPin(_) => {
+            Request::DockInputRegion(_) | Request::DockLayoutGet | Request::DockLayoutSet(_) | Request::DockList | Request::DockPin(_) => {
                 Some(Capability::Dock)
             }
             Request::SearchQuery(_) | Request::SearchActivate(_) => Some(Capability::Search),

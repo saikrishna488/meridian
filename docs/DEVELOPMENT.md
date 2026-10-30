@@ -128,4 +128,18 @@ See [ARCHITECTURE.md §13](ARCHITECTURE.md#13-repository-layout).
 
 ## Read-only GUI preview
 
+The dock style can be changed under Settings → Appearance. Floating, full-width,
+and minimal modes use the same dock and persisted desktop preference. Hover a
+running app for its window titles; use Up on a focused dock item and the arrow
+keys to select a window. Window thumbnails and attention indicators are not
+provided by the current compositor window protocol.
+
+`tools/tests/wayland.sh` runs against the checkout's built UI in a disposable
+headless labwc session. Its dock checks use a wlroots virtual pointer and two
+outputs. Set `MERIDIAN_DOCK_CAPTURES` to a directory to save compositor
+screenshots (requires `grim`), or set `MERIDIAN_TEST_SCALE=1.25` to test a
+fractional scale (requires `wlr-randr`). `MERIDIAN_TEST_UI_DIR` selects a
+different built bundle when needed. `MERIDIAN_DOCK_ONLY=1` skips the popover
+renderer-recovery stress loop while retaining the dock and external Kitty checks.
+
 `node tools/preview-ui.mjs` serves `ui/dist` on loopback port 4173 with sample fixtures. Build the UI first. It strips the native-only CSP and maps `meridian://` assets to local HTTP **only in the preview response**; production bundles and CSP remain unchanged. Fake bridge calls update in-memory sample state and never invoke native operations. See `docs/GUI-POLISH.md` for the visual and keyboard audit.

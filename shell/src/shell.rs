@@ -349,6 +349,18 @@ impl Shell {
                 })))
             }
             Request::DesktopGet => serialize(proto::reply_ok(&crate::desktop::get())),
+            Request::DesktopDockStyleSet(choice) => {
+                let state = crate::desktop::set_dock_style(&choice.id)?;
+                self.desktop_changed(&state);
+                serialize(proto::reply_ok(&state))
+            }
+            Request::DockInputRegion(bounds) => {
+                if surface.kind != SurfaceKind::Panel {
+                    return Err(ErrorBody::new(ErrorCode::PermissionDenied, "Only the panel can change its input region"));
+                }
+                surface.set_dock_input_region(&bounds);
+                serialize(ok())
+            }
             Request::DesktopWallpaperSet(choice) => {
                 let state = crate::desktop::set_wallpaper(&choice.id)?;
                 self.desktop_changed(&state);

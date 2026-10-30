@@ -364,3 +364,24 @@ html, body, .settings-app { background: var(--settings-bg); color: var(--setting
 @media(max-width:560px) { .bluetooth-quality-options { grid-template-columns:repeat(2,minmax(0,1fr)); }.font-effect-row { grid-template-columns:minmax(90px,1fr) 42px; gap:8px 12px; }.font-effect-row .lg-slider { grid-column:1 / -1; grid-row:2; }.font-effect-row output { grid-column:2; grid-row:1; } }
 
 .settings-content .lg-input input:not([type="radio"]):not([type="range"]):not([type="checkbox"]) { max-width:none; border:0; background:transparent; padding:0; color:inherit; }
+
+/* Wallpaper thumbnails and labels have separate, predictable space in each row. */
+.wallpaper-preview-heading, .wallpaper-list-heading { padding:20px 20px 0; }
+.wallpaper-preview-heading p, .wallpaper-list-heading p { margin:5px 0 0; color:var(--ink-muted); font-size:11px; }
+.wallpaper-current { width:calc(100% - 40px); max-width:560px; max-height:280px; margin:16px auto 0; }
+.wallpaper-list-heading { padding-top:24px; }
+.wallpaper-choices { display:grid; grid-template-columns:minmax(0,1fr); gap:6px; padding:12px 20px 20px; }
+:root[data-theme] .settings-content button.wallpaper-choice { display:grid; grid-template-columns:88px minmax(0,1fr) 20px; align-items:center; gap:14px; width:100%; height:auto; min-height:70px; padding:8px; border:1px solid transparent; border-radius:9px; color:var(--ink); text-align:left; }
+:root[data-theme] .settings-content button.wallpaper-choice:hover { background:var(--surface-hover); }
+:root[data-theme] .settings-content button.wallpaper-choice[aria-pressed="true"] { background:var(--selection); border-color:var(--action); }
+.wallpaper-choice img { width:88px; height:54px; aspect-ratio:auto; margin:0; border:0; border-radius:5px; object-fit:cover; }
+.wallpaper-choice[aria-pressed="true"] img { border:0; }
+.wallpaper-choice span { display:block; min-width:0; padding:0; overflow-wrap:anywhere; font-size:12px; font-weight:600; }
+.wallpaper-choice > svg { color:var(--action); }
+.wallpaper-custom { border-top:1px solid var(--line); padding:16px 20px 20px; }
+@media(max-width:560px) {
+  .wallpaper-preview-heading, .wallpaper-list-heading { padding-inline:14px; }
+  .wallpaper-current { width:calc(100% - 28px); }
+  .wallpaper-choices { grid-template-columns:minmax(0,1fr); padding-inline:14px; }
+  .wallpaper-custom { padding-inline:14px; }
+}

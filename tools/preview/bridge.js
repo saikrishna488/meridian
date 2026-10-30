@@ -8,10 +8,11 @@ Failed to create stream fd: Operation not permitted
   const apps = [
     ["meridian-pulse.desktop", "Pulse"], ["meridian-finder.desktop", "Orbit"], ["meridian-terminal.desktop", "Meridian Terminal"], ["meridian-settings.desktop", "Settings"], ["firefox.desktop", "Firefox"], ["code.desktop", "Code"], ["calendar.desktop", "Calendar"], ["mail.desktop", "Mail"],
   ].map(([id, title]) => ({ id, title, subtitle: "Application", icon: null }));
-  const desktop = { appearance: mode, font: "Inter", wallpaper: "meridian-dusk", wallpaper_uri: "/assets/wallpapers/meridian-dusk.svg", wallpapers: ["dusk", "tide", "alpine", "aurora"].map(id => ({ id: `meridian-${id}`, name: id[0].toUpperCase() + id.slice(1), uri: `/assets/wallpapers/meridian-${id}.svg` })), items: [] };
+  const desktop = { appearance: mode, dock_style: "floating", font: "Inter", wallpaper: "meridian-dusk", wallpaper_uri: "/assets/wallpapers/meridian-dusk.svg", wallpapers: ["dusk", "tide", "alpine", "aurora"].map(id => ({ id: `meridian-${id}`, name: id[0].toUpperCase() + id.slice(1), uri: `/assets/wallpapers/meridian-${id}.svg` })), items: [] };
   const settings = { wifi: true, bluetooth: true, brightness: 75, volume: 42 };
   const locations = ["Home", "Desktop", "Documents", "Downloads", "Pictures", "Music", "Videos"].map(name => ({ name, path: name === "Home" ? "/home/alex" : `/home/alex/${name}` }));
-  let pins = ["meridian-terminal.desktop", "meridian-finder.desktop"], layout = [], terminalSent = false, nextTerminal = 1;
+  let pins = ["meridian-terminal.desktop", "meridian-finder.desktop", "firefox.desktop"], layout = [], terminalSent = false, nextTerminal = 1;
+  let windows = [{ id: 1, name: "Firefox", title: "Meridian — Welcome", active: true }, { id: 2, name: "Firefox", title: "New tab", active: false }];
   let pulseTick = 0, bookmarks = [], calendarEvents = [];
   let notificationState = { available: true, items: [{ id: 1, app: "Calendar", summary: "Design review", body: "Starts in 10 minutes", time: Date.now(), unread: true, actions: [["open", "Open"]] }] };
   let trashEntries = [
@@ -40,11 +41,13 @@ Failed to create stream fd: Operation not permitted
       case "calendar.list": result = calendarEvents; break;
       case "calendar.save": calendarEvents = params; break;
       case "desktop.get": result = desktop; break;
+      case "desktop.dock_style_set": desktop.dock_style = params.id; result = desktop; emit("desktop.changed", desktop); break;
       case "desktop.font_set": desktop.font = params.id; emit("desktop.changed", desktop); result = desktop; break;
       case "desktop.appearance_set": desktop.appearance = params.id; emit("desktop.changed", desktop); result = desktop; break;
       case "desktop.wallpaper_set": desktop.wallpaper = params.id; desktop.wallpaper_uri = `/assets/wallpapers/${params.id}.svg`; emit("desktop.changed", desktop); result = desktop; break;
       case "search.query": result = { serial: params.serial, sections: [{ provider: "apps", items: apps.filter(app => app.title.toLowerCase().includes((params.query || "").toLowerCase())) }] }; break;
-      case "windows.list": result = []; break;
+      case "windows.list": result = windows; break;
+      case "windows.activate": windows = windows.map(window => ({ ...window, active: window.id === params.id })); emit("windows.changed", windows); break;
       case "dock.list": result = pins; break;
       case "dock.layout_get": result = layout; break;
       case "dock.layout_set": layout = params.items; emit("dock.layout_changed", layout); break;

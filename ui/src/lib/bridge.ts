@@ -28,6 +28,7 @@ interface ResultMap {
   "shell.hello": SurfaceInfo;
   "desktop.font_set": import("./generated/DesktopState").DesktopState;
   "desktop.appearance_set": import("./generated/DesktopState").DesktopState;
+  "desktop.dock_style_set": import("./generated/DesktopState").DesktopState;
   "desktop.get": import("./generated/DesktopState").DesktopState;
   "desktop.wallpaper_set": import("./generated/DesktopState").DesktopState;
   "desktop.wallpaper_choose": import("./generated/DesktopState").DesktopState;
@@ -88,6 +89,7 @@ interface ResultMap {
   "apps.uninstall": null;
   "system.info": import("./generated/SystemInfo").SystemInfo;
   "dock.layout_get": string[];
+  "dock.input_region": null;
   "dock.layout_set": null;
   "dock.list": string[];
   "dock.pin": null;

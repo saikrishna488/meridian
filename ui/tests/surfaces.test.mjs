@@ -65,6 +65,50 @@ test("dock follows host windows and activates the selected window", async t => {
   assert.ok(ui.get("#applications"));
 });
 
+test("dock previews running windows with keyboard selection and follows dock style changes", async t => {
+  const windows = [{ id: 1, name: "Terminal", title: "First shell", active: true }, { id: 2, name: "Terminal", title: "Second shell", active: false }];
+  const desktop = { appearance: "dark", dock_style: "floating", font: "Inter", wallpaper: "", wallpaper_uri: "", wallpapers: [], items: [] };
+  const ui = await surface(t, "panel", request => request.method === "windows.list" ? windows : request.method === "desktop.get" ? desktop : null);
+  await waitFor(() => ui.get('[aria-label="Terminal"]'));
+  const button = ui.get('[aria-label="Terminal"]');
+  button.focus();
+  button.dispatchEvent(new ui.window.KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+  await waitFor(() => ui.get(".dock-preview-window"));
+  await waitFor(() => ui.window.document.activeElement === ui.get(".dock-preview-window"));
+  assert.equal(ui.window.document.querySelectorAll(".dock-preview-window").length, 2);
+  ui.window.document.activeElement.dispatchEvent(new ui.window.KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+  assert.equal(ui.window.document.activeElement.textContent, "Second shell");
+  ui.window.document.activeElement.click();
+  await waitFor(() => ui.requests.some(r => r.method === "windows.activate" && r.params.id === 2));
+  await waitFor(() => !ui.get(".dock-preview"));
+  ui.emit("desktop.changed", { ...desktop, dock_style: "minimal" });
+  await waitFor(() => ui.get(".bar.dock-minimal"));
+  ui.emit("desktop.changed", { ...desktop, dock_style: "full-width" });
+  await waitFor(() => ui.get(".bar.dock-full-width"));
+  assert.ok(ui.requests.some(r => r.method === "dock.input_region"));
+});
+
+test("native panel leave clears hover and dismisses its tooltip", async t => {
+  const ui = await surface(t, "panel");
+  const button = ui.get("#applications");
+  button.dispatchEvent(new ui.window.MouseEvent("mouseover", { bubbles: true }));
+  await waitFor(() => ui.get(".dock-preview"));
+  assert.ok(button.parentElement.classList.contains("dock-hovered"));
+  ui.window.dispatchEvent(new ui.window.Event("meridian-panel-leave"));
+  await waitFor(() => !ui.get(".dock-preview") && !button.parentElement.classList.contains("dock-hovered"));
+});
+
+test("overflowing dock responds to a vertical mouse wheel", async t => {
+  const ui = await surface(t, "panel");
+  const list = ui.get(".dock-items");
+  Object.defineProperty(list, "scrollWidth", { value: 900 });
+  Object.defineProperty(list, "clientWidth", { value: 300 });
+  const event = new ui.window.WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: 120 });
+  list.dispatchEvent(event);
+  assert.equal(list.scrollLeft, 120);
+  assert.equal(event.defaultPrevented, true);
+});
+
 test("applications preserve keyboard selection, launching, and dismissal", async t => {
   const ui = await surface(t, "applications", request => request.method === "search.query"
     ? searchResult(request.params.serial, [app("terminal", "Terminal"), app("browser", "Browser")]) : null);

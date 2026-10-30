@@ -111,6 +111,24 @@ pub struct WebSurface {
 }
 
 impl WebSurface {
+    pub fn set_dock_input_region(&self, bounds: &meridian_protocol::DockInputRegion) {
+        let Some(surface) = self.window.surface() else { return };
+        let region = gtk::cairo::Region::create();
+        let width = surface.width().max(0);
+        let height = surface.height().max(0);
+        let add = |x: i32, y: i32, w: i32, h: i32| {
+            let left = x.clamp(0, width);
+            let top = y.clamp(0, height);
+            let right = x.saturating_add(w.max(0)).clamp(left, width);
+            let bottom = y.saturating_add(h.max(0)).clamp(top, height);
+            if right > left && bottom > top {
+                let _ = region.union_rectangle(&gtk::cairo::RectangleInt::new(left, top, right - left, bottom - top));
+            }
+        };
+        add(bounds.x, bounds.y, bounds.width, bounds.height);
+        if let Some(rect) = &bounds.preview { add(rect.x, rect.y, rect.width, rect.height); }
+        surface.set_input_region(Some(&region));
+    }
     pub fn new(
         app: &gtk::Application,
         env: &WebEnv,
@@ -297,6 +315,32 @@ impl WebSurface {
         fallback.set_visible(false);
         overlay.add_overlay(&fallback);
         window.set_child(Some(&overlay));
+
+        if kind == SurfaceKind::Panel {
+            // WebKit may not deliver a DOM mouseleave when the pointer leaves a
+            // shaped Wayland surface directly. Notify the dock explicitly.
+            let motion = gtk::EventControllerMotion::new();
+            let weak_view = view.downgrade();
+            motion.connect_leave(move |_| {
+                if let Some(view) = weak_view.upgrade() {
+                    view.evaluate_javascript(
+                        "window.dispatchEvent(new Event('meridian-panel-leave'))", None, None,
+                        gio::Cancellable::NONE, |_| {},
+                    );
+                }
+            });
+            view.add_controller(motion);
+            // Until the web UI reports its measured bounds, only the reserved
+            // bottom strip accepts input; the transparent preview area does not.
+            window.connect_map(|window| {
+                if let Some(surface) = window.surface() {
+                    let region = gtk::cairo::Region::create_rectangle(&gtk::cairo::RectangleInt::new(
+                        0, (surface.height() - PANEL_HEIGHT).max(0), surface.width(), PANEL_HEIGHT,
+                    ));
+                    surface.set_input_region(Some(&region));
+                }
+            });
+        }
 
         let surface = Rc::new(WebSurface {
             kind,
@@ -488,7 +532,7 @@ impl WebSurface {
 
 /// Full-width panel height; keep in sync with the UI token.
 pub const PANEL_HEIGHT: i32 = 64;
-pub const PANEL_ANIMATION_OVERFLOW: i32 = 20;
+pub const PANEL_ANIMATION_OVERFLOW: i32 = 240;
 pub const TOPBAR_HEIGHT: i32 = 44;
 
 fn entry_dir(kind: SurfaceKind) -> &'static str {
@@ -559,8 +603,8 @@ fn configure_layer(window: &gtk::Window, kind: SurfaceKind, monitor: Option<&gdk
             window.set_exclusive_zone(-1);
         }
         SurfaceKind::Panel => {
-            window.set_layer(Layer::Bottom);
-            window.set_keyboard_mode(KeyboardMode::None);
+            window.set_layer(Layer::Top);
+            window.set_keyboard_mode(KeyboardMode::OnDemand);
             window.set_default_size(1, PANEL_HEIGHT + PANEL_ANIMATION_OVERFLOW);
             window.set_exclusive_zone(PANEL_HEIGHT);
         }

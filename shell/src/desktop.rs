@@ -17,6 +17,7 @@ const WALLPAPERS: [(&str, &str); 4] = [
 struct Config {
     primary_display: Option<String>,
     appearance: String,
+    dock_style: String,
     font: String,
     wallpaper: String,
     custom: Option<String>,
@@ -28,6 +29,7 @@ impl Default for Config {
         Self {
             primary_display: None,
             appearance: "dark".into(),
+            dock_style: "floating".into(),
             font: "Inter".into(),
             wallpaper: "meridian-dusk".into(),
             custom: None,
@@ -69,6 +71,7 @@ fn state(config: &Config) -> DesktopState {
     };
     DesktopState {
         appearance: config.appearance.clone(),
+        dock_style: config.dock_style.clone(),
         font: config.font.clone(),
         wallpaper: config.wallpaper.clone(),
         wallpaper_uri,
@@ -78,6 +81,14 @@ fn state(config: &Config) -> DesktopState {
 }
 pub fn get() -> DesktopState {
     state(&load())
+}
+pub fn set_dock_style(style: &str) -> Result<DesktopState, ErrorBody> {
+    if !["floating", "full-width", "minimal"].contains(&style) { return Err(error("Unknown dock style")); }
+    let _guard = CONFIG_LOCK.lock().map_err(error)?;
+    let mut config = load();
+    config.dock_style = style.into();
+    save(&config)?;
+    Ok(state(&config))
 }
 pub fn set_wallpaper(id: &str) -> Result<DesktopState, ErrorBody> {
     let _guard = CONFIG_LOCK.lock().map_err(error)?;

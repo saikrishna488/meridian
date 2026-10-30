@@ -1,158 +1,38 @@
 @import url("../../lib/desktop-gloss.css");
 
-/* Native panel includes a small transparent area above the reserved dock strip. */
-html,
-body,
-#root {
-  width: 100%;
-  height: calc(var(--dock-surface-height) + var(--dock-animation-overflow));
-  min-height: 0;
-  margin: 0;
-  overflow: hidden;
-  background: transparent;
-}
-
-.taskbar {
-  position: fixed;
-  z-index: var(--layer-listbox, 1000);
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: var(--dock-surface-height);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  padding: 5px 10px;
-  overflow: visible;
-  color: #f8faff;
-  background: var(--glass-background-strong);
-}
-
-.bar {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  height: 100%;
-  padding: 4px 7px;
-  overflow: visible;
-  border: 0;
-  border-radius: 0;
-  color: #f8faff;
-  background: transparent;
-  box-shadow: none;
-}
-
-.windows {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  width: 100%;
-  min-width: 0;
-  margin: 0;
-  padding: 0 2px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  list-style: none;
-  scrollbar-width: none;
-}
-.windows::-webkit-scrollbar { display: none; }
-.windows li { position: relative; flex: none; }
-
-.bar-button,
-.window {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  padding: 3px;
-  border: 1px solid transparent;
-  border-radius: 13px;
-  color: inherit;
-  background: transparent;
-  cursor: pointer;
-  transition: transform 150ms cubic-bezier(.2, .8, .2, 1), background 150ms ease,
-    border-color 150ms ease, box-shadow 150ms ease;
-}
-.dock-icon { width: 34px; height: 34px; font-size: 21px; }
-.app-icon { border-radius: 10px; }
-.generic-monogram { position: absolute; inset: 0; display: grid; place-items: center; font-size: 20px; }
-.bar-button:hover,
-.window:hover,
-.bar-button[aria-expanded="true"],
-.window[aria-pressed="true"] {
-  transform: translateY(-2px);
-  border-color: rgb(255 255 255 / 14%);
-  background: linear-gradient(145deg, rgb(102 163 255 / 32%), rgb(52 100 190 / 25%));
-  box-shadow: inset 0 1px rgb(255 255 255 / 12%), 0 4px 12px rgb(0 0 0 / 20%);
-}
-.bar-button:active,
-.window:active { transform: scale(.94); }
-.bar-button:focus-visible,
-.window:focus-visible { outline: 2px solid #9dc5ff; outline-offset: 1px; }
-.window.running::after {
-  content: "";
-  position: absolute;
-  bottom: 1px;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: #a9caff;
-  box-shadow: 0 0 8px rgb(111 169 255 / 65%);
-}
-.window.running[aria-pressed="true"]::after {
-  width: 13px;
-  height: 3px;
-  border-radius: 3px;
-  background: #78adff;
-}
-.window[aria-pressed="true"] { background: rgb(74 132 224 / 18%); }
-.dock-window-count {
-  position: absolute;
-  top: -3px;
-  right: -3px;
-  display: grid;
-  place-items: center;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border: 1px solid rgb(255 255 255 / 34%);
-  border-radius: 9px;
-  color: #fff;
-  background: #e34f6f;
-  font-size: 9px;
-  font-weight: 700;
-  line-height: 1;
-}
-.dock-drop-target,
-.bar.drop-active { outline: 2px solid #91bdff; outline-offset: 1px; border-radius: 13px; }
-
-.dock-error {
-  position: absolute;
-  z-index: 2;
-  inset: 2px;
-  overflow: auto;
-  border: 1px solid rgb(255 180 180 / 55%);
-  background: #7b2634;
-  font-size: 11px;
-}
-
-@media (max-width: 520px) {
-  .taskbar { padding-inline: 5px; }
-  .bar { padding-inline: 4px; }
-  .windows { justify-content: center; gap: 2px; }
-  .bar-button, .window { width: 38px; height: 40px; }
-  .dock-icon { width: 31px; height: 31px; }
-}
-@media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
-  .bar { background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .bar-button, .window { transition: none; }
-}
+/* The native surface extends upward for previews; only the dock and open
+   preview are included in its Wayland input region. All sizes are logical px. */
+html, body, #root { width:100%; height:100%; min-height:0; margin:0; overflow:hidden; background:transparent; }
+:root .taskbar { position:fixed; bottom:0; left:0; right:0; height:64px; display:flex; justify-content:center; align-items:flex-start; padding:0 8px; background:transparent; border:0; box-shadow:none; backdrop-filter:none; -webkit-backdrop-filter:none; color:#fff; }
+.bar { position:relative; display:flex; justify-content:center; width:max-content; max-width:100%; height:56px; min-width:0; border:1px solid #252525; border-radius:18px; background:#000; color:#fff; }
+.bar.dock-full-width { width:100%; max-width:none; border-radius:0; }
+.bar.dock-minimal { background:transparent; border-color:transparent; }
+.windows { display:flex; align-items:flex-end; justify-content:safe center; gap:5px; width:max-content; max-width:100%; height:76px; margin:-20px 0 0; padding:20px 9px 6px; overflow-x:auto; overflow-y:hidden; list-style:none; scrollbar-width:none; }
+.windows::-webkit-scrollbar { display:none; }
+.windows li { position:relative; flex:none; z-index:0; }
+.windows li.dock-hovered { z-index:3; }
+.windows li.dock-neighbor { z-index:1; }
+.bar-button, .window { position:relative; display:grid; place-items:center; width:44px; height:44px; padding:4px; border:0; border-radius:12px; color:#fff; background:transparent; cursor:pointer; }
+.bar-button .dock-icon, .window .dock-icon { width:36px; height:36px; font-size:21px; transform-origin:center bottom; transition:transform 180ms cubic-bezier(.2,.8,.2,1); }
+.app-icon { border-radius:10px; }
+.generic-monogram { position:absolute; inset:0; display:grid; place-items:center; font-size:20px; }
+.dock-hovered .dock-icon, .bar-button:focus-visible .dock-icon, .window:focus-visible .dock-icon { transform:translateY(-5px) scale(1.19); }
+.dock-neighbor .dock-icon { transform:translateY(-2px) scale(1.08); }
+.bar-button:active .dock-icon, .window:active .dock-icon { transform:scale(.94); }
+.bar-button:focus-visible, .window:focus-visible { outline:2px solid #fff; outline-offset:1px; }
+.window.running::after { content:""; position:absolute; bottom:-4px; width:4px; height:4px; border-radius:4px; background:#fff; }
+.window.running[aria-pressed="true"]::after { width:13px; }
+.window.pending::after { content:""; position:absolute; bottom:-4px; width:4px; height:4px; border-radius:50%; background:#fff; animation:dock-pending 900ms ease-in-out infinite alternate; }
+@keyframes dock-pending { from { opacity:.35; } to { opacity:1; } }
+.dock-window-count { position:absolute; bottom:-4px; left:calc(50% + 10px); width:3px; height:3px; overflow:hidden; border-radius:50%; background:#aaa; color:transparent; font-size:0; }
+.dock-drop-target, .bar.drop-active { outline:2px solid #fff; outline-offset:1px; }
+.dock-preview { position:fixed; bottom:76px; z-index:10; width:250px; max-width:calc(100vw - 16px); max-height:200px; overflow-y:auto; padding:8px; border:1px solid #252525; border-radius:12px; background:#000; color:#fff; box-shadow:0 8px 24px #0009; }
+.dock-preview:not(.has-windows) { text-align:center; }
+.dock-preview-title { padding:5px 8px; font-size:12px; font-weight:600; overflow-wrap:anywhere; }
+.dock-preview-window { display:flex; align-items:center; gap:9px; width:100%; min-width:0; padding:7px; border:0; border-radius:8px; background:transparent; color:#fff; text-align:left; cursor:pointer; }
+.dock-preview-window:hover, .dock-preview-window:focus-visible { background:#252525; outline:none; }
+.dock-preview-window .dock-icon { width:24px; height:24px; flex:none; font-size:14px; }
+.dock-preview-window > span:nth-child(2) { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dock-preview-active { font-size:9px; }
+.dock-error { position:absolute; z-index:5; inset:2px; overflow:auto; border:1px solid #777; background:#000; color:#fff; font-size:11px; }
+@media (prefers-reduced-motion:reduce) { .bar-button .dock-icon, .window .dock-icon { transition:none; } .window.pending::after { animation:none; } }

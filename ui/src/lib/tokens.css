@@ -30,7 +30,7 @@
   --row-height: 52px;
   --icon-size: 18px;
   --dock-surface-height: 64px; /* exclusive zone and clickable dock */
-  --dock-animation-overflow: 20px; /* native panel surface extends upward */
+  --dock-animation-overflow: 240px; /* native panel surface extends upward */
   --topbar-height: 44px; /* matches native TOPBAR_HEIGHT */
   --radius-sm: 8px;
   --radius-md: 12px;
