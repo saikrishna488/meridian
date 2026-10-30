@@ -74,25 +74,37 @@ For development checks, run `tools/check.sh`.
 
 ## Install on Linux
 
-Build and install from a source checkout:
+Install from one source checkout command (run as your regular user, **without** sudo):
 
 ```sh
-tools/dev-env.sh
-tools/compile_meridian.sh
-sudo tools/install.sh
+bash install.sh
 ```
 
-Run the first two commands as your regular user. `dev-env.sh` uses `sudo` for
-the distribution package manager if needed; only `install.sh` should be run with `sudo`.
+The source installer detects APT, DNF, or pacman from `/etc/os-release`, shows a
+confirmation before system changes, installs build/runtime dependencies, compiles
+a verified release, and invokes the transactional privileged installer. It
+keeps the current login manager unchanged. Other commands:
+
+```sh
+bash install.sh --check       # read-only dependency and version report
+bash install.sh --update      # rebuild and reinstall current checkout
+bash install.sh --repair      # rebuild and reinstall current checkout
+bash install.sh --uninstall   # remove Meridian-managed system files
+```
+
+`--update` intentionally does not pull Git changes; run `git pull` on your
+desired branch first. `--yes` skips the package-installation confirmation for
+reviewed automation. If you prefer separate steps, the original
+`tools/dev-env.sh`, `tools/compile_meridian.sh`, and
+`sudo tools/install.sh` workflow is still supported.
 
 Setup selects APT, DNF, or pacman from `/etc/os-release`. Arch setup performs
 a full system upgrade. Fedora codecs come from its configured repositories and
 may support fewer formats. New profiles have script tests; desktop and hardware
 qualification on Fedora and Arch remains pending. Systemd/logind is required.
 
-Select **Meridian** at the login screen. To update, rebuild and run
-`sudo tools/install.sh` again, then sign out and back in. Remove it with
-`sudo tools/install.sh --uninstall`. See [installation details](tools/INSTALLER.md)
+Select **Meridian** at the login screen. To update, pull the source you want and run `bash install.sh --update`, then
+sign out and back in. Remove it with `bash install.sh --uninstall`. See [installation details](tools/INSTALLER.md)
 for optional greetd configuration.
 
 ## Keyboard shortcuts
