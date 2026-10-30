@@ -268,8 +268,8 @@ test("Displays edits a multi-monitor layout and keeps a reviewed native trial", 
   const outputs = [{ name:"eDP-1",description:"Built-in Display",enabled:true,x:0,y:0,scale:1,transform:0,current:modes[0],modes },{ name:"HDMI-A-1",description:"External Display",enabled:true,x:1920,y:0,scale:1,transform:0,current:modes[0],modes }];
   const ui = await surface(t,"settings",r=>r.method==="settings.displays"?outputs:r.method==="settings.display_apply"?{token:"review-1",seconds:15}:r.method==="settings.get"?{wifi:true,bluetooth:true,brightness:70,volume:50}:defaults(r));
   [...ui.window.document.querySelectorAll("nav button")].find(b=>b.textContent.endsWith("Displays")).click();
-  await waitFor(()=>ui.window.document.querySelectorAll(".display-tile").length===2);
-  [...ui.window.document.querySelectorAll(".display-tile")].find(b=>b.textContent.includes("External Display")).click();
+  await waitFor(()=>ui.window.document.querySelectorAll(".display-list-row").length===2);
+  [...ui.window.document.querySelectorAll(".display-list-row")].find(b=>b.textContent.includes("External Display")).click();
   await waitFor(()=>ui.get("#resolution"));
   ui.get("#resolution").value="1280:720:60000";ui.get("#resolution").dispatchEvent(new ui.window.Event("change",{bubbles:true}));
   [...ui.window.document.querySelectorAll(".settings-actions button")].find(b=>b.textContent==="Apply changes").click();
@@ -1106,7 +1106,7 @@ test("primary display selection persists and stale brightness replies cannot aff
   ui.get('#primary-display').dispatchEvent(new ui.window.Event('change', { bubbles: true }));
   await waitFor(() => ui.requests.some(req => req.method === 'settings.primary_display_set'));
   assert.deepEqual(ui.requests.find(req => req.method === 'settings.primary_display_set').params, { connector: 'DP-1' });
-  [...ui.window.document.querySelectorAll('.display-tile')].find(button => button.textContent.includes('DP-1')).click();
+  [...ui.window.document.querySelectorAll('.display-list-row')].find(button => button.textContent.includes('DP-1')).click();
   await waitFor(() => ui.get('#monitor-brightness')?.value === '80');
   first({ percent: 10 });
   await new Promise(resolve => setTimeout(resolve, 25));
