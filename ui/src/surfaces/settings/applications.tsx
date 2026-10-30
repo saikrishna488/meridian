@@ -48,7 +48,7 @@ export function ApplicationsSettings() {
   useEffect(() => {
     let alive = true;
     void request({ method: "settings.default_apps" })
-      .then(value => { if (alive) setDefaults(value); })
+      .then(value => { if (alive) setDefaults(Array.isArray(value) ? value : []); })
       .catch(e => { if (alive) setDefaultsError(errorMessage(e, "Couldn’t load default applications")); })
       .finally(() => { if (alive) setDefaultsLoading(false); });
     return () => { alive = false; };
