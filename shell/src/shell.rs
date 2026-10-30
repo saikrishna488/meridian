@@ -956,6 +956,8 @@ impl Shell {
             | Request::SettingsUsers
             | Request::SettingsUserCreate(_)
             | Request::SettingsUserAction(_)
+            | Request::SettingsDefaultApps
+            | Request::SettingsDefaultAppSet(_)
             | Request::SettingsStartupApps
             | Request::SettingsStartup
             | Request::SettingsStartupSet(_)
