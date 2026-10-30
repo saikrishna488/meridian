@@ -432,3 +432,13 @@ html, body, .settings-app { background: var(--settings-bg); color: var(--setting
 .settings-app input[type="range"]:disabled { cursor: default; }
 .settings-app input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="reset"]),
 .settings-app textarea { cursor: text; }
+
+/* Default application preferences: compact, single-column Settings rows. */
+.default-apps-section { margin-bottom: 24px; }
+.default-apps-heading { padding: 19px 20px 13px; }
+.default-apps-heading h3 { font-size: 14px; margin: 0 0 6px; }
+.default-apps-heading p { margin: 0; color: var(--ink-muted); font-size: 11px; line-height: 1.7; }
+.default-apps-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.default-apps-row > div:first-child { min-width: 0; }
+.default-apps-row .meridian-select { width: min(260px, 48%); flex: none; }
+@media (max-width: 640px) { .default-apps-row { flex-direction: column; align-items: stretch; gap: 9px; } .default-apps-row .meridian-select { width: 100%; } }
