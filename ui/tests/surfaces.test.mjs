@@ -393,15 +393,15 @@ test("Clock switches between local time, stopwatch and timer", async t => {
 });
 
 
-test("launcher grid exposes descriptions and launches the keyboard selection", async t => {
+test("launcher list shows icon and app name and launches the keyboard selection", async t => {
   const items = [{ ...app("terminal", "Terminal"), subtitle: "Command line" }, app("browser", "Browser")];
   const ui = await surface(t, "applications", req => req.method === "search.query" ? searchResult(req.params.serial, items) : null);
   ui.emit("popover.shown");
   await waitFor(() => ui.get("#row-1"));
-  assert.ok(ui.get(".grid-view"));
-  assert.match(ui.get("#row-0").title, /Command line/);
+  assert.ok(ui.get(".list-view"));
+  assert.equal(ui.get("#row-0").title, "Terminal");
   ui.get("#search").focus();
-  ui.key("ArrowRight"); ui.key("ArrowRight");
+  ui.key("ArrowDown"); ui.key("ArrowDown");
   await waitFor(() => ui.get("#row-1").getAttribute("aria-selected") === "true");
   ui.key("Enter");
   await waitFor(() => ui.requests.some(req => req.method === "search.activate"));
@@ -617,7 +617,7 @@ test("Displays keeps unsupported compositor output information read-only", async
     ? { state: 'unsupported', message: 'Compositor does not support configuration', adapters: [] }
     : req.method === 'settings.displays' ? [{ name: 'Virtual-1', description: '', enabled: true, x: 0, y: 0, scale: 1, transform: 0, modes: [], current: { width: 1280, height: 720, refresh: 60000, preferred: false } }] : null);
   ui.get('nav [aria-label="Displays"]').click();
-  await waitFor(() => ui.get('.display-tile'));
+  await waitFor(() => ui.get('.display-list-row'));
   assert.match(ui.get('.settings-content').textContent, /read-only/);
   assert.equal(ui.get('[aria-label="Enable display"]').disabled, true);
   assert.equal([...ui.window.document.querySelectorAll('button')].find(b => b.textContent === 'Apply changes').disabled, true);
