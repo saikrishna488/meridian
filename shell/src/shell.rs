@@ -772,7 +772,7 @@ impl Shell {
             Request::DockList => serialize(proto::reply_ok(&read_dock(&self.catalog.borrow()))),
             Request::DockPin(pin) => {
                 if pin.pinned
-                    && !["meridian-settings.desktop", "meridian-pulse.desktop"].contains(&pin.id.as_str())
+                    && !["meridian-settings.desktop", "meridian-pulse.desktop", "meridian-terminal.desktop", "meridian-finder.desktop"].contains(&pin.id.as_str())
                     && !self.catalog.borrow().apps().iter().any(|app| app.id == pin.id)
                 {
                     return Err(ErrorBody::new(ErrorCode::NotFound, "no such application"));
@@ -819,8 +819,8 @@ impl Shell {
                     .map(|(id, name, icon)| proto::SearchItem {
                         id: id.into(),
                         title: name.into(),
-                        subtitle: Some(if name.starts_with("Meridian ") {
-                            "Interactive terminal".into()
+                        subtitle: Some(if matches!(id, "meridian-terminal.desktop" | "meridian-finder.desktop") {
+                            "Beta · Meridian built-in app".into()
                         } else {
                             format!("Meridian {name}")
                         }),
