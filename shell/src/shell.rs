@@ -418,7 +418,7 @@ impl Shell {
                 } else {
                     let name = match app.id.as_str() {
                         "meridian-settings.desktop" => "Settings",
-                        "meridian-finder.desktop" => "File Manager",
+                        "meridian-finder.desktop" => "Files",
                         "meridian-terminal.desktop" => "Meridian Terminal",
                         "meridian-pulse.desktop" => "Pulse",
                         _ => return Err(ErrorBody::new(ErrorCode::NotFound, "Unknown application")),
