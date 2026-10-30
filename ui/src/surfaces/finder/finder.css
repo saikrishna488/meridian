@@ -55,3 +55,14 @@ html, body { background:var(--surface); color:var(--ink); }
 .file-preview h2 { overflow-wrap:anywhere; font-size:17px; }
 .file-preview pre { overflow:auto; min-height:100px; white-space:pre-wrap; overflow-wrap:anywhere; user-select:text; }
 .file-preview img { object-fit:contain; min-height:0; max-height:60vh; image-rendering:auto; }
+
+/* Native Files: connected network volumes */
+.finder-network-intro { padding: 25px 26px 12px; }
+.finder-network-intro h2 { margin: 0 0 7px; font-size: 17px; font-weight: 600; }
+.finder-network-intro p { color: var(--ink-muted); font-size: 12px; line-height: 1.65; margin: 0; }
+.finder-network-list { padding: 12px 20px 24px; overflow: auto; flex: 1; min-height: 0; }
+.finder-network-row { display: flex; align-items: center; gap: 16px; padding: 14px; width: 100%; min-height: 64px; border: 1px solid var(--line); border-radius: 10px; text-align: left; background: var(--surface); color: var(--ink); margin-bottom: 8px; cursor: pointer; }
+.finder-network-row:hover { background: var(--surface-hover); }
+.finder-network-row > span { display: grid; gap: 4px; flex: 1; min-width: 0; }
+.finder-network-row strong { font-size: 12px; }
+.finder-network-row small { font-size: 11px; color: var(--ink-muted); overflow-wrap: anywhere; }
