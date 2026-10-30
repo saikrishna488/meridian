@@ -39,7 +39,12 @@ function Applications() {
     try {
       const response = await request({ method: "search.query", params: { query: value, serial: mine } });
       if (!alive.current || response.serial !== serial.current) return;
-      const next = response.sections.flatMap(section => section.items.map(item => ({ provider: section.provider, item })));
+      // Meridian Files replaces Nautilus in the launcher without removing the
+      // system package or hiding it from app-management/default-app settings.
+      const hiddenSystemFiles = new Set(["org.gnome.Nautilus.desktop", "org.gnome.nautilus.desktop", "nautilus.desktop"]);
+      const next = response.sections.flatMap(section => section.items
+        .filter(item => section.provider !== "apps" || !hiddenSystemFiles.has(item.id))
+        .map(item => ({ provider: section.provider, item })));
       setResults(next);
       setSelected(value.trim() && next.length ? 0 : -1);
       if (!value.trim()) scroller.current?.scrollTo({ top: 0, behavior: "instant" });
