@@ -10,6 +10,7 @@ mod cache;
 mod calendar;
 mod config;
 mod desktop;
+mod default_apps;
 mod files;
 pub mod greetd;
 pub mod greeter;
