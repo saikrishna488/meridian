@@ -739,7 +739,7 @@ impl Shell {
                     for surface in &recipients {
                         surface.send(&Event::SearchInvalidated);
                     }
-                    let mut pins = read_dock();
+                    let mut pins = read_dock(&catalog.borrow());
                     pins.retain(|id| id != &request.id);
                     for surface in &recipients {
                         surface.send(&Event::DockChanged(pins.clone()));
@@ -769,7 +769,7 @@ impl Shell {
                 self.send_to_popover(Popover::Applications, &Event::DockLayoutChanged(layout.items));
                 serialize(ok())
             }
-            Request::DockList => serialize(proto::reply_ok(&read_dock())),
+            Request::DockList => serialize(proto::reply_ok(&read_dock(&self.catalog.borrow()))),
             Request::DockPin(pin) => {
                 if pin.pinned
                     && !["meridian-settings.desktop", "meridian-pulse.desktop"].contains(&pin.id.as_str())
@@ -777,7 +777,7 @@ impl Shell {
                 {
                     return Err(ErrorBody::new(ErrorCode::NotFound, "no such application"));
                 }
-                let mut pins = read_dock();
+                let mut pins = read_dock(&self.catalog.borrow());
                 pins.retain(|id| id != &pin.id);
                 if pin.pinned {
                     pins.push(pin.id);
@@ -802,6 +802,8 @@ impl Shell {
                         "utilities-system-monitor",
                     ),
                     ("meridian-settings.desktop", "Settings", "Meridian settings preferences", "preferences-system"),
+                    ("meridian-terminal.desktop", "Terminal", "Meridian terminal beta interactive shell command line", "utilities-terminal"),
+                    ("meridian-finder.desktop", "Files", "Meridian Files beta file manager folders browser", "system-file-manager"),
                 ];
                 let items = builtins
                     .into_iter()
@@ -1528,11 +1530,26 @@ fn dock_path() -> std::path::PathBuf {
     glib::user_config_dir().join("meridian/dock.json")
 }
 
-fn read_dock() -> Vec<String> {
+fn default_dock(catalog: &AppCatalog) -> Vec<String> {
+    let mut pins = vec!["meridian-settings.desktop".to_string()];
+    // Resolve installed desktop IDs instead of assuming distro-specific names.
+    // Defaults are only used if no valid saved dock config exists.
+    for candidates in [
+        &["org.mozilla.firefox.desktop", "firefox.desktop", "firefox_firefox.desktop"][..],
+        &["kitty.desktop", "net.kovidgoyal.kitty.desktop"][..],
+    ] {
+        if let Some(app) = candidates.iter().find_map(|id| catalog.get(id)) {
+            pins.push(app.id.clone());
+        }
+    }
+    pins
+}
+
+fn read_dock(catalog: &AppCatalog) -> Vec<String> {
     std::fs::read(dock_path())
         .ok()
         .and_then(|data| serde_json::from_slice(&data).ok())
-        .unwrap_or_else(|| vec!["meridian-settings.desktop".into()])
+        .unwrap_or_else(|| default_dock(catalog))
 }
 
 fn system_info() -> proto::SystemInfo {
