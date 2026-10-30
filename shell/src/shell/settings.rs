@@ -171,6 +171,11 @@ impl Shell {
                 crate::users::change(choice).await?;
                 proto::reply_ok(&()).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
             }))),
+            Request::SettingsDefaultApps => serialize(proto::reply_ok(&crate::default_apps::list())),
+            Request::SettingsDefaultAppSet(choice) => {
+                let value = crate::default_apps::set(&choice, &self.catalog.borrow())?;
+                serialize(proto::reply_ok(&value))
+            }
             Request::SettingsStartupApps => {
                 let apps: Vec<_> = self
                     .catalog
