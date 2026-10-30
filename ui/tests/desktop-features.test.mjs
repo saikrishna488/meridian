@@ -1198,3 +1198,32 @@ test("Meridian Files opens a Network page and browses mounted shares without lau
   ui.get('.finder-network-row').click();
   await waitFor(() => ui.requests.some(r => r.method === "files.list" && r.params.path === "/mnt/team"));
 });
+
+test("Settings lists default application purposes and saves selected installed handlers", async t => {
+  const initial = [
+    { purpose: "files", app_id: "meridian-finder.desktop" },
+    { purpose: "browser", app_id: null },
+    { purpose: "terminal", app_id: "kitty.desktop" },
+    { purpose: "mail", app_id: null },
+    { purpose: "pdf", app_id: null },
+    { purpose: "images", app_id: null },
+    { purpose: "text", app_id: null },
+  ];
+  const ui = await surface(t, "settings", request => {
+    if (request.method === "settings.default_apps") return initial;
+    if (request.method === "settings.default_app_set") return initial.map(value => value.purpose === request.params.purpose ? { ...value, app_id: request.params.app_id } : value);
+    return defaults(request);
+  });
+  [...ui.window.document.querySelectorAll('.settings-sidebar nav button')].find(button => button.textContent === "Applications").click();
+  await waitFor(() => ui.get('[aria-label="Default app for Web browser"]'));
+  assert.equal(ui.window.document.querySelectorAll(".default-apps-row").length, 7);
+  assert.equal(ui.get('[aria-label="Default app for Files"]').value, "meridian-finder.desktop");
+  const select = ui.get('[aria-label="Default app for Web browser"]');
+  const setter = Object.getOwnPropertyDescriptor(ui.window.HTMLSelectElement.prototype, "value").set;
+  setter.call(select, "firefox.desktop");
+  select.dispatchEvent(new ui.window.Event("change", { bubbles: true }));
+  await waitFor(() => ui.requests.some(request => request.method === "settings.default_app_set"));
+  assert.deepEqual(ui.requests.find(request => request.method === "settings.default_app_set").params,
+    { purpose: "browser", app_id: "firefox.desktop" });
+  await waitFor(() => ui.get('[aria-label="Default app for Web browser"]').value === "firefox.desktop");
+});
