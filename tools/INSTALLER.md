@@ -5,7 +5,27 @@ provided. `tools/install.sh` installs runtime dependencies with APT, DNF, or pac
 the verified release binaries, UI, assets, compositor configuration, PAM
 service, and session entry into system locations.
 
-On Debian, Fedora, Arch, or a derivative with the required library versions:
+On Debian, Fedora, Arch, or a derivative with the required library versions,
+run the source installer as your regular user (**do not run it with sudo**):
+
+```sh
+bash install.sh
+```
+
+It confirms the system package operations, installs dependencies with the
+correct distribution package manager, builds as your normal user, verifies the
+release, then invokes the existing transactional installer with sudo. The
+existing login manager remains unchanged.
+
+```sh
+bash install.sh --check       # read-only report; no install or build
+bash install.sh --update      # install from checked-out source, no git pull
+bash install.sh --repair      # rebuild/reinstall from checked-out source
+bash install.sh --uninstall   # preserve user preferences and dependencies
+bash install.sh --install --yes  # skip confirmation only for reviewed automation
+```
+
+For advanced/manual operation, the original commands remain available:
 
 ```sh
 tools/dev-env.sh
@@ -22,11 +42,11 @@ Run `dev-env.sh` and `compile_meridian.sh` as your regular user; `dev-env.sh`
 uses `sudo` for the package manager when needed. Only `install.sh` needs `sudo`. The build
 requires the PipeWire development package installed by `dev-env.sh`.
 
-Select **Meridian** from the existing login screen. To update, rebuild and run
-`sudo tools/install.sh` again, then sign out and back in. To remove Meridian:
+Select **Meridian** from the existing login screen. To update, run `git pull` first if you want newer code, then `bash install.sh --update`,
+and sign out and back in. To remove Meridian:
 
 ```sh
-sudo tools/install.sh --uninstall
+bash install.sh --uninstall
 ```
 
 The existing login screen remains the default. The installer has optional
