@@ -167,7 +167,7 @@ impl WebSurface {
                 | SurfaceKind::Pulse
         ) {
             let title = match kind {
-                SurfaceKind::Finder => "File Manager",
+                SurfaceKind::Finder => "Files",
                 SurfaceKind::Terminal => "Terminal",
                 SurfaceKind::Calendar => "Calendar",
                 SurfaceKind::Clock => "Clock",
