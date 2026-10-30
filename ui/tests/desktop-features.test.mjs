@@ -766,8 +766,9 @@ test("Sound selects a playback device and controls microphone mute and level", a
     return defaults(req);
   });
   ui.get('nav [aria-label="Sound"]').click();
-  await waitFor(() => ui.get('[aria-label="Output device"]'));
-  const output = ui.get('[aria-label="Output device"]'); output.value = "6"; output.dispatchEvent(new ui.window.Event("change", { bubbles: true }));
+  await waitFor(() => [...ui.window.document.querySelectorAll(".sound-device-list .sound-option-row")].some(row => row.textContent.includes("Headphones")));
+  const output = [...ui.window.document.querySelectorAll(".sound-device-list .sound-option-row")].find(row => row.textContent.includes("Headphones"));
+  output.click();
   await waitFor(() => ui.get('.startup-message'));
   assert.deepEqual(ui.requests.find(r => r.method === "settings.audio_action").params, { id: 6, name: "headphones", action: "default", percent: null });
   ui.get('[aria-label="Mute microphone"]').click();
