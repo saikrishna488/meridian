@@ -385,3 +385,34 @@ html, body, .settings-app { background: var(--settings-bg); color: var(--setting
 .storage-volume p { margin:8px 0; font-size:12px; }
 .storage-volume .settings-row { padding:0; min-height:32px; gap:12px; flex-wrap:wrap; }
 .storage-volume .settings-actions { flex-wrap:wrap; }
+
+/* Vertical Settings lists: Displays and Sound. Shared visual language. */
+.display-list-section, .sound-list-section { overflow: hidden; }
+.sound-section-heading { padding: 16px 18px 12px; }
+.sound-section-heading h3 { margin: 0 0 4px; font-size: 14px; font-weight: 600; }
+.sound-section-heading p { margin: 0; font-size: 11px; color: var(--ink-muted); line-height: 1.6; }
+.display-vertical-list, .sound-option-list { display: flex; flex-direction: column; gap: 0; padding: 4px 12px 12px; min-width: 0; }
+.settings-content button.display-list-row, .settings-content button.sound-option-row {
+ display: flex; align-items: center; text-align: left; gap: 12px; width: 100%;
+ min-width: 0; padding: 12px; border-radius: 9px; color: var(--ink);
+ background: transparent; border: 1px solid transparent; box-shadow: none;
+}
+.settings-content button.display-list-row + button.display-list-row,
+.settings-content button.sound-option-row + button.sound-option-row { border-top: 1px solid var(--line); border-top-left-radius: 0; border-top-right-radius: 0; }
+.settings-content button.display-list-row:hover:not(:disabled),
+.settings-content button.sound-option-row:hover:not(:disabled) { background: var(--surface-hover); }
+.settings-content button.display-list-row[aria-pressed="true"],
+.settings-content button.sound-option-row[aria-pressed="true"] { background: var(--selection); border-color: var(--line); }
+.display-list-icon { display: grid; place-items: center; width: 38px; height: 34px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface-subtle); flex: none; }
+.display-list-icon span { font-size: 13px; font-weight: 650; }
+.display-list-copy, .sound-option-copy { display: flex; flex: 1 1 auto; flex-direction: column; gap: 4px; min-width: 0; }
+.display-list-copy strong, .sound-option-copy strong { font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+.display-list-copy small, .sound-option-copy small { font-size: 11px; color: var(--ink-muted); line-height: 1.5; overflow-wrap: anywhere; }
+.display-list-state { font-size: 10px; color: var(--ink-muted); flex: none; }
+.sound-option-indicator { display: grid; place-items: center; width: 17px; height: 17px; border-radius: 50%; border: 1px solid var(--line); flex: none; font-size: 11px; }
+.sound-option-row[aria-pressed="true"] .sound-option-indicator { border-color: var(--ink); }
+.sound-device-list { padding-top: 10px; }
+@media (max-width: 560px) {
+ .settings-content button.display-list-row, .settings-content button.sound-option-row { gap: 9px; padding: 11px 8px; }
+ .display-list-state { display: none; }
+}
