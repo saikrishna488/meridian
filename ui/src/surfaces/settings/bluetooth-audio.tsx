@@ -5,10 +5,6 @@ import { errorMessage } from "../../lib/react";
 import type { BluetoothAudioMode } from "../../lib/generated/BluetoothAudioMode";
 import type { BluetoothAudioState } from "../../lib/generated/BluetoothAudioState";
 
-const codecs = [
-  ["SBC", "Medium quality", "Low stutter risk", "Broad compatibility"], ["SBC-XQ", "High quality", "Range sensitive", "Higher bitrate"], ["AAC", "Medium–high quality", "Device dependent", "Common on phones"], ["aptX", "High quality", "Low latency", "Device support required"], ["aptX HD", "Very high quality", "Range sensitive", "Higher bitrate"], ["aptX LL", "Medium quality", "Very low latency", "Gaming / video"], ["aptX LL Duplex", "Low quality", "Very low latency", "Two-way audio"], ["FastStream", "Medium quality", "Low latency", "Two-way audio"], ["FastStream Duplex", "Medium quality", "Low latency", "Two-way audio"], ["LDAC", "Very high quality", "Stutter possible at range", "High bitrate modes"], ["LC3", "High efficiency", "Low latency", "LE Audio devices"], ["LC3plus H3", "High quality", "Device dependent", "Hardware support required"], ["Opus 0.5", "High quality", "Low latency", "Stereo profile"], ["Opus 0.5 5.1", "High quality", "Device dependent", "5.1 profile"], ["Opus 0.5 7.1", "High quality", "Device dependent", "7.1 profile"], ["Opus 0.5 Duplex", "Medium quality", "Low latency", "Two-way audio"], ["Opus 0.5 Pro", "Very high quality", "Device dependent", "Pro profile"],
-] as const;
-
 export function BluetoothAudioSettings() {
   const [audio, setAudio] = useState<BluetoothAudioState>({ mode: "auto", active_codec: null, active_device: null });
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [notice, setNotice] = useState("");
@@ -28,11 +24,22 @@ export function BluetoothAudioSettings() {
     catch (e) { if (alive.current) setError(errorMessage(e)); }
     finally { pending.current = false; if (alive.current) setBusy(false); }
   }
-  return <section className="settings-card bluetooth-codecs"><div><h3>Bluetooth audio</h3><p>PipeWire negotiates a codec supported by both your system and headset. Availability depends on installed codec plugins and the connected device.</p></div>
-    <div className="bluetooth-active-codec"><span>Active codec</span><strong>{audio.active_codec ? audio.active_codec.toUpperCase().replaceAll("_", " ") : "No Bluetooth audio output"}</strong>{audio.active_device && <small>{audio.active_device}</small>}</div>
-    <div className="bluetooth-quality-setting"><div><strong>Quality preference</strong><small>Choose a Bluetooth streaming bitrate. Higher quality uses more bandwidth and may be less stable at range; Auto lets PipeWire adapt.</small></div><div className="bluetooth-quality-options" role="group" aria-label="Bluetooth audio quality preference">{([["high-quality", "High quality"], ["medium-quality", "Medium quality"], ["low-quality", "Low quality"], ["auto", "Auto"]] as const).map(([mode, label]) => <Button key={mode} disabled={busy || audio.mode === mode} aria-pressed={audio.mode === mode} onClick={() => void setQuality(mode)}>{label}</Button>)}</div></div>
+  const options: { mode: BluetoothAudioMode; label: string; description: string }[] = [
+    { mode: "auto", label: "Auto", description: "Recommended. Let the system negotiate the best supported quality." },
+    { mode: "high-quality", label: "High quality", description: "Prefer higher fidelity when your headset and connection support it." },
+    { mode: "medium-quality", label: "Medium quality", description: "Balance sound quality and wireless reliability." },
+    { mode: "low-quality", label: "Low quality", description: "Prefer a more reliable connection when wireless conditions are poor." },
+  ];
+  return <section className="settings-card bluetooth-codecs sound-list-section" aria-labelledby="bluetooth-quality-title">
+    <div className="sound-section-heading"><h3 id="bluetooth-quality-title">Bluetooth audio quality</h3><p>Choose a simple quality preference. Meridian uses your system's supported Bluetooth audio capabilities.</p></div>
+    <div className="sound-option-list" role="group" aria-label="Bluetooth audio quality">
+      {options.map(option => <Button key={option.mode} className="sound-option-row" aria-pressed={audio.mode === option.mode} disabled={busy} onClick={() => void setQuality(option.mode)}>
+        <span className="sound-option-indicator" aria-hidden="true">{audio.mode === option.mode && "✓"}</span>
+        <span className="sound-option-copy"><strong>{option.label}</strong><small>{option.description}</small></span>
+      </Button>)}
+    </div>
+    {audio.active_device && <p className="section-caption card-caption">Connected device: {audio.active_device}</p>}
+    <p className="section-caption card-caption">Manual quality presets affect supported settings such as LDAC bitrate. Other Bluetooth formats continue to negotiate automatically; actual results depend on the device.</p>
     {error && <p className="settings-error" role="alert">{error}</p>}{notice && <p className="startup-message" role="status">{notice}</p>}
-    <div className="codec-list">{codecs.map(([codec, quality, stability, detail]) => <div className="codec-row" key={codec}><strong>{codec}</strong><span>{quality}</span><span>{stability}</span><small>{detail}</small></div>)}</div>
-    <small className="codec-note">Codec names describe common tradeoffs. Actual sound quality, delay and connection stability vary by headset, radio conditions and system support. Auto adapts LDAC quality; High, Medium and Low request the corresponding LDAC bitrate when the headset supports LDAC. Other codecs are negotiated by PipeWire.</small>
   </section>;
 }
