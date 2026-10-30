@@ -1,6 +1,7 @@
 //! User-selectable default applications. GIO owns standard MIME/scheme defaults;
 //! Meridian owns only shell-specific Files and Terminal preferences.
 use gtk::{gio, glib};
+use gio_unix::DesktopAppInfo;
 use gtk::prelude::*;
 use meridian_protocol::{DefaultAppChoice, DefaultAppSetting, ErrorBody, ErrorCode};
 use meridian_services::apps::AppCatalog;
@@ -73,7 +74,7 @@ pub fn set(choice: &DefaultAppChoice, catalog: &AppCatalog) -> Result<Vec<Defaul
     } else {
         let mime = PURPOSES.iter().find(|(purpose, _)| *purpose == choice.purpose).map(|(_, mime)| *mime)
             .ok_or_else(|| ErrorBody::new(ErrorCode::InvalidRequest, "Unknown default app purpose"))?;
-        let app = gio::DesktopAppInfo::new(id)
+        let app = DesktopAppInfo::new(id)
             .ok_or_else(|| ErrorBody::new(ErrorCode::NotFound, "Application desktop entry is unavailable"))?;
         app.set_as_default_for_type(mime)
             .map_err(|error| ErrorBody::new(ErrorCode::Failed, format!("Cannot set the default application: {error}")))?;
@@ -84,7 +85,7 @@ pub fn set(choice: &DefaultAppChoice, catalog: &AppCatalog) -> Result<Vec<Defaul
 pub fn launch_file_manager(path: &str) -> Result<bool, ErrorBody> {
     let Some(id) = preferred("files") else { return Ok(false) };
     if id == "meridian-finder.desktop" { return Ok(false) }
-    let app = gio::DesktopAppInfo::new(&id).ok_or_else(|| ErrorBody::new(ErrorCode::NotFound, "Default file manager is unavailable"))?;
+    let app = DesktopAppInfo::new(&id).ok_or_else(|| ErrorBody::new(ErrorCode::NotFound, "Default file manager is unavailable"))?;
     let file = gio::File::for_path(path);
     app.launch(&[file], None::<&gio::AppLaunchContext>)
         .map_err(|error| ErrorBody::new(ErrorCode::Failed, format!("Cannot open file manager: {error}")))?;
@@ -94,7 +95,7 @@ pub fn launch_file_manager(path: &str) -> Result<bool, ErrorBody> {
 pub fn launch_terminal() -> bool {
     let Some(id) = preferred("terminal") else { return false };
     if id == "kitty.desktop" || id == "meridian-terminal.desktop" { return false }
-    let Some(app) = gio::DesktopAppInfo::new(&id) else { return false };
+    let Some(app) = DesktopAppInfo::new(&id) else { return false };
     if let Err(error) = app.launch(&[], None::<&gio::AppLaunchContext>) {
         log::warn!("Default terminal failed to open: {error}");
         return false;
