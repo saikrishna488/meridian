@@ -416,3 +416,19 @@ html, body, .settings-app { background: var(--settings-bg); color: var(--setting
  .settings-content button.display-list-row, .settings-content button.sound-option-row { gap: 9px; padding: 11px 8px; }
  .display-list-state { display: none; }
 }
+
+/* Cursor semantics across Settings: hand for actions, text for editing. */
+.settings-app button:not(:disabled),
+.settings-app [role="button"]:not([aria-disabled="true"]),
+.settings-app summary,
+.settings-app input[type="checkbox"]:not(:disabled),
+.settings-app input[type="radio"]:not(:disabled),
+.settings-app input[type="range"]:not(:disabled),
+.settings-app select:not(:disabled),
+.settings-app label:has(> input[type="checkbox"]:not(:disabled)),
+.settings-app label:has(> input[type="radio"]:not(:disabled)) { cursor: pointer; }
+.settings-app button:disabled,
+.settings-app select:disabled,
+.settings-app input[type="range"]:disabled { cursor: default; }
+.settings-app input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="reset"]),
+.settings-app textarea { cursor: text; }
