@@ -15,6 +15,7 @@ bash tools/tests/screenshot.sh
 bash tools/tests/power.sh
 bash tools/tests/session.sh
 bash tools/tests/install-transaction.sh
+bash tools/tests/source-install.sh
 python3 tools/tests/profile-desktop.py
 python3 tools/tests/check-bindings.py
 
