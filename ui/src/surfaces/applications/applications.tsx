@@ -91,14 +91,12 @@ function Applications() {
       return;
     }
     const row = list.current?.children[0] as HTMLElement | undefined;
-    const grid = list.current ? getComputedStyle(list.current).gridTemplateColumns.split(" ").filter(Boolean).length : 0;
-    const columns = grid || Math.max(1, Math.floor((list.current?.clientWidth ?? 600) / 112));
-    const page = row && row.offsetHeight ? Math.max(1, Math.floor((scroller.current?.clientHeight ?? 0) / row.offsetHeight) - 1) * columns : columns;
+    const page = row?.offsetHeight ? Math.max(1, Math.floor((scroller.current?.clientHeight ?? 0) / row.offsetHeight) - 1) : 1;
     switch (event.key) {
-      case "ArrowDown": move(columns); break;
+      case "ArrowDown": move(1); break;
       case "ArrowRight": move(1); break;
       case "ArrowLeft": move(-1); break;
-      case "ArrowUp": move(-columns); break;
+      case "ArrowUp": move(-1); break;
       case "Tab": return;
       case "PageDown": move(page); break;
       case "PageUp": move(-page); break;
@@ -121,13 +119,13 @@ function Applications() {
       <button className="close-applications" aria-label="Close applications" onClick={() => void dismiss().catch(report)}><Icon name="close" width="18" height="18" /></button>
       </div>
       <div ref={scroller} className="scroller" id="scroller">
-        <ul ref={list} className="list grid-view" id="list" role="listbox" aria-label="Applications">
+        <ul ref={list} className="list list-view" id="list" role="listbox" aria-label="Applications">
           {results.map((result, index) => {
             const key = `${result.provider}:${result.item.id}`;
             return <li key={key} id={`row-${index}`} role="option" aria-selected={selected === index}
               onContextMenu={event => { event.preventDefault(); if (result.provider === "apps") setContext({ id: result.item.id, x: event.clientX, y: event.clientY }); }}
               draggable={result.provider === "apps"} onDragEnd={() => setDragging(false)} onDragStart={event => { setDragging(true); event.dataTransfer.setData(APP_DRAG, result.item.id); event.dataTransfer.effectAllowed = "copyMove"; }}
-              tabIndex={-1} title={`${result.item.title}${result.item.subtitle ? `\n${result.item.subtitle}` : ""}`}
+              tabIndex={-1} title={result.item.title}
               className={`row${launching === key ? " launching" : ""}`} onClick={() => { setSelected(index); void activate(index); }}>
               <AppIcon id={result.provider === "apps" ? result.item.id : undefined} name={result.item.title} icon={result.item.icon} />
               <span className="app-label"><span className="name">{result.item.title}</span></span>
