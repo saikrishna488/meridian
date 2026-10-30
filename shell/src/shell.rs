@@ -480,7 +480,7 @@ impl Shell {
                 let item = crate::desktop::item(&app.id)?;
                 if item.kind != "app" {
                     if std::path::Path::new(&item.target).is_dir() {
-                        crate::files::open_directory(&item.target)?;
+                        self.open_finder_at(&item.target);
                     } else {
                         crate::files::open(&item.target)?;
                     }
@@ -693,7 +693,7 @@ impl Shell {
                 serialize(ok())
             }
             Request::TrashOpen => {
-                crate::files::open_trash()?;
+                self.open_finder_at("@trash");
                 serialize(ok())
             }
             Request::AppUninstallPrompt(app) => {
