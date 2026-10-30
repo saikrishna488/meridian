@@ -4,7 +4,6 @@ import { request } from "../../lib/bridge";
 import { errorMessage } from "../../lib/react";
 import { Icon } from "../../components/Icon";
 import { Slider } from "../../components/ui/slider";
-import { Select } from "../../components/Select";
 import { SystemSlider } from "../../components/SystemSlider";
 import { useSystemSettings } from "../../lib/settings";
 import type { AudioState } from "../../lib/generated/AudioState";
@@ -59,7 +58,12 @@ export function Sound() {
       const devices = audio.devices.filter(d => d.kind === kind), selected = devices.find(d => d.default);
       const volume = kind === "output" ? audio.output_volume : audio.input_volume, muted = kind === "output" ? audio.output_muted : audio.input_muted;
       return <section key={kind} className="settings-card sound-card" aria-labelledby={`sound-${kind}-title`}><header><span className="sound-card-icon"><Icon name={kind === "output" ? "sound" : "microphone"} width="23" height="23" /></span><div><h3 id={`sound-${kind}-title`}>{kind === "output" ? "Output" : "Input"}</h3><p>{kind === "output" ? "Speakers, headphones, and other playback devices" : "Microphones and other recording devices"}</p></div></header>
-        {devices.length ? <><div className="settings-row"><label htmlFor={`sound-${kind}-device`}>{kind === "output" ? "Play sound through" : "Record sound from"}</label><Select id={`sound-${kind}-device`} aria-label={kind === "output" ? "Output device" : "Input device"} disabled={busy} value={selected?.id ?? ""} onChange={e => { const device = devices.find(d => d.id === Number(e.target.value)); if (device) void act(device, "default"); }}><option value="" disabled>Choose a device</option>{devices.map(device => <option key={device.id} value={device.id}>{device.description}</option>)}</Select></div>
+        {devices.length ? <><div className="sound-option-list sound-device-list" role="group" aria-label={kind === "output" ? "Playback devices" : "Recording devices"}>
+          {devices.map(device => <Button key={device.id} className="sound-option-row" aria-pressed={device.default} disabled={busy} onClick={() => { if (!device.default) void act(device, "default"); }}>
+            <span className="sound-option-indicator" aria-hidden="true">{device.default && "✓"}</span>
+            <span className="sound-option-copy"><strong>{device.description}</strong><small>{device.default ? "Selected" : kind === "output" ? "Use for playback" : "Use for recording"}</small></span>
+          </Button>)}
+        </div>
         <div className="sound-level-row"><div className="sound-level-heading"><span>{kind === "output" ? "Output volume" : "Microphone level"}</span><Button aria-label={muted ? `Unmute ${kind === "output" ? "speakers" : "microphone"}` : `Mute ${kind === "output" ? "speakers" : "microphone"}`} aria-pressed={muted === true} disabled={busy || !selected || muted === null} onClick={() => selected && void act(selected, muted ? "unmute" : "mute")}><Icon name={muted ? "muted" : kind === "output" ? "sound" : "microphone"} width="16" height="16" />{muted ? "Muted" : "Mute"}</Button></div><AudioLevel key={selected?.id ?? "none"} label={kind === "output" ? "Output volume" : "Microphone level"} value={volume} disabled={busy || !selected} save={percent => { if (selected) void act(selected, "volume", percent); }} />{muted && <p className="sound-muted-note">{kind === "output" ? "Sound is muted. Unmute to hear playback." : "Microphone is muted. Apps will not receive audio from this device."}</p>}</div></> : <div className="sound-no-device"><Icon name={kind === "output" ? "sound" : "microphone"} width="26" height="26" /><strong>No {kind === "output" ? "output devices" : "microphones"} connected</strong><p>Connect a device, then refresh to see it here.</p></div>}
         {kind === "output" && <div className="settings-row"><div><strong>Virtual output</strong><small className="row-detail">Create a software playback device for recording or routing audio.</small></div><Button disabled={busy} onClick={() => void virtualOutput(devices.some(device => device.name === "meridian_virtual_output") ? "virtual-remove" : "virtual-create")}>{devices.some(device => device.name === "meridian_virtual_output") ? "Remove virtual output" : "Add virtual output"}</Button></div>}
       </section>;
