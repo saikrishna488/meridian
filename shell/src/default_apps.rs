@@ -86,7 +86,7 @@ pub fn launch_file_manager(path: &str) -> Result<bool, ErrorBody> {
     if id == "meridian-finder.desktop" { return Ok(false) }
     let app = gio::DesktopAppInfo::new(&id).ok_or_else(|| ErrorBody::new(ErrorCode::NotFound, "Default file manager is unavailable"))?;
     let file = gio::File::for_path(path);
-    app.launch(&[file], gio::AppLaunchContext::NONE)
+    app.launch(&[file], None::<&gio::AppLaunchContext>)
         .map_err(|error| ErrorBody::new(ErrorCode::Failed, format!("Cannot open file manager: {error}")))?;
     Ok(true)
 }
@@ -95,7 +95,7 @@ pub fn launch_terminal() -> bool {
     let Some(id) = preferred("terminal") else { return false };
     if id == "kitty.desktop" || id == "meridian-terminal.desktop" { return false }
     let Some(app) = gio::DesktopAppInfo::new(&id) else { return false };
-    if let Err(error) = app.launch(&[], gio::AppLaunchContext::NONE) {
+    if let Err(error) = app.launch(&[], None::<&gio::AppLaunchContext>) {
         log::warn!("Default terminal failed to open: {error}");
         return false;
     }
