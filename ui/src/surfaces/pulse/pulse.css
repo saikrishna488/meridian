@@ -110,6 +110,7 @@ html, body { background:#000; color:#fff; }
 .pulse-processes th:nth-child(3), .pulse-processes td:nth-child(3) { width:100px; }
 .pulse-processes th:nth-child(4), .pulse-processes td:nth-child(4) { width:130px; }
 .pulse-processes th:nth-child(5), .pulse-processes td:nth-child(5) { width:100px; }
+.pulse-processes th:nth-child(6), .pulse-processes td:nth-child(6) { width:100px; }
 .process-empty { text-align:center; color:var(--pulse-muted); padding:45px 15px; }
 .pulse-error {
   background:#111; color:#fff; border:1px solid var(--pulse-line);
