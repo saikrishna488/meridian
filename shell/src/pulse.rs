@@ -9,6 +9,7 @@ use meridian_protocol::{ErrorBody, ErrorCode, ProcessSample, PulseSnapshot, Reso
 #[derive(Default)]
 pub struct Sampler {
     previous: Option<Previous>,
+    gpu: crate::gpu_monitor::GpuMonitor,
 }
 struct Previous {
     time: Instant,
@@ -173,6 +174,7 @@ impl Sampler {
                 resources.push(r);
             }
         }
+        let gpu_readings = self.gpu.sample(old.map(|previous| time.duration_since(previous.time)));
         if let Ok(entries) = fs::read_dir("/sys/class/drm") {
             for entry in entries.flatten() {
                 let name = entry.file_name().to_string_lossy().into_owned();
@@ -192,12 +194,17 @@ impl Sampler {
                     format!("{vendor} GPU · {name}"),
                     format!("Device {}", text(p.join("device"))),
                 );
-                r.percent = number(p.join("gpu_busy_percent")).map(|n| n.min(100) as f64);
-                r.used = number(p.join("mem_info_vram_used")).map(|n| n as f64);
-                r.total = number(p.join("mem_info_vram_total")).map(|n| n as f64);
-                if r.percent.is_none() {
-                    r.detail = "Usage unavailable from this driver".into();
-                }
+                let reading = gpu_readings.get(&name);
+                r.percent = reading.and_then(|reading| reading.percent);
+                r.used = reading.and_then(|reading| reading.used)
+                    .or_else(|| number(p.join("mem_info_vram_used")).map(|n| n as f64));
+                r.total = reading.and_then(|reading| reading.total)
+                    .or_else(|| number(p.join("mem_info_vram_total")).map(|n| n as f64));
+                r.detail = if let Some(reading) = reading.filter(|reading| reading.percent.is_some()) {
+                    format!("{vendor} GPU · {} utilization", reading.backend)
+                } else {
+                    "Utilization unavailable from this driver or inaccessible DRM clients".into()
+                };
                 resources.push(r);
             }
         }
