@@ -139,12 +139,11 @@ fn fdinfo_utilization(
             }
         }
         for (engine, (cycles, total)) in &counters.cycles {
-            if let Some((old_cycles, old_total)) = old.cycles.get(engine) {
-                if let (Some(work), Some(capacity)) = (cycles.checked_sub(*old_cycles), total.checked_sub(*old_total))
-                    && capacity > 0
-                {
-                    *engines.entry(engine).or_default() += work as f64 / capacity as f64;
-                }
+            if let Some((old_cycles, old_total)) = old.cycles.get(engine)
+                && let (Some(work), Some(capacity)) = (cycles.checked_sub(*old_cycles), total.checked_sub(*old_total))
+                && capacity > 0
+            {
+                *engines.entry(engine).or_default() += work as f64 / capacity as f64;
             }
         }
     }
@@ -188,10 +187,12 @@ impl Nvml {
             if init() != 0 { libc::dlclose(library); return None; }
             Some(Self {
                 library,
-                shutdown: std::mem::transmute(shutdown),
-                by_bus: std::mem::transmute(by_bus),
-                utilization: std::mem::transmute(utilization),
-                memory: (!memory.is_null()).then(|| std::mem::transmute(memory)),
+                shutdown: std::mem::transmute::<*mut c_void, unsafe extern "C" fn() -> c_int>(shutdown),
+                by_bus: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*const c_char, *mut *mut c_void) -> c_int>(by_bus),
+                utilization: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*mut c_void, *mut NvmlUtilization) -> c_int>(utilization),
+                memory: (!memory.is_null()).then(|| {
+                    std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*mut c_void, *mut NvmlMemory) -> c_int>(memory)
+                }),
             })
         }
     }
