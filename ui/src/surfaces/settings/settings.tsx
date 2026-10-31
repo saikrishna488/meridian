@@ -24,7 +24,7 @@ const sections: { name: string; icon: IconName; description: string }[] = [
   { name: "Keyboard", icon: "keyboard", description: "Key repeat and typing options." },
   { name: "Mouse & Touchpad", icon: "settings", description: "Pointer speed, scrolling, and touchpad gestures." },
   { name: "Keyboard Shortcuts", icon: "keyboard", description: "Review Meridian's keyboard shortcuts." },
-  { name: "Date & Time", icon: "clock", description: "Clock and time zone information." },
+  { name: "Date & Time", icon: "info", description: "Clock and time zone information." },
   { name: "Printers & Scanners", icon: "settings", description: "Printer and scanner integration status." },
   { name: "Notifications", icon: "info", description: "Manage notification interruptions." },
   { name: "Privacy & Security", icon: "settings", description: "Review security and permission availability." },
