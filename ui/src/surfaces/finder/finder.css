@@ -23,15 +23,16 @@ html, body { background:var(--surface); color:var(--ink); }
 @media(max-width:560px) { .finder-list-heading,.list .file-item { grid-template-columns:25px minmax(0,1fr) 58px; gap:6px; padding-inline:6px; }.file-size { font-size:9px; }.trash-item { grid-template-columns:26px minmax(0,1fr) 58px; gap:6px; padding-inline:6px; } }
 @media(prefers-reduced-motion:reduce) { .finder-spinner { animation:none; } }
 
-/* Orbit keeps its native file operations and adapts the workspace palette. */
-:root[data-theme="dark"] .finder-app { background: var(--surface); color: var(--ink); }
-:root[data-theme="dark"] .finder-sidebar { background: #101a2a; }
+/* Keep the Files workspace neutral black. The glass chrome below provides
+   subtle depth without inheriting the old blue Orbit palette. */
+:root[data-theme="dark"] .finder-app { background: #000; color: #fff; }
+:root[data-theme="dark"] .finder-sidebar { background: rgb(0 0 0 / .92); }
 :root[data-theme="dark"] .finder-toolbar,
+:root[data-theme="dark"] .finder-tabs { background: rgb(0 0 0 / .94); }
 :root[data-theme="dark"] .finder-locationbar,
-:root[data-theme="dark"] .finder-tabs { background: var(--surface-raised); }
 :root[data-theme="dark"] .finder-main,
-:root[data-theme="dark"] .finder-content { background: #0e1624; }
-:root[data-theme="dark"] .file-item:hover { background: rgb(107 155 255 / .14); }
+:root[data-theme="dark"] .finder-content { background: #000; }
+:root[data-theme="dark"] .file-item:hover { background: rgb(255 255 255 / .08); }
 
 .trash-browser .finder-toolbar>button.restore-button { display:flex; align-items:center; gap:7px; width:auto; padding:7px 13px; background:var(--button-primary); color:#fff; font-size:11px; }
 .trash-intro { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:24px; }.trash-intro>div { display:flex; align-items:center; gap:14px; }.trash-intro-icon { display:grid; place-items:center; flex:none; width:46px; height:46px; border-radius:14px; color:var(--action); background:var(--selection); }.trash-intro h2 { font-size:16px; letter-spacing:-.3px; margin:0 0 7px; }.trash-intro p { font-size:11px; line-height:1.6; color:var(--ink-muted); margin:0; }.trash-intro .finder-search { margin:0; }.trash-list-heading { display:grid; grid-template-columns:1fr 105px 85px; gap:16px; flex:none; padding:11px 24px; border-block:1px solid var(--line); background:var(--surface-subtle); color:var(--ink-muted); font-size:10px; }.trash-list-heading>span:last-child { text-align:right; }.trash-list { flex:1; min-height:0; overflow:auto; padding:8px 12px; }.trash-item { display:grid; align-items:center; grid-template-columns:35px minmax(0,1fr) 105px 85px; width:100%; gap:16px; padding:15px 12px; border:1px solid transparent; border-radius:9px; background:transparent; color:var(--ink); text-align:left; }.trash-item:hover { background:var(--surface-subtle); }.trash-item.selected { border-color:color-mix(in srgb,var(--action) 25%,transparent); background:var(--selection); }.trash-file-icon { color:var(--action); display:grid; place-items:center; }.trash-item-name { min-width:0; }.trash-item-name strong { display:block; overflow-wrap:anywhere; font-size:12px; font-weight:550; }.trash-item-name small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink-muted); font-size:10px; margin-top:6px; }.trash-item-date, .trash-item-size { color:var(--ink-muted); font-size:11px; }.trash-item-size { text-align:right; font-variant-numeric:tabular-nums; }.trash-error { margin:0 24px 14px; color:var(--danger); font-size:12px; line-height:1.7; }.trash-restored { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px 24px; background:var(--selection); color:var(--selection-ink); font-size:12px; }.trash-restored button { display:flex; align-items:center; gap:5px; border:0; background:transparent; color:inherit; font-size:11px; padding:4px; }
@@ -71,7 +72,7 @@ html, body { background:var(--surface); color:var(--ink); }
 /* Meridian Files — dark liquid-glass design system.
    All chrome shares the desktop tokens; contents remain legible and restrained. */
 :root .finder-app {
-  --files-glass: var(--glass-background-strong, rgb(13 13 15 / .90));
+  --files-glass: rgb(0 0 0 / .92);
   --files-border: var(--glass-border, rgb(255 255 255 / .12));
   --files-hover: var(--surface-hover, rgb(255 255 255 / .08));
   --files-shadow: inset 0 1px 0 rgb(255 255 255 / .075);
@@ -272,4 +273,17 @@ html, body { background: #000; }
     background: var(--surface-raised);
     -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none;
   }
+}
+
+
+/* Explicit dark-theme overrides outrank legacy theme selectors. */
+:root[data-theme="dark"] .finder-sidebar { background: rgb(0 0 0 / .92); }
+:root[data-theme="dark"] .finder-toolbar,
+:root[data-theme="dark"] .finder-footer { background: rgb(0 0 0 / .94); }
+:root[data-theme="dark"] .finder-locationbar,
+:root[data-theme="dark"] .finder-workspace,
+:root[data-theme="dark"] .finder-tab-panel,
+:root[data-theme="dark"] .finder-body { background: #000; }
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  :root[data-theme="dark"] .finder-sidebar { background: #000; }
 }
