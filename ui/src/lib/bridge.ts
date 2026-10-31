@@ -19,6 +19,8 @@ import type { WindowInfo } from "./generated/WindowInfo";
 
 /** Result type of each request method. Keep in sync with `shell/src/bridge.rs`. */
 interface ResultMap {
+  "settings.input": import("./generated/InputPreferences").InputPreferences;
+  "settings.input_set": import("./generated/InputPreferences").InputPreferences;
   "settings.capability": import("./generated/SystemCapability").SystemCapability;
   "settings.storage": import("./generated/StorageState").StorageState;
   "settings.storage_action": null;
