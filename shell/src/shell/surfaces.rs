@@ -22,28 +22,10 @@ impl Shell {
         }
     }
 
-    pub(super) fn open_meridian_terminal(&self) {
-        if self.state.borrow().terminal.is_none() {
-            let surface = WebSurface::new(&self.app, &self.env, SurfaceKind::Terminal, None, self.dispatcher());
-            self.state.borrow_mut().terminal = Some(surface);
-        }
-        if let Some(surface) = &self.state.borrow().terminal {
-            surface.window.present();
-            if surface.is_ready() {
-                surface.send(&Event::TerminalOpened);
-            }
-        }
-        for popover in POPOVERS {
-            self.hide_popover(popover);
-        }
-    }
-
     pub(super) fn open_terminal(&self) {
-        if crate::default_apps::preferred("terminal").as_deref() == Some("meridian-terminal.desktop") {
-            self.open_meridian_terminal();
-            return;
+        if !crate::default_apps::launch_terminal() {
+            launch_kitty(None);
         }
-        if !crate::default_apps::launch_terminal() { launch_kitty(None); }
         for popover in POPOVERS {
             self.hide_popover(popover);
         }
