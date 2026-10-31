@@ -66,3 +66,210 @@ html, body { background:var(--surface); color:var(--ink); }
 .finder-network-row > span { display: grid; gap: 4px; flex: 1; min-width: 0; }
 .finder-network-row strong { font-size: 12px; }
 .finder-network-row small { font-size: 11px; color: var(--ink-muted); overflow-wrap: anywhere; }
+
+
+/* Meridian Files — dark liquid-glass design system.
+   All chrome shares the desktop tokens; contents remain legible and restrained. */
+:root .finder-app {
+  --files-glass: var(--glass-background-strong, rgb(13 13 15 / .90));
+  --files-border: var(--glass-border, rgb(255 255 255 / .12));
+  --files-hover: var(--surface-hover, rgb(255 255 255 / .08));
+  --files-shadow: inset 0 1px 0 rgb(255 255 255 / .075);
+  background: #000;
+  color: #fff;
+  font-family: var(--font-ui);
+}
+html, body { background: #000; }
+.finder-app :is(button, input, .select-trigger) { color: inherit; }
+.finder-app :is(button, [role="button"]):not(:disabled) { cursor: pointer; }
+.finder-app :is(input[type="text"], input:not([type])) { cursor: text; }
+.finder-app :is(button, input):focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+.finder-sidebar {
+  width: 222px;
+  padding: 22px 12px 16px;
+  background: var(--files-glass);
+  border-right: 1px solid var(--files-border);
+  box-shadow: var(--files-shadow);
+  -webkit-backdrop-filter: blur(var(--glass-blur, 18px)) saturate(135%);
+  backdrop-filter: blur(var(--glass-blur, 18px)) saturate(135%);
+}
+.orbit-brand { padding: 0 10px 25px; }
+.orbit-brand > span {
+  width: 36px; height: 36px;
+  border: 1px solid var(--files-border);
+  border-radius: 11px;
+  background: rgb(255 255 255 / .07);
+  color: #fff;
+}
+.orbit-brand strong { color: #fff; font-size: 17px; font-weight: 650; }
+.orbit-brand small { color: var(--ink-muted); font-size: 10px; }
+.finder-sidebar h2 { margin-top: 19px; color: var(--ink-muted); }
+.finder-sidebar nav { gap: 3px; }
+.finder-sidebar nav button {
+  min-height: 37px; padding: 8px 11px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: #fff;
+  font-weight: 500;
+}
+:root .finder-sidebar nav button:hover:not(:disabled) {
+  background: var(--files-hover); color: #fff;
+}
+.finder-sidebar nav button[aria-current="page"] {
+  background: var(--selection);
+  border-color: var(--files-border);
+  box-shadow: var(--files-shadow);
+  color: #fff;
+}
+.finder-sidebar nav button[aria-current="page"] :is(svg, .file-art) { opacity: 1; }
+.finder-sidebar nav :is(svg, .file-art) { opacity: .9; }
+
+.finder-workspace, .finder-tab-panel, .finder-body { background: #000; color: #fff; }
+.finder-tabs {
+  min-height: 48px; align-items: center;
+  padding: 7px 16px; gap: 7px;
+  background: rgb(12 12 14 / .95);
+  border-bottom: 1px solid var(--files-border);
+}
+.finder-tab { border: 1px solid var(--files-border); border-radius: 10px; background: transparent; }
+.finder-tab button, .finder-tabs > button {
+  min-height: 31px; padding: 7px 12px;
+  background: transparent; color: #fff;
+}
+.finder-tab [role="tab"][aria-selected="true"] {
+  background: rgb(255 255 255 / .12);
+  color: #fff;
+  box-shadow: var(--files-shadow);
+}
+.finder-tabs > button { border: 1px solid var(--files-border); border-radius: 9px; }
+.finder-tabs button:hover:not(:disabled) { background: var(--files-hover); }
+
+.finder-toolbar {
+  min-height: 62px; padding: 10px 19px; gap: 6px;
+  background: var(--files-glass);
+  border-bottom: 1px solid var(--files-border);
+  box-shadow: var(--files-shadow);
+}
+.finder-toolbar h1 { color: #fff; font-size: 17px; font-weight: 640; letter-spacing: -.35px; }
+.finder-toolbar > button {
+  width: 34px; height: 34px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: #fff;
+}
+:root .finder-toolbar > button:hover:not(:disabled),
+.finder-toolbar > button[aria-pressed="true"] {
+  background: var(--files-hover); border-color: var(--files-border); color: #fff;
+}
+.finder-search {
+  width: clamp(130px, 22vw, 240px);
+  border: 1px solid var(--files-border);
+  border-radius: 11px;
+  background: rgb(255 255 255 / .065);
+  color: #fff;
+}
+.finder-search input { color: #fff; }
+.finder-locationbar {
+  min-height: 48px; padding: 7px 20px;
+  background: #000; border-bottom: 1px solid var(--files-border);
+}
+.finder-locationbar form {
+  min-height: 32px; padding-inline: 10px;
+  border: 1px solid var(--files-border);
+  border-radius: 9px;
+  background: rgb(255 255 255 / .04);
+}
+.finder-locationbar input { color: #fff; }
+.finder-locationbar input:focus { background: transparent; color: #fff; }
+.finder-breadcrumbs {
+  min-height: 40px; padding-inline: 18px;
+  background: #000; border-bottom: 1px solid var(--files-border);
+}
+.finder-breadcrumbs button { color: #fff; border-radius: 8px; }
+.finder-breadcrumbs button:hover { background: var(--files-hover); color: #fff; }
+.finder-breadcrumbs [aria-current="location"] { color: #fff; }
+
+.file-collection { background: #000; padding: 19px; }
+.file-collection.grid {
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  grid-auto-rows: 125px; gap: 12px;
+}
+.file-item { border-color: transparent; color: #fff; border-radius: 12px; }
+.grid .file-item { gap: 10px; padding: 12px 8px; }
+.file-item .file-name { color: #fff; }
+:root .file-item:hover { background: var(--files-hover); box-shadow: var(--files-shadow); }
+.file-item.selected, :root .file-item.selected:hover {
+  border-color: var(--files-border);
+  background: var(--selection);
+  box-shadow: var(--files-shadow);
+}
+.file-item.selected .file-name { color: #fff; }
+.file-collection.list { padding: 8px 14px 16px; }
+.list .file-item { min-height: 49px; padding: 8px 13px; border-radius: 9px; }
+.list .file-item:nth-child(even) { background: transparent; }
+.list .file-item:nth-child(even):hover { background: var(--files-hover); }
+.list .file-item:nth-child(even).selected { background: var(--selection); }
+.finder-list-heading {
+  padding: 12px 27px;
+  background: rgb(255 255 255 / .035);
+  color: var(--ink-muted);
+  border-bottom: 1px solid var(--files-border);
+  letter-spacing: .15px;
+}
+.finder-footer {
+  min-height: 40px; padding: 9px 20px;
+  background: var(--files-glass);
+  border-top: 1px solid var(--files-border);
+}
+.finder-notice, .trash-restored { background: var(--selection); color: #fff; }
+.finder-network-intro, .trash-intro { background: #000; }
+.finder-network-row {
+  background: rgb(255 255 255 / .035);
+  border-color: var(--files-border);
+  border-radius: 12px;
+  box-shadow: var(--files-shadow);
+  color: #fff;
+}
+.finder-network-row:hover { background: var(--files-hover); }
+.trash-item { color: #fff; border-radius: 10px; }
+.trash-item:hover { background: var(--files-hover); }
+.trash-item.selected { border-color: var(--files-border); background: var(--selection); }
+.trash-list-heading { background: rgb(255 255 255 / .035); border-color: var(--files-border); }
+.finder-context, .finder-dialog-scrim form, .properties-dialog, .file-preview {
+  background: var(--files-glass);
+  border: 1px solid var(--files-border);
+  color: #fff;
+  box-shadow: var(--files-shadow), var(--shadow-lg);
+  -webkit-backdrop-filter: blur(var(--glass-blur, 18px)) saturate(135%);
+  backdrop-filter: blur(var(--glass-blur, 18px)) saturate(135%);
+}
+.finder-context button:hover, .finder-context button:focus-visible { color: #fff; }
+.finder-dialog-scrim { background: rgb(0 0 0 / .7); }
+.finder-dialog-scrim input, .finder-dialog-scrim button,
+.properties-dialog footer button {
+  background: rgb(255 255 255 / .06);
+  border-color: var(--files-border);
+  color: #fff;
+  border-radius: 9px;
+}
+.finder-dialog-scrim button[type="submit"] { background: var(--button-primary); color: #fff; }
+@media (max-width: 800px) {
+  .finder-sidebar { width: 176px; padding-inline: 8px; }
+  .finder-toolbar { padding-inline: 12px; }
+  .finder-search { width: 140px; }
+}
+@media (max-width: 570px) {
+  .finder-sidebar { width: 64px; padding-inline: 6px; }
+  .orbit-brand { padding: 0 4px 20px; }
+  .orbit-brand strong, .orbit-brand small, .finder-sidebar h2 { display: none; }
+  .finder-sidebar nav button { justify-content: center; font-size: 0; padding: 7px; }
+  .finder-sidebar nav button svg, .finder-sidebar nav button .file-art { flex: none; }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
+  .finder-sidebar, .finder-toolbar, .finder-footer, .finder-context,
+  .finder-dialog-scrim form, .properties-dialog, .file-preview {
+    background: var(--surface-raised);
+    -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none;
+  }
+}
