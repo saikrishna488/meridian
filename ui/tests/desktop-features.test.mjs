@@ -832,6 +832,42 @@ test("top bar clock opens the configured Calendar application", async t => {
   assert.deepEqual(ui.requests.find(r => r.method === "search.activate").params, { provider: "apps", item_id: "org.gnome.Calendar.desktop" });
 });
 
+test("Critical Settings pages expose live input controls and notification preferences", async t => {
+  const input = {
+    repeat_rate: 25, repeat_delay: 600, mouse_speed: 0, mouse_acceleration: true,
+    mouse_natural_scroll: false, mouse_left_handed: false, touchpad_speed: 0,
+    tap_to_click: true, tap_and_drag: true, touchpad_natural_scroll: false,
+    disable_while_typing: true,
+  };
+  const ui = await surface(t, "settings", req => req.method === "settings.input" ? input
+    : req.method === "settings.input_set" ? req.params
+    : req.method === "notifications.get" ? { available: true, do_not_disturb: false, items: [] }
+    : req.method === "notifications.do_not_disturb" ? { available: true, do_not_disturb: req.params.enabled, items: [] }
+    : defaults(req));
+  const open = name => [...ui.window.document.querySelectorAll('.settings-sidebar nav button')].find(b => b.textContent === name)?.click();
+  await waitFor(() => [...ui.window.document.querySelectorAll('.settings-sidebar nav button')].some(b => b.textContent === "Keyboard"));
+  open("Keyboard");
+  await waitFor(() => ui.get('[aria-label="Key repeat speed"]'));
+  assert.equal(ui.get('[aria-label="Key repeat speed"]').value, "25");
+  type(ui, '[aria-label="Key repeat speed"]', "45");
+  ui.get('[aria-label="Key repeat speed"]').dispatchEvent(new ui.window.Event("change", { bubbles: true }));
+  await waitFor(() => [...ui.window.document.querySelectorAll("button")].some(b => b.textContent === "Apply changes"));
+  [...ui.window.document.querySelectorAll("button")].find(b => b.textContent === "Apply changes").click();
+  await waitFor(() => ui.requests.some(req => req.method === "settings.input_set"));
+  open("Mouse & Touchpad");
+  await waitFor(() => ui.get('[aria-label="Tap to click"]'));
+  open("Keyboard Shortcuts");
+  await waitFor(() => ui.get(".settings-content")?.textContent.includes("Super + Enter"));
+  open("Notifications");
+  await waitFor(() => ui.get('[aria-label="Do Not Disturb"]'));
+  ui.get('[aria-label="Do Not Disturb"]').click();
+  await waitFor(() => ui.requests.some(req => req.method === "notifications.do_not_disturb"));
+  for (const name of ["Date & Time", "Printers & Scanners", "Privacy & Security"]) {
+    open(name);
+    await waitFor(() => ui.get("#settings-title")?.textContent === name);
+  }
+});
+
 test("Power preferences save supported lock timing and explain when it applies", async t => {
   const ui = await surface(t, "settings", req => req.method === "power.status" ? { on_ac: false, batteries: [{ name: "BAT0", percent: 72, status: "Discharging", health: 96 }] } : req.method === "settings.idle" ? { lock_after: 300, blank_after: 330 } : req.method === "settings.idle_set" ? req.params : defaults(req));
   ui.emit("preferences.page", { page: "power" });
