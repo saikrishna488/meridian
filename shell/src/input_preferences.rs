@@ -115,7 +115,7 @@ mod tests {
         assert!(update_xml(&result, &prefs).is_ok());
         let again = update_xml(&result, &prefs).unwrap();
         assert_eq!(again.matches(BEGIN).count(), 1);
-        assert!(again.contains("keybind key=\\"W-e\\""));
+        assert!(again.contains(r#"keybind key="W-e""#));
     }
     #[test]
     fn rejects_existing_custom_libinput() {
