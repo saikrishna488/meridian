@@ -5,6 +5,12 @@ import type { PulseSnapshot } from "../../lib/generated/PulseSnapshot";
 import type { ResourceSample } from "../../lib/generated/ResourceSample";
 
 type Sort = "cpu" | "memory" | "name" | "pid";
+type Section = "overview" | "cpu" | "memory" | "gpu" | "storage" | "network";
+const sections: { id: Section; label: string }[] = [
+  { id: "overview", label: "Overview" }, { id: "cpu", label: "CPU" },
+  { id: "memory", label: "Memory" }, { id: "gpu", label: "GPU" },
+  { id: "storage", label: "Storage" }, { id: "network", label: "Network" },
+];
 const stateNames: Record<string, string> = {
   R: "Running", S: "Sleeping", D: "Waiting", T: "Stopped",
   t: "Stopped", Z: "Zombie", I: "Idle",
@@ -56,6 +62,7 @@ function ResourceRow({ resource }: { resource: ResourceSample }) {
 
 function Pulse() {
   const [data, setData] = useState<PulseSnapshot | null>(null);
+  const [section, setSection] = useState<Section>("overview");
   const [active, setActive] = useState(true);
   const [visible, setVisible] = useState(!document.hidden);
   const [error, setError] = useState("");
@@ -115,52 +122,97 @@ function Pulse() {
     { key: "memory", label: "Memory", detail: "Resident RAM in bytes" },
   ];
 
+  const chosen = resources.filter(resource => resource.kind === section);
+  const primary = chosen[0];
+  const heading = sections.find(item => item.id === section)?.label ?? "Overview";
+  const metric = section === "cpu" || section === "memory";
+  const processDescription = section === "gpu" || section === "storage" || section === "network"
+    ? "Process GPU, disk, and network attribution is not collected yet. CPU and RAM columns show system process usage."
+    : section === "memory" ? "Processes ordered by resident memory" : "Processes ordered by system CPU share";
+
+  function navigate(next: Section) {
+    setSection(next);
+    setQuery("");
+    if (next === "memory") { setSort("memory"); setAscending(false); }
+    else if (next === "cpu" || next === "overview") { setSort("cpu"); setAscending(false); }
+  }
+
   return <main className="pulse-app">
-    <header className="pulse-header">
-      <div><h1>Pulse</h1><p>System activity</p></div>
-      <span className="pulse-refresh-note">Updates every 2 seconds</span>
-    </header>
-    {error && <div className="pulse-error" role="alert">{error}</div>}
-    {!data && !error && <p className="pulse-loading" role="status">Reading system activity…</p>}
+    <aside className="pulse-sidebar" aria-label="Pulse navigation">
+      <div className="pulse-brand"><h1>Pulse</h1><span>System Monitor</span></div>
+      <nav aria-label="Resources">
+        {sections.map(item => <button key={item.id} type="button"
+          aria-current={section === item.id ? "page" : undefined}
+          onClick={() => navigate(item.id)}>
+          <span>{item.label}</span>
+          {item.id !== "overview" && <small>{resourceValue(
+            resources.find(resource => resource.kind === item.id)
+            ?? { kind: item.id, percent: null, read_rate: null, write_rate: null } as ResourceSample
+          )}</small>}
+        </button>)}
+      </nav>
+      <div className="pulse-sidebar-foot">Updates every 2 seconds</div>
+    </aside>
 
-    <section className="pulse-summary" aria-label="System resource usage">
-      <div className="pulse-summary-heading"><h2>System</h2><span>Current usage</span></div>
-      <div className="pulse-summary-primary">
-        <div><span>CPU</span><strong>{percent(cpu?.percent)}</strong></div>
-        <div><span>Memory</span><strong>{percent(memory?.percent)}</strong></div>
-        <div><span>Processes</span><strong>{data?.processes.length ?? "—"}</strong></div>
-      </div>
-      <div className="pulse-resource-list">
-        {resources.filter(resource => resource.kind !== "cpu" && resource.kind !== "memory")
-          .map(resource => <ResourceRow key={resource.id} resource={resource} />)}
-        {memory && <div className="pulse-memory-detail">{resourceDetail(memory)}</div>}
-      </div>
-    </section>
+    <div className="pulse-main">
+      <header className="pulse-page-header">
+        <div><span className="pulse-eyebrow">SYSTEM ACTIVITY</span><h2>{heading}</h2></div>
+        <span className="pulse-live">Live</span>
+      </header>
+      {error && <div className="pulse-error" role="alert">{error}</div>}
+      {!data && !error && <p className="pulse-loading" role="status">Reading system activity…</p>}
 
-    <section className="pulse-processes" aria-labelledby="pulse-process-heading">
-      <div className="process-toolbar">
-        <div><h2 id="pulse-process-heading">Processes</h2><p>{processes.length} shown · CPU {percent(cpu?.percent)} · RAM {percent(memory?.percent)}</p></div>
-        <input type="search" aria-label="Search processes" placeholder="Search process or PID" value={query}
-          onChange={event => setQuery(event.target.value)} />
+      <div className="pulse-content" key={section}>
+        {section === "overview" ? <section className="pulse-overview" aria-label="System overview">
+          <div className="pulse-section-heading"><h3>System overview</h3><span>Current usage</span></div>
+          <div className="pulse-overview-metrics">
+            <div><span>CPU</span><strong>{percent(cpu?.percent)}</strong></div>
+            <div><span>Memory</span><strong>{percent(memory?.percent)}</strong></div>
+            <div><span>Processes</span><strong>{data?.processes.length ?? "—"}</strong></div>
+          </div>
+          <div className="pulse-resource-list">
+            {resources.filter(resource => resource.kind !== "cpu" && resource.kind !== "memory")
+              .map(resource => <ResourceRow key={resource.id} resource={resource} />)}
+          </div>
+        </section> : <section className="pulse-detail" aria-label={`${heading} resource details`}>
+          <div className="pulse-section-heading"><h3>{heading} usage</h3><span>{chosen.length > 1 ? `${chosen.length} devices` : "Current"}</span></div>
+          {metric ? <div className="pulse-detail-hero">
+            <strong>{percent(primary?.percent)}</strong>
+            <span>{primary ? resourceDetail(primary) || primary.detail : "Waiting for metrics…"}</span>
+          </div> : chosen.length ? <div className="pulse-device-list">
+            {chosen.map(resource => <ResourceRow key={resource.id} resource={resource} />)}
+          </div> : <p className="pulse-no-device">No {heading.toLowerCase()} devices reported.</p>}
+        </section>}
+
+        <section className="pulse-processes" aria-labelledby="pulse-process-heading">
+          <div className="process-toolbar">
+            <div><h3 id="pulse-process-heading">{section === "overview" ? "Processes" : section === "cpu" ? "Processes using CPU" : section === "memory" ? "Processes using memory" : "Processes"}</h3>
+              <p>{processes.length} shown · CPU {percent(cpu?.percent)} · Memory {percent(memory?.percent)}</p>
+            </div>
+            <input type="search" aria-label="Search processes" placeholder="Search name or PID"
+              value={query} onChange={event => setQuery(event.target.value)} />
+          </div>
+          {section !== "overview" && <p className="pulse-process-caption">{processDescription}</p>}
+          <div className="process-table-wrap">
+            <table>
+              <thead><tr>{columns.map(column => <th key={column.key} scope="col" title={column.detail}
+                aria-sort={sort === column.key ? ascending ? "ascending" : "descending" : "none"}>
+                <button onClick={() => order(column.key)}>{column.label}<span aria-hidden="true">{sort === column.key ? ascending ? " ↑" : " ↓" : ""}</span></button>
+              </th>)}<th scope="col">RAM %</th><th scope="col">State</th></tr></thead>
+              <tbody>{processes.map(process => <tr key={process.pid}>
+                <td className="process-name" title={process.name}>{process.name}</td>
+                <td>{process.pid}</td>
+                <td>{percent(process.cpu)}</td>
+                <td>{bytes(process.memory)}</td>
+                <td>{memory?.total && memory.total > 0 ? percent(process.memory / memory.total * 100) : "—"}</td>
+                <td>{stateNames[process.state] ?? process.state}</td>
+              </tr>)}</tbody>
+            </table>
+            {!processes.length && <p className="process-empty">{query ? "No matching processes." : "Waiting for processes…"}</p>}
+          </div>
+        </section>
       </div>
-      <div className="process-table-wrap">
-        <table>
-          <thead><tr>{columns.map(column => <th key={column.key} scope="col" title={column.detail}
-            aria-sort={sort === column.key ? ascending ? "ascending" : "descending" : "none"}>
-            <button onClick={() => order(column.key)}>{column.label}<span aria-hidden="true">{sort === column.key ? ascending ? " ↑" : " ↓" : ""}</span></button>
-          </th>)}<th scope="col">RAM %</th><th scope="col">State</th></tr></thead>
-          <tbody>{processes.map(process => <tr key={process.pid}>
-            <td className="process-name" title={process.name}>{process.name}</td>
-            <td>{process.pid}</td>
-            <td>{percent(process.cpu)}</td>
-            <td>{bytes(process.memory)}</td>
-            <td>{memory?.total && memory.total > 0 ? percent(process.memory / memory.total * 100) : "—"}</td>
-            <td>{stateNames[process.state] ?? process.state}</td>
-          </tr>)}</tbody>
-        </table>
-        {!processes.length && <p className="process-empty">{query ? "No matching processes." : "Waiting for processes…"}</p>}
-      </div>
-    </section>
+    </div>
   </main>;
 }
 
