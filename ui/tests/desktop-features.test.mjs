@@ -521,25 +521,24 @@ const pulseData = {
   ],
 };
 
-test("Pulse displays device graphs, unsupported GPU readings and live appearance", async t => {
+test("Pulse displays monochrome resource percentages and a visible process list", async t => {
   const ui = await surface(t, "pulse", req => req.method === "pulse.snapshot" ? pulseData : defaults(req));
-  await waitFor(() => ui.window.document.querySelectorAll(".resource-card").length === 5);
-  assert.equal(ui.window.document.querySelectorAll('.pulse-chart svg[role="img"]').length, 5);
-  assert.ok(ui.get(".resource-card").textContent.includes("24.5%"));
-  assert.ok(ui.get(".pulse-overview").textContent.includes("Usage unavailable"));
-  assert.ok(ui.get(".pulse-overview").textContent.includes("1.0 MiB/s"));
-  assert.ok(ui.get(".pulse-overview").textContent.includes("16.0 GiB total"));
-  const gpu = [...ui.window.document.querySelectorAll(".resource-card")].find(e => e.textContent.includes("GPU"));
-  assert.ok(!gpu.querySelector(".chart-line"));
-  assert.equal(ui.window.document.querySelectorAll(".chart-line.secondary").length, 2);
+  await waitFor(() => ui.get(".pulse-summary-primary"));
+  await waitFor(() => ui.get("tbody tr"));
+  assert.ok(ui.get(".pulse-summary-primary").textContent.includes("24.5%"));
+  assert.ok(ui.get(".pulse-summary-primary").textContent.includes("50.0%"));
+  assert.equal(ui.window.document.querySelectorAll(".pulse-resource-row").length, 3);
+  assert.ok(ui.get(".pulse-resource-list").textContent.includes("1.0 MiB/s"));
+  assert.ok(ui.get(".pulse-memory-detail").textContent.includes("16.0 GiB"));
+  assert.ok(ui.get(".pulse-resource-list").textContent.includes("Usage unavailable from this driver"));
+  assert.equal(ui.window.document.querySelectorAll("svg, canvas, .pulse-chart, .resource-card, .process-dot").length, 0);
+  assert.ok(ui.get("tbody tr").textContent.includes("firefox"));
   ui.emit("desktop.changed", { ...desktop, appearance: "dark" });
   await waitFor(() => ui.window.document.documentElement.dataset.theme === "dark");
 });
 
-test("Pulse processes support sorting, searching and keyboard tab navigation", async t => {
+test("Pulse processes support sorting and searching without switching views", async t => {
   const ui = await surface(t, "pulse", req => req.method === "pulse.snapshot" ? pulseData : defaults(req));
-  await waitFor(() => ui.get(".resource-card"));
-  ui.get("#tab-processes").click();
   await waitFor(() => ui.get("tbody tr"));
   assert.ok(ui.get("tbody tr").textContent.includes("firefox"));
   [...ui.window.document.querySelectorAll("th button")].find(b => b.textContent.startsWith("Memory")).click();
@@ -551,16 +550,13 @@ test("Pulse processes support sorting, searching and keyboard tab navigation", a
   assert.ok(ui.get("tbody tr").textContent.includes("—"));
   type(ui, '[aria-label="Search processes"]', "missing");
   await waitFor(() => ui.get(".process-empty")?.textContent.includes("No matching"));
-  ui.get("#tab-processes").dispatchEvent(new ui.window.KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
-  await waitFor(() => ui.get("#panel-overview"));
-  assert.equal(ui.window.document.activeElement.id, "tab-overview");
 });
 
 test("Pulse has no pause control and stops polling while closed", async t => {
   const ui = await surface(t, "pulse", req => req.method === "pulse.snapshot" ? pulseData : defaults(req));
-  await waitFor(() => ui.get(".resource-card"));
+  await waitFor(() => ui.get("tbody tr"));
   assert.ok(!ui.get(".pause-button"));
-  assert.ok(!ui.get(".pulse-header") && !ui.get(".pulse-footer") && !ui.get(".overview-intro"));
+  assert.ok(ui.get(".pulse-header") && !ui.get(".pulse-footer") && !ui.get(".overview-intro"));
   const count = () => ui.requests.filter(r => r.method === "pulse.snapshot").length;
   const before = count();
   ui.emit("pulse.visibility", false);
@@ -579,7 +575,7 @@ test("Pulse reports metric failures and can recover without losing its window", 
   ui.emit("pulse.visibility", false);
   await new Promise(r => setTimeout(r, 20));
   ui.emit("pulse.visibility", true);
-  await waitFor(() => ui.get(".resource-card") && !ui.get('[role="alert"]'));
+  await waitFor(() => ui.get("tbody tr") && !ui.get('[role="alert"]'));
 });
 
 test("Meridian menu opens Pulse", async t => {
