@@ -54,6 +54,15 @@ pub(crate) fn validate_identity(expected: Option<&str>, current: Option<&str>) -
     }
     Ok(())
 }
+// Only physical/virtual block storage and its actual volumes belong in Storage.
+// Input peripherals, device nodes and non-storage kernel devices do not.
+fn storage_kind(kind: &str) -> bool {
+    matches!(
+        kind,
+        "disk" | "part" | "rom" | "crypt" | "lvm" | "raid0" | "raid1"
+            | "raid4" | "raid5" | "raid6" | "raid10" | "md" | "mpath"
+    )
+}
 fn inventory(tree: &Value) -> Vec<StorageVolume> {
     fn visit(
         node: &Value,
@@ -70,6 +79,14 @@ fn inventory(tree: &Value) -> Vec<StorageVolume> {
         }
         let removable = removable || flag(&node["rm"]) || node["tran"] == "usb";
         let kind = node["type"].as_str().unwrap_or("unknown");
+        if !storage_kind(kind) {
+            // Still visit descendants: a mapper or aggregate can contain a
+            // genuine filesystem even if the parent type is not supported.
+            for child in node["children"].as_array().into_iter().flatten() {
+                visit(child, parent, removable, seen, out);
+            }
+            return;
+        }
         let points = mounts(node);
         let fs = node["fstype"].as_str().unwrap_or_default();
         let mut actions = vec![];
@@ -131,31 +148,15 @@ fn mounted_filesystems(volumes: &mut Vec<StorageVolume>, mountinfo: &str) {
         }
         let fs = r[0];
         let point = decode(f[4]);
-        if [
-            "proc",
-            "sysfs",
-            "devtmpfs",
-            "devpts",
-            "tmpfs",
-            "cgroup",
-            "cgroup2",
-            "securityfs",
-            "pstore",
-            "bpf",
-            "tracefs",
-            "debugfs",
-            "mqueue",
-            "hugetlbfs",
-            "configfs",
-            "fusectl",
-            "autofs",
-            "binfmt_misc",
-            "rpc_pipefs",
-            "efivarfs",
-        ]
-        .contains(&fs)
-            || volumes.iter().any(|v| v.mount_points.contains(&point))
-        {
+        // The block inventory already contains physical disks and volumes.
+        // Only supplement it with real remote/shared filesystems. FUSE
+        // portals, GVFS mounts, and kernel pseudo mounts are not disks.
+        let remote = matches!(
+            fs,
+            "nfs" | "nfs4" | "cifs" | "smb3" | "sshfs"
+                | "fuse.sshfs" | "9p" | "virtiofs" | "ceph" | "glusterfs"
+        );
+        if !remote || !point.starts_with('/') || volumes.iter().any(|v| v.mount_points.contains(&point)) {
             continue;
         }
         volumes.push(StorageVolume {
@@ -279,6 +280,24 @@ fn action(choice: StorageAction) -> Result<(), ErrorBody> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn only_real_block_storage_and_remote_shares_appear() {
+        let data = serde_json::json!({"blockdevices":[
+            {"name":"/dev/sda","type":"disk","size":1000,
+             "children":[{"name":"/dev/sda1","type":"part","fstype":"ext4","mountpoints":["/"]}]},
+            {"name":"/dev/input/event0","type":"input","size":0},
+            {"name":"/dev/hidraw0","type":"hid","size":0},
+            {"name":"/dev/loop0","type":"loop","size":100}
+        ]});
+        let inventory = inventory(&data);
+        assert_eq!(inventory.len(), 2);
+        assert!(inventory.iter().all(|v| v.path.starts_with("/dev/sda")));
+        let mut mounts = vec![];
+        mounted_filesystems(&mut mounts,
+            "1 0 0:1 / /run/user/1000/gvfs rw - fuse.gvfsd-fuse gvfs rw\n2 0 0:2 / /mnt/nas rw - nfs4 server:/share rw");
+        assert_eq!(mounts.len(), 1);
+        assert_eq!(mounts[0].filesystem, "nfs4");
+    }
     #[test]
     fn reused_device_paths_reject_a_stale_attachment_identity() {
         assert!(validate_identity(Some("diskseq:10"), Some("diskseq:11")).is_err());
