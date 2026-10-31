@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "../../components/ui/button";
+import { Slider } from "../../components/ui/slider";
+import { Select } from "../../components/Select";
 import { on, request } from "../../lib/bridge";
 import { Switch } from "../../components/ui/switch";
 import { errorMessage } from "../../lib/react";
@@ -17,8 +19,8 @@ function RangeRow({ title, value, min, max, step, unit, onChange }: {
   title: string; value: number; min: number; max: number; step: number; unit: string; onChange: (value: number) => void;
 }) {
   return <label className="settings-row essentials-setting"><strong>{title}</strong>
-    <span className="essentials-range"><input type="range" min={min} max={max} step={step} value={value}
-      onChange={event => onChange(Number(event.target.value))} aria-label={title} />
+    <span className="essentials-range"><Slider min={min} max={max} step={step} value={value}
+      onValueChange={onChange} aria-label={title} />
       <output>{value}{unit}</output></span></label>;
 }
 export function InputSettings({ kind }: { kind: "keyboard" | "mouse" }) {
@@ -54,13 +56,13 @@ export function InputSettings({ kind }: { kind: "keyboard" | "mouse" }) {
       <div className="settings-card">
         <h3>Typing</h3>
         <label className="settings-row essentials-setting"><strong>Keyboard layout</strong>
-          <select aria-label="Keyboard layout" value={draft.keyboard_layout}
+          <Select aria-label="Keyboard layout" value={draft.keyboard_layout}
             onChange={event => update("keyboard_layout", event.target.value)}>
             {!["us", "gb", "in", "de", "fr", "es", "it", "br", "ca", "jp", "ru"].includes(draft.keyboard_layout)
               && <option value={draft.keyboard_layout}>{draft.keyboard_layout}</option>}
             {[["us", "English (US)"], ["gb", "English (UK)"], ["in", "English (India)"], ["de", "German"], ["fr", "French"], ["es", "Spanish"], ["it", "Italian"], ["br", "Portuguese (Brazil)"], ["ca", "Canadian"], ["jp", "Japanese"], ["ru", "Russian"]].map(([code, name]) =>
               <option key={code} value={code}>{name}</option>)}
-          </select>
+          </Select>
         </label>
         <ToggleRow title="Num Lock on startup" value={draft.num_lock} onChange={value => update("num_lock", value)} />
         <RangeRow title="Key repeat speed" value={draft.repeat_rate} min={1} max={60} step={1} unit=" /sec"
