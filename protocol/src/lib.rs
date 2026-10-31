@@ -13,6 +13,36 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+
+/// Preferences applied to the Meridian labwc compositor, not merely cached UI state.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct InputPreferences {
+    pub repeat_rate: u32,
+    pub repeat_delay: u32,
+    pub mouse_speed: f64,
+    pub mouse_acceleration: bool,
+    pub mouse_natural_scroll: bool,
+    pub mouse_left_handed: bool,
+    pub touchpad_speed: f64,
+    pub tap_to_click: bool,
+    pub tap_and_drag: bool,
+    pub touchpad_natural_scroll: bool,
+    pub disable_while_typing: bool,
+}
+impl Default for InputPreferences {
+    fn default() -> Self {
+        Self {
+            repeat_rate: 25, repeat_delay: 600,
+            mouse_speed: 0.0, mouse_acceleration: true,
+            mouse_natural_scroll: false, mouse_left_handed: false,
+            touchpad_speed: 0.0, tap_to_click: true, tap_and_drag: true,
+            touchpad_natural_scroll: false, disable_while_typing: true,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
 #[ts(export)]
@@ -862,6 +892,10 @@ pub enum Request {
     #[serde(rename = "windows.close")]
     WindowsClose(WindowsActivate),
 
+    #[serde(rename = "settings.input")]
+    SettingsInput,
+    #[serde(rename = "settings.input_set")]
+    SettingsInputSet(InputPreferences),
     #[serde(rename = "settings.displays")]
     SettingsDisplays,
     #[serde(rename = "settings.capability")]
@@ -1239,7 +1273,9 @@ impl Request {
             Request::SettingsSystemInfo | Request::SettingsCheckUpdates | Request::SettingsOpenReleases => {
                 Some(Capability::Settings)
             }
-            Request::SettingsPrimaryDisplay
+            Request::SettingsInput
+            | Request::SettingsInputSet(_)
+            | Request::SettingsPrimaryDisplay
             | Request::SettingsPrimaryDisplaySet(_)
             | Request::SettingsSearch
             | Request::SettingsSearchSet(_)
