@@ -42,13 +42,17 @@ fn network_locations() -> Vec<FileLocation> {
     if let Ok(mounts) = std::fs::read_to_string("/proc/mounts") {
         for line in mounts.lines() {
             let columns: Vec<_> = line.split_whitespace().collect();
-            let (Some(source), Some(target), Some(kind)) = (columns.first(), columns.get(1), columns.get(2)) else { continue };
+            let (Some(source), Some(target), Some(kind)) = (columns.first(), columns.get(1), columns.get(2)) else {
+                continue;
+            };
             if !matches!(*kind, "cifs" | "nfs" | "nfs4" | "sshfs" | "fuse.sshfs" | "davfs" | "fuse.gvfsd-fuse") {
                 continue;
             }
             let target = target.replace("\\040", " ").replace("\\011", "\t").replace("\\134", "\\");
             let path = PathBuf::from(&target);
-            if !path.is_dir() || !found.insert(target.clone()) { continue; }
+            if !path.is_dir() || !found.insert(target.clone()) {
+                continue;
+            }
             let source = source.split('@').next_back().unwrap_or(source);
             locations.push(FileLocation { name: format!("Network · {source}"), path: target });
         }

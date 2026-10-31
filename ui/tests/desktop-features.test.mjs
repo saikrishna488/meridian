@@ -861,7 +861,7 @@ test("Devices lists peripherals separately from actual storage volumes", async t
   assert.ok(ui.get(".connected-device-row").textContent.includes("Laptop Keyboard"));
 });
 
-test("Critical Settings pages expose live input controls and notification preferences", async t => {
+test("Critical Settings pages identify unsupported input controls and synchronize notifications", async t => {
   const input = {
     repeat_rate: 25, repeat_delay: 600, keyboard_layout: "us", num_lock: false, mouse_speed: 0, mouse_acceleration: true,
     mouse_natural_scroll: false, mouse_left_handed: false, touchpad_speed: 0,
@@ -878,21 +878,18 @@ test("Critical Settings pages expose live input controls and notification prefer
   open("Keyboard");
   await waitFor(() => ui.get('[aria-label="Key repeat speed"]'));
   assert.equal(ui.get('[aria-label="Key repeat speed"]').value, "25");
-  const layout = ui.get('[aria-label="Keyboard layout"]');
-  layout.value = "gb";
-  layout.dispatchEvent(new ui.window.Event("change", { bubbles: true }));
-  await waitFor(() => [...ui.window.document.querySelectorAll("button")].some(b => b.textContent === "Apply changes" && !b.disabled));
-  [...ui.window.document.querySelectorAll("button")].find(b => b.textContent === "Apply changes").click();
-  await waitFor(() => ui.requests.some(req => req.method === "settings.input_set"));
-  assert.equal(ui.requests.find(req => req.method === "settings.input_set").params.keyboard_layout, "gb");
+  assert.ok(ui.get('[aria-label="Keyboard layout"]').matches(':disabled'));
+  assert.ok(!ui.requests.some(req => req.method === "settings.input_set"));
   open("Mouse & Touchpad");
   await waitFor(() => ui.get('[aria-label="Tap to click"]'));
   open("Keyboard Shortcuts");
-  await waitFor(() => ui.get(".settings-content")?.textContent.includes("Super + Enter"));
+  await waitFor(() => ui.get(".settings-content")?.textContent.includes("unsupported"));
   open("Notifications");
   await waitFor(() => ui.get('[aria-label="Do Not Disturb"]'));
   ui.get('[aria-label="Do Not Disturb"]').click();
   await waitFor(() => ui.requests.some(req => req.method === "notifications.do_not_disturb"));
+  ui.emit("notifications.changed", { available: true, do_not_disturb: false, items: [] });
+  await waitFor(() => ui.get('[aria-label="Do Not Disturb"]').getAttribute("aria-checked") === "false");
   for (const name of ["Date & Time", "Printers & Scanners", "Privacy & Security"]) {
     open(name);
     await waitFor(() => ui.get("#settings-title")?.textContent === name);

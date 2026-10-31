@@ -74,8 +74,11 @@ fn sys_devices(sys: &Path) -> Vec<ManagedDevice> {
         }
         let title = text(p.join("name"));
         let lower = title.to_ascii_lowercase();
-        if title.is_empty() || lower.contains("power button") || lower.contains("video bus")
-            || lower.contains("lid switch") || lower.contains("sleep button")
+        if title.is_empty()
+            || lower.contains("power button")
+            || lower.contains("video bus")
+            || lower.contains("lid switch")
+            || lower.contains("sleep button")
         {
             continue;
         }

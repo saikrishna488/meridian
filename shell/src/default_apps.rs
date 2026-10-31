@@ -1,8 +1,8 @@
 //! User-selectable default applications. GIO owns standard MIME/scheme defaults;
 //! Meridian owns only shell-specific Files and Terminal preferences.
-use gtk::{gio, glib};
 use gio_unix::DesktopAppInfo;
 use gtk::prelude::*;
+use gtk::{gio, glib};
 use meridian_protocol::{DefaultAppChoice, DefaultAppSetting, ErrorBody, ErrorCode};
 use meridian_services::apps::AppCatalog;
 use serde::{Deserialize, Serialize};
@@ -24,14 +24,20 @@ struct ShellDefaults {
     terminal: Option<String>,
 }
 static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-fn path() -> PathBuf { glib::user_config_dir().join("meridian/default-apps.json") }
-fn read() -> ShellDefaults { crate::config::read::<ShellDefaults>(&path()).unwrap_or_default() }
+fn path() -> PathBuf {
+    glib::user_config_dir().join("meridian/default-apps.json")
+}
+fn read() -> ShellDefaults {
+    crate::config::read::<ShellDefaults>(&path()).unwrap_or_default()
+}
 
 pub fn preferred(purpose: &str) -> Option<String> {
     let config = read();
     match purpose {
         "files" => config.files.or_else(|| Some("meridian-finder.desktop".into())),
-        "terminal" => config.terminal.filter(|id| id != "meridian-terminal.desktop").or_else(|| Some("kitty.desktop".into())),
+        "terminal" => {
+            config.terminal.filter(|id| id != "meridian-terminal.desktop").or_else(|| Some("kitty.desktop".into()))
+        }
         _ => None,
     }
 }
@@ -53,9 +59,7 @@ pub fn list() -> Vec<DefaultAppSetting> {
 pub fn set(choice: &DefaultAppChoice, catalog: &AppCatalog) -> Result<Vec<DefaultAppSetting>, ErrorBody> {
     let _lock = LOCK.lock().map_err(|_| ErrorBody::new(ErrorCode::Failed, "Default app preferences busy"))?;
     let id = choice.app_id.as_str();
-    if !catalog.apps().iter().any(|app| app.id == id)
-        && id != "meridian-finder.desktop"
-    {
+    if !catalog.apps().iter().any(|app| app.id == id) && id != "meridian-finder.desktop" {
         return Err(ErrorBody::new(ErrorCode::NotFound, "Select an installed application"));
     }
     if SHELL_PURPOSES.contains(&choice.purpose.as_str()) {
@@ -70,7 +74,10 @@ pub fn set(choice: &DefaultAppChoice, catalog: &AppCatalog) -> Result<Vec<Defaul
         }
         crate::config::save(&path(), &config)?;
     } else {
-        let mime = PURPOSES.iter().find(|(purpose, _)| *purpose == choice.purpose).map(|(_, mime)| *mime)
+        let mime = PURPOSES
+            .iter()
+            .find(|(purpose, _)| *purpose == choice.purpose)
+            .map(|(_, mime)| *mime)
             .ok_or_else(|| ErrorBody::new(ErrorCode::InvalidRequest, "Unknown default app purpose"))?;
         let app = DesktopAppInfo::new(id)
             .ok_or_else(|| ErrorBody::new(ErrorCode::NotFound, "Application desktop entry is unavailable"))?;
@@ -83,8 +90,11 @@ pub fn set(choice: &DefaultAppChoice, catalog: &AppCatalog) -> Result<Vec<Defaul
 
 pub fn launch_file_manager(path: &str) -> Result<bool, ErrorBody> {
     let Some(id) = preferred("files") else { return Ok(false) };
-    if id == "meridian-finder.desktop" { return Ok(false) }
-    let app = DesktopAppInfo::new(&id).ok_or_else(|| ErrorBody::new(ErrorCode::NotFound, "Default file manager is unavailable"))?;
+    if id == "meridian-finder.desktop" {
+        return Ok(false);
+    }
+    let app = DesktopAppInfo::new(&id)
+        .ok_or_else(|| ErrorBody::new(ErrorCode::NotFound, "Default file manager is unavailable"))?;
     let file = gio::File::for_path(path);
     app.launch(&[file], None::<&gio::AppLaunchContext>)
         .map_err(|error| ErrorBody::new(ErrorCode::Failed, format!("Cannot open file manager: {error}")))?;
@@ -93,7 +103,9 @@ pub fn launch_file_manager(path: &str) -> Result<bool, ErrorBody> {
 
 pub fn launch_terminal() -> bool {
     let Some(id) = preferred("terminal") else { return false };
-    if id == "kitty.desktop" || id == "net.kovidgoyal.kitty.desktop" { return false }
+    if id == "kitty.desktop" || id == "net.kovidgoyal.kitty.desktop" {
+        return false;
+    }
     let Some(app) = DesktopAppInfo::new(&id) else { return false };
     if let Err(error) = app.launch(&[], None::<&gio::AppLaunchContext>) {
         log::warn!("Default terminal failed to open: {error}");

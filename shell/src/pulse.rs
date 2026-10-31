@@ -196,9 +196,11 @@ impl Sampler {
                 );
                 let reading = gpu_readings.get(&name);
                 r.percent = reading.and_then(|reading| reading.percent);
-                r.used = reading.and_then(|reading| reading.used)
+                r.used = reading
+                    .and_then(|reading| reading.used)
                     .or_else(|| number(p.join("mem_info_vram_used")).map(|n| n as f64));
-                r.total = reading.and_then(|reading| reading.total)
+                r.total = reading
+                    .and_then(|reading| reading.total)
                     .or_else(|| number(p.join("mem_info_vram_total")).map(|n| n as f64));
                 r.detail = if let Some(reading) = reading.filter(|reading| reading.percent.is_some()) {
                     format!("{vendor} GPU · {} utilization", reading.backend)

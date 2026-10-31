@@ -62,7 +62,7 @@ export function ConnectedDevices() {
       const category = classify(device);
       if (!category) return [];
       return [{ id: device.id, category, name: device.name, status: device.status,
-        detail: device.id.startsWith("usb:") ? "USB · Wired" : device.id.startsWith("input:") ? "Input device" : device.category,
+        detail: device.id.startsWith("usb:") ? "USB" : device.id.startsWith("input:") ? "Input device" : device.category,
         properties: device.properties }];
     });
     for (const device of bluetooth) {

@@ -59,8 +59,19 @@ pub(crate) fn validate_identity(expected: Option<&str>, current: Option<&str>) -
 fn storage_kind(kind: &str) -> bool {
     matches!(
         kind,
-        "disk" | "part" | "rom" | "crypt" | "lvm" | "raid0" | "raid1"
-            | "raid4" | "raid5" | "raid6" | "raid10" | "md" | "mpath"
+        "disk"
+            | "part"
+            | "rom"
+            | "crypt"
+            | "lvm"
+            | "raid0"
+            | "raid1"
+            | "raid4"
+            | "raid5"
+            | "raid6"
+            | "raid10"
+            | "md"
+            | "mpath"
     )
 }
 fn inventory(tree: &Value) -> Vec<StorageVolume> {
@@ -153,8 +164,7 @@ fn mounted_filesystems(volumes: &mut Vec<StorageVolume>, mountinfo: &str) {
         // portals, GVFS mounts, and kernel pseudo mounts are not disks.
         let remote = matches!(
             fs,
-            "nfs" | "nfs4" | "cifs" | "smb3" | "sshfs"
-                | "fuse.sshfs" | "9p" | "virtiofs" | "ceph" | "glusterfs"
+            "nfs" | "nfs4" | "cifs" | "smb3" | "sshfs" | "fuse.sshfs" | "9p" | "virtiofs" | "ceph" | "glusterfs"
         );
         if !remote || !point.starts_with('/') || volumes.iter().any(|v| v.mount_points.contains(&point)) {
             continue;
@@ -293,8 +303,10 @@ mod tests {
         assert_eq!(inventory.len(), 2);
         assert!(inventory.iter().all(|v| v.path.starts_with("/dev/sda")));
         let mut mounts = vec![];
-        mounted_filesystems(&mut mounts,
-            "1 0 0:1 / /run/user/1000/gvfs rw - fuse.gvfsd-fuse gvfs rw\n2 0 0:2 / /mnt/nas rw - nfs4 server:/share rw");
+        mounted_filesystems(
+            &mut mounts,
+            "1 0 0:1 / /run/user/1000/gvfs rw - fuse.gvfsd-fuse gvfs rw\n2 0 0:2 / /mnt/nas rw - nfs4 server:/share rw",
+        );
         assert_eq!(mounts.len(), 1);
         assert_eq!(mounts[0].filesystem, "nfs4");
     }

@@ -55,7 +55,7 @@ impl Shell {
         if !path.starts_with("@") {
             match crate::default_apps::launch_file_manager(path) {
                 Ok(true) => return,
-                Ok(false) => {},
+                Ok(false) => {}
                 Err(error) => log::warn!("Default file manager unavailable; opening Meridian Files: {}", error.message),
             }
         }

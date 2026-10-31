@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "../../components/ui/button";
-import { request } from "../../lib/bridge";
+import { on, request } from "../../lib/bridge";
+import { Switch } from "../../components/ui/switch";
 import { errorMessage } from "../../lib/react";
 import type { InputPreferences } from "../../lib/generated/InputPreferences";
 import type { NotificationState } from "../../lib/generated/NotificationState";
@@ -9,8 +10,8 @@ type InputKey = keyof InputPreferences;
 function ToggleRow({ title, detail, value, disabled, onChange }: {
   title: string; detail?: string; value: boolean; disabled?: boolean; onChange: (value: boolean) => void;
 }) {
-  return <label className="settings-row essentials-setting"><span><strong>{title}</strong>{detail && <small className="row-detail">{detail}</small>}</span>
-    <input type="checkbox" checked={value} disabled={disabled} onChange={event => onChange(event.target.checked)} aria-label={title} /></label>;
+  return <div className="settings-row essentials-setting"><span><strong>{title}</strong>{detail && <small className="row-detail">{detail}</small>}</span>
+    <Switch checked={value} disabled={disabled} onChange={onChange} label={title} /></div>;
 }
 function RangeRow({ title, value, min, max, step, unit, onChange }: {
   title: string; value: number; min: number; max: number; step: number; unit: string; onChange: (value: number) => void;
@@ -22,18 +23,17 @@ function RangeRow({ title, value, min, max, step, unit, onChange }: {
 }
 export function InputSettings({ kind }: { kind: "keyboard" | "mouse" }) {
   const [draft, setDraft] = useState<InputPreferences | null>(null);
-  const [saved, setSaved] = useState<InputPreferences | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     let mounted = true;
     void request({ method: "settings.input" })
-      .then(value => { if (mounted) { setDraft(value); setSaved(value); } })
+      .then(value => { if (mounted) { setDraft(value); } })
       .catch(e => { if (mounted) setError(errorMessage(e)); });
     return () => { mounted = false; };
   }, []);
-  function update(key: InputKey, value: number | boolean) {
+  function update(key: InputKey, value: number | boolean | string) {
     setDraft(current => current ? { ...current, [key]: value } : current);
     setMessage("");
   }
@@ -42,13 +42,14 @@ export function InputSettings({ kind }: { kind: "keyboard" | "mouse" }) {
     setBusy(true); setError(""); setMessage("");
     try {
       const result = await request({ method: "settings.input_set", params: draft });
-      setSaved(result); setDraft(result); setMessage("Input settings applied to the labwc session.");
+      setDraft(result); setMessage("Input settings applied to the labwc session.");
     } catch(e) { setError(errorMessage(e)); }
     finally { setBusy(false); }
   }
   if (!draft) return <p className="section-caption">{error || "Loading input settings…"}</p>;
-  const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
   return <div className="essentials-panel">
+    <p className="section-caption">Input controls are unsupported in this session: labwc does not expose the readback needed to verify changes. Values below may not reflect connected devices.</p>
+    <fieldset disabled className="essentials-disabled">
     {kind === "keyboard" ? <>
       <div className="settings-card">
         <h3>Typing</h3>
@@ -68,7 +69,7 @@ export function InputSettings({ kind }: { kind: "keyboard" | "mouse" }) {
           onChange={value => update("repeat_delay", value)} />
         <p className="section-caption">These settings control how keys repeat in Meridian's labwc session.</p>
       </div>
-      <p className="section-caption">Keyboard layout changes use labwc XKB configuration. Multiple simultaneous layouts and custom layout-switching shortcuts are not yet supported. Shortcuts are listed in Keyboard Shortcuts.</p>
+
     </> : <>
       <div className="settings-card"><h3>Mouse</h3>
         <RangeRow title="Pointer speed" value={draft.mouse_speed} min={-1} max={1} step={0.05} unit=""
@@ -86,37 +87,33 @@ export function InputSettings({ kind }: { kind: "keyboard" | "mouse" }) {
         <ToggleRow title="Disable while typing" value={draft.disable_while_typing} onChange={value => update("disable_while_typing", value)} />
       </div>
     </>}
+    </fieldset>
     {error && <p role="alert" className="settings-error">{error}</p>}
     {message && <p role="status" className="section-caption">{message}</p>}
-    <div className="settings-actions"><Button disabled={!dirty || busy} onClick={() => void save()}>{busy ? "Applying…" : "Apply changes"}</Button></div>
-    <p className="section-caption">Settings apply only when Meridian is running under labwc. Existing custom libinput profiles are protected from replacement.</p>
+    <div className="settings-actions"><Button disabled onClick={() => void save()}>Unsupported</Button></div>
+
   </div>;
 }
 
-const shortcuts = [
-  ["Applications", "Super + Space"], ["Control Center", "Super + C"],
-  ["Files", "Super + E"], ["Kitty", "Super + Enter"], ["Settings", "Super + I"],
-  ["Lock screen", "Super + L"], ["Screenshot", "Print Screen"],
-  ["Screenshot area", "Super + Shift + S"], ["Close window", "Super + Q"],
-  ["Maximize", "Super + ↑"], ["Minimize", "Super + ↓"],
-  ["Snap left", "Super + ←"], ["Snap right", "Super + →"],
-  ["Switch windows", "Alt + Tab"], ["Window menu", "Alt + Space"],
-];
 export function ShortcutSettings() {
-  return <><section className="settings-card"><h3>System shortcuts</h3>
-    {shortcuts.map(([label, keys]) => <div key={label} className="settings-row"><strong>{label}</strong><kbd>{keys}</kbd></div>)}
-  </section><p className="section-caption">These are Meridian's currently configured shortcuts. Editing shortcuts requires compositor keybinding support and is not enabled yet.</p></>;
+  return <section className="settings-card"><h3>Keyboard shortcuts</h3>
+    <p className="section-caption">Reading and editing the active compositor shortcuts is unsupported. Review your labwc rc.xml for the current bindings.</p>
+  </section>;
 }
 export function NotificationSettings() {
   const [data, setData] = useState<NotificationState | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  useEffect(() => { let active = true; void request({ method: "notifications.get" })
-    .then(value => { if (active) setData(value); }).catch(e => { if (active) setError(errorMessage(e)); });
-    return () => { active = false; }; }, []);
+  const revision = useRef(0);
+  useEffect(() => { let active = true; const unsubscribe = on("notifications.changed", event => { revision.current++; setData(event.data); });
+    const initialRevision = revision.current;
+    void request({ method: "notifications.get" })
+    .then(value => { if (active && revision.current === initialRevision) setData(value); }).catch(e => { if (active) setError(errorMessage(e)); });
+    return () => { active = false; unsubscribe(); }; }, []);
   async function setDnd(enabled: boolean) {
     if (busy) return; setBusy(true); setError("");
-    try { setData(await request({ method: "notifications.do_not_disturb", params: { enabled } })); }
+    const currentRevision = revision.current;
+    try { const state = await request({ method: "notifications.do_not_disturb", params: { enabled } }); if (revision.current === currentRevision) setData(state); }
     catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
   }
   return <><section className="settings-card"><h3>Notifications</h3>

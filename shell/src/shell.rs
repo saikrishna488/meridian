@@ -140,6 +140,9 @@ impl Shell {
                 shell.send_panel(&event);
                 shell.send_to_popover(Popover::Notifications, &event);
                 shell.send_to_popover(Popover::Options, &event);
+                if let Some(surface) = &shell.state.borrow().preferences {
+                    surface.send(&event);
+                }
             }
         }));
 
@@ -771,7 +774,8 @@ impl Shell {
             Request::DockList => serialize(proto::reply_ok(&read_dock(&self.catalog.borrow()))),
             Request::DockPin(pin) => {
                 if pin.pinned
-                    && !["meridian-settings.desktop", "meridian-pulse.desktop", "meridian-finder.desktop"].contains(&pin.id.as_str())
+                    && !["meridian-settings.desktop", "meridian-pulse.desktop", "meridian-finder.desktop"]
+                        .contains(&pin.id.as_str())
                     && !self.catalog.borrow().apps().iter().any(|app| app.id == pin.id)
                 {
                     return Err(ErrorBody::new(ErrorCode::NotFound, "no such application"));
@@ -801,7 +805,12 @@ impl Shell {
                         "utilities-system-monitor",
                     ),
                     ("meridian-settings.desktop", "Settings", "Meridian settings preferences", "preferences-system"),
-                    ("meridian-finder.desktop", "Files", "Meridian Files beta file manager folders browser", "system-file-manager"),
+                    (
+                        "meridian-finder.desktop",
+                        "Files",
+                        "Meridian Files beta file manager folders browser",
+                        "system-file-manager",
+                    ),
                 ];
                 let items = builtins
                     .into_iter()

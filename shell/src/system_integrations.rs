@@ -6,10 +6,7 @@ fn call(args: &[&str]) -> Result<String, ErrorBody> {
     crate::settings_devices::run_timeout(args, None, Duration::from_secs(12))
 }
 pub fn time() -> Result<TimeState, ErrorBody> {
-    let output = call(&[
-        "timedatectl", "show", "--property=Timezone", "--property=NTP",
-        "--property=NTPSynchronized",
-    ])?;
+    let output = call(&["timedatectl", "show", "--property=Timezone", "--property=NTP", "--property=NTPSynchronized"])?;
     let find = |name: &str| output.lines().find_map(|line| line.strip_prefix(name)).unwrap_or("").trim();
     Ok(TimeState {
         timezone: find("Timezone=").to_owned(),
@@ -18,9 +15,15 @@ pub fn time() -> Result<TimeState, ErrorBody> {
     })
 }
 fn valid_zone(value: &str) -> bool {
-    if value.is_empty() || value.len() > 100
-        || value.starts_with('/') || value.contains("..") || value.contains("//")
-        || !value.bytes().all(|b| b.is_ascii_alphanumeric() || b"_-+/".contains(&b)) { return false; }
+    if value.is_empty()
+        || value.len() > 100
+        || value.starts_with('/')
+        || value.contains("..")
+        || value.contains("//")
+        || !value.bytes().all(|b| b.is_ascii_alphanumeric() || b"_-+/".contains(&b))
+    {
+        return false;
+    }
     let root = Path::new("/usr/share/zoneinfo");
     let Ok(found) = root.join(value).canonicalize() else { return false };
     found.starts_with(root) && found.is_file()
@@ -46,11 +49,21 @@ pub fn printers() -> Result<PrinterInventory, ErrorBody> {
     Ok(PrinterInventory {
         cups_available: printers.is_ok(),
         sane_available: scanners.is_ok(),
-        printers: printers.unwrap_or_default().lines().filter_map(|line| {
-            line.strip_prefix("printer ").and_then(|rest| rest.split_whitespace().next()).map(str::to_owned)
-        }).take(128).collect(),
-        scanners: scanners.unwrap_or_default().lines().filter(|line| line.starts_with("device "))
-            .take(128).map(str::to_owned).collect(),
+        printers: printers
+            .unwrap_or_default()
+            .lines()
+            .filter_map(|line| {
+                line.strip_prefix("printer ").and_then(|rest| rest.split_whitespace().next()).map(str::to_owned)
+            })
+            .take(128)
+            .collect(),
+        scanners: scanners
+            .unwrap_or_default()
+            .lines()
+            .filter(|line| line.starts_with("device "))
+            .take(128)
+            .map(str::to_owned)
+            .collect(),
     })
 }
 #[cfg(test)]

@@ -40,25 +40,33 @@ fn read(path: impl AsRef<Path>) -> String {
 }
 
 fn card_number(name: &str) -> Option<usize> {
-    name.strip_prefix("card").and_then(|n| (!n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())).then_some(n))?.parse().ok()
+    name.strip_prefix("card")
+        .and_then(|n| (!n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())).then_some(n))?
+        .parse()
+        .ok()
 }
 
 fn devices() -> Vec<GpuDevice> {
     let Ok(entries) = fs::read_dir("/sys/class/drm") else { return vec![] };
-    let mut devices: Vec<_> = entries.flatten().filter_map(|entry| {
-        let name = entry.file_name().to_string_lossy().into_owned();
-        card_number(&name)?;
-        let path = entry.path().join("device");
-        if !path.exists() { return None; }
-        let properties = read(path.join("uevent"));
-        let prop = |key: &str| properties.lines().find_map(|line| line.strip_prefix(key)).map(str::to_owned);
-        Some(GpuDevice {
-            card: name,
-            pci: prop("PCI_SLOT_NAME="),
-            driver: prop("DRIVER=").unwrap_or_default(),
-            path,
+    let mut devices: Vec<_> = entries
+        .flatten()
+        .filter_map(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            card_number(&name)?;
+            let path = entry.path().join("device");
+            if !path.exists() {
+                return None;
+            }
+            let properties = read(path.join("uevent"));
+            let prop = |key: &str| properties.lines().find_map(|line| line.strip_prefix(key)).map(str::to_owned);
+            Some(GpuDevice {
+                card: name,
+                pci: prop("PCI_SLOT_NAME="),
+                driver: prop("DRIVER=").unwrap_or_default(),
+                path,
+            })
         })
-    }).collect();
+        .collect();
     devices.sort_by_key(|d| card_number(&d.card));
     devices
 }
@@ -86,7 +94,9 @@ fn parse_fdinfo(contents: &str) -> Option<(String, EngineCounters)> {
         let cycles = value.split_whitespace().next().and_then(|v| v.parse::<u64>().ok());
         let total = contents.lines().find_map(|other| {
             let (k, v) = other.split_once(':')?;
-            (k == format!("drm-total-cycles-{engine}")).then(|| v.split_whitespace().next()?.parse::<u64>().ok()).flatten()
+            (k == format!("drm-total-cycles-{engine}"))
+                .then(|| v.split_whitespace().next()?.parse::<u64>().ok())
+                .flatten()
         });
         if let (Some(cycles), Some(total)) = (cycles, total) {
             counters.cycles.insert(engine.to_owned(), (cycles, total));
@@ -106,7 +116,9 @@ fn collect_fdinfo(devices: &[GpuDevice]) -> HashMap<String, HashMap<String, Engi
     // One DRM client can expose multiple file descriptors. Keep it once per GPU.
     let mut seen: HashSet<(String, String)> = HashSet::new();
     for process in processes.flatten() {
-        if !process.file_name().to_string_lossy().bytes().all(|b| b.is_ascii_digit()) { continue; }
+        if !process.file_name().to_string_lossy().bytes().all(|b| b.is_ascii_digit()) {
+            continue;
+        }
         let Ok(fds) = fs::read_dir(process.path().join("fdinfo")) else { continue };
         for fd in fds.flatten() {
             let info = read(fd.path());
@@ -129,7 +141,9 @@ fn fdinfo_utilization(
     elapsed: Duration,
 ) -> Option<f64> {
     let nanos = elapsed.as_nanos();
-    if nanos == 0 { return None; }
+    if nanos == 0 {
+        return None;
+    }
     // An engine may have multiple clients. Sum each engine across clients,
     // then take the busiest engine rather than summing independent engines.
     let mut engines: HashMap<&str, f64> = HashMap::new();
@@ -155,10 +169,17 @@ fn fdinfo_utilization(
 // NVML is loaded dynamically: non-NVIDIA machines require no NVIDIA libraries.
 #[repr(C)]
 #[derive(Default)]
-struct NvmlUtilization { gpu: u32, memory: u32 }
+struct NvmlUtilization {
+    gpu: u32,
+    memory: u32,
+}
 #[repr(C)]
 #[derive(Default)]
-struct NvmlMemory { total: u64, free: u64, used: u64 }
+struct NvmlMemory {
+    total: u64,
+    free: u64,
+    used: u64,
+}
 
 struct Nvml {
     library: *mut c_void,
@@ -174,7 +195,9 @@ impl Nvml {
         unsafe {
             let name = CString::new("libnvidia-ml.so.1").ok()?;
             let library = libc::dlopen(name.as_ptr(), libc::RTLD_NOW | libc::RTLD_LOCAL);
-            if library.is_null() { return None; }
+            if library.is_null() {
+                return None;
+            }
             let symbol = |name: &CStr| libc::dlsym(library, name.as_ptr());
             let init = symbol(c"nvmlInit_v2");
             let shutdown = symbol(c"nvmlShutdown");
@@ -186,7 +209,10 @@ impl Nvml {
                 return None;
             }
             let init: unsafe extern "C" fn() -> c_int = std::mem::transmute(init);
-            if init() != 0 { libc::dlclose(library); return None; }
+            if init() != 0 {
+                libc::dlclose(library);
+                return None;
+            }
             Some(Self {
                 library,
                 shutdown: std::mem::transmute::<*mut c_void, unsafe extern "C" fn() -> c_int>(shutdown),
@@ -199,7 +225,9 @@ impl Nvml {
                     unsafe extern "C" fn(*mut c_void, *mut NvmlUtilization) -> c_int,
                 >(utilization),
                 memory: (!memory.is_null()).then(|| {
-                    std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*mut c_void, *mut NvmlMemory) -> c_int>(memory)
+                    std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*mut c_void, *mut NvmlMemory) -> c_int>(
+                        memory,
+                    )
                 }),
             })
         }
@@ -210,10 +238,18 @@ impl Nvml {
         // SAFETY: the resolved NVML functions are invoked with initialized
         // out-parameters; a successful lookup yields a device owned by NVML.
         unsafe {
-            if (self.by_bus)(bus.as_ptr(), &mut device) != 0 || device.is_null() { return None; }
+            if (self.by_bus)(bus.as_ptr(), &mut device) != 0 || device.is_null() {
+                return None;
+            }
             let mut utilization = NvmlUtilization::default();
-            if (self.utilization)(device, &mut utilization) != 0 { return None; }
-            let mut reading = GpuReading { percent: Some(f64::from(utilization.gpu.min(100))), backend: "NVML", ..Default::default() };
+            if (self.utilization)(device, &mut utilization) != 0 {
+                return None;
+            }
+            let mut reading = GpuReading {
+                percent: Some(f64::from(utilization.gpu.min(100))),
+                backend: "NVML",
+                ..Default::default()
+            };
             if let Some(memory) = self.memory {
                 let mut usage = NvmlMemory::default();
                 if memory(device, &mut usage) == 0 {
@@ -228,7 +264,10 @@ impl Nvml {
 impl Drop for Nvml {
     fn drop(&mut self) {
         // SAFETY: the NVML library is initialized and only used on this thread.
-        unsafe { (self.shutdown)(); libc::dlclose(self.library); }
+        unsafe {
+            (self.shutdown)();
+            libc::dlclose(self.library);
+        }
     }
 }
 
@@ -251,13 +290,13 @@ impl GpuMonitor {
                 if let Some(usage) = sysfs {
                     result.percent = Some(usage);
                     result.backend = "sysfs";
-                } else if let (Some(time), Some(now), Some(old)) = (
-                    elapsed,
-                    current.get(&device.card),
-                    self.previous.get(&device.card),
-                ) {
+                } else if let (Some(time), Some(now), Some(old)) =
+                    (elapsed, current.get(&device.card), self.previous.get(&device.card))
+                {
                     result.percent = fdinfo_utilization(now, old, time);
-                    if result.percent.is_some() { result.backend = "DRM fdinfo"; }
+                    if result.percent.is_some() {
+                        result.backend = "DRM fdinfo";
+                    }
                 }
             }
             readings.insert(device.card.clone(), result);
@@ -272,7 +311,10 @@ mod tests {
     use super::*;
     #[test]
     fn fdinfo_parses_engine_time_and_deduplicable_client_id() {
-        let (client, counters) = parse_fdinfo("drm-driver: i915\ndrm-client-id: 12\ndrm-engine-render: 500000000 ns\ndrm-engine-video: 90000000 ns\n").unwrap();
+        let (client, counters) = parse_fdinfo(
+            "drm-driver: i915\ndrm-client-id: 12\ndrm-engine-render: 500000000 ns\ndrm-engine-video: 90000000 ns\n",
+        )
+        .unwrap();
         assert_eq!(client, "12");
         assert_eq!(counters.nanos["render"], 500_000_000);
         assert!(parse_fdinfo("drm-client-id: 12\n").is_none());

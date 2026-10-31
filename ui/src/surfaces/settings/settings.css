@@ -502,3 +502,16 @@ html, body, .settings-app { background: var(--settings-bg); color: var(--setting
 .connected-device-meta { padding:0 5px 12px; display:grid; gap:7px; }
 .connected-device-meta > div { display:flex; justify-content:space-between; gap:14px; font-size:10px; color:rgb(255 255 255 / .64); }
 .connected-device-meta > div span:last-child { text-align:right; overflow-wrap:anywhere; }
+
+/* Settings uses a single dark foundation, independent of the desktop theme. */
+html, body, .settings-app { background: #000; color: #fff; }
+.settings-app { --settings-bg: #000; --settings-sidebar-bg: rgba(20,20,20,.88); --settings-card-bg: #080808; --settings-text: #fff; --settings-muted: #aaa; --settings-border: #303030; --settings-divider: #252525; --settings-control-bg: #171717; --settings-control-text: #fff; --settings-hover-bg: #292929; --settings-soft-bg: #101010; }
+.settings-sidebar { background: var(--settings-sidebar-bg); backdrop-filter: blur(16px); border-right: 1px solid #252525; }
+.settings-sidebar nav button { transition: background-color 140ms ease, opacity 140ms ease; }
+.settings-sidebar nav button[aria-current="page"] { background: #303030; color: #fff; }
+.settings-content { background: #000; }
+.settings-card { border-color: #252525; background: #080808; }
+.essentials-disabled { border: 0; margin: 0; padding: 0; min-width: 0; }
+.settings-app :focus-visible { outline: 2px solid #ddd; outline-offset: 2px; }
+@media (prefers-reduced-transparency: reduce) { .settings-sidebar { background: #141414; backdrop-filter: none; } }
+@media (prefers-reduced-motion: reduce) { .settings-app *, .settings-app *::before, .settings-app *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; } }

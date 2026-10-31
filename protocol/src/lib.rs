@@ -13,7 +13,6 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-
 /// Preferences applied to the Meridian labwc compositor, not merely cached UI state.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
@@ -36,16 +35,22 @@ pub struct InputPreferences {
 impl Default for InputPreferences {
     fn default() -> Self {
         Self {
-            repeat_rate: 25, repeat_delay: 600,
-            keyboard_layout: "us".into(), num_lock: false,
-            mouse_speed: 0.0, mouse_acceleration: true,
-            mouse_natural_scroll: false, mouse_left_handed: false,
-            touchpad_speed: 0.0, tap_to_click: true, tap_and_drag: true,
-            touchpad_natural_scroll: false, disable_while_typing: true,
+            repeat_rate: 25,
+            repeat_delay: 600,
+            keyboard_layout: "us".into(),
+            num_lock: false,
+            mouse_speed: 0.0,
+            mouse_acceleration: true,
+            mouse_natural_scroll: false,
+            mouse_left_handed: false,
+            touchpad_speed: 0.0,
+            tap_to_click: true,
+            tap_and_drag: true,
+            touchpad_natural_scroll: false,
+            disable_while_typing: true,
         }
     }
 }
-
 
 /// Current system clock configuration reported by systemd-timedated.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -636,6 +641,7 @@ impl SurfaceKind {
                 Capability::SystemAdministration,
                 Capability::Search,
                 Capability::AppManagement,
+                Capability::Notifications,
             ],
             SurfaceKind::Finder => &[
                 Capability::Files,
@@ -1298,8 +1304,7 @@ impl Request {
             | Request::SettingsDeviceAction(_)
             | Request::SettingsDrivers
             | Request::SettingsDriverSet(_) => Some(Capability::SystemAdministration),
-            Request::SettingsDefaultApps
-            | Request::SettingsDefaultAppSet(_) => Some(Capability::AppManagement),
+            Request::SettingsDefaultApps | Request::SettingsDefaultAppSet(_) => Some(Capability::AppManagement),
             Request::SettingsStartup
             | Request::SettingsStartupSet(_)
             | Request::SettingsStartupAdd(_)
@@ -1585,7 +1590,7 @@ mod tests {
             Request::NotificationsDoNotDisturb(SetEnabled { enabled: true }).required_capability(),
             Some(Capability::Notifications)
         );
-        assert!(!SurfaceKind::Preferences.has(Capability::Notifications));
+        assert!(SurfaceKind::Preferences.has(Capability::Notifications));
         assert!(SurfaceKind::Topbar.has(Capability::Notifications));
         assert!(SurfaceKind::Options.has(Capability::Notifications));
     }

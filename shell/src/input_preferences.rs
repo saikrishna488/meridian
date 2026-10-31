@@ -1,170 +1,69 @@
 //! Input options for Meridian's labwc session. Do not replace user keybindings.
 use meridian_protocol::{ErrorBody, ErrorCode, InputPreferences};
-use std::{fs, path::PathBuf, process::Command};
+use std::{fs, path::PathBuf};
 
-const BEGIN: &str = "<!-- meridian-input-start -->";
-const END: &str = "<!-- meridian-input-end -->";
+fn invalid(message: &str) -> ErrorBody {
+    ErrorBody::new(ErrorCode::InvalidRequest, message)
+}
+fn preferences() -> PathBuf {
+    glib::user_config_dir().join("meridian/input-preferences.json")
+}
 
-fn invalid(message: &str) -> ErrorBody { ErrorBody::new(ErrorCode::InvalidRequest, message) }
-fn failed(message: impl std::fmt::Display) -> ErrorBody { ErrorBody::new(ErrorCode::Failed, message.to_string()) }
-fn file() -> PathBuf { glib::user_config_dir().join("labwc/rc.xml") }
-fn preferences() -> PathBuf { glib::user_config_dir().join("meridian/input-preferences.json") }
-
-fn environment_file() -> PathBuf { glib::user_config_dir().join("labwc/environment") }
+fn environment_file() -> PathBuf {
+    glib::user_config_dir().join("labwc/environment")
+}
 fn current_layout() -> Option<String> {
     let text = fs::read_to_string(environment_file()).ok()?;
-    text.lines().filter_map(|line| line.trim().strip_prefix("XKB_DEFAULT_LAYOUT="))
-        .last().map(str::to_owned)
+    text.lines().filter_map(|line| line.trim().strip_prefix("XKB_DEFAULT_LAYOUT=")).next_back().map(str::to_owned)
 }
 pub fn get() -> Result<InputPreferences, ErrorBody> {
-    if let Some(saved) = crate::config::read::<InputPreferences>(&preferences()) { return Ok(saved); }
-    let mut defaults = InputPreferences::default();
-    if let Some(layout) = current_layout() { defaults.keyboard_layout = layout; }
-    Ok(defaults)
+    let mut result = crate::config::read::<InputPreferences>(&preferences()).unwrap_or_default();
+    if let Some(layout) = current_layout().or_else(|| std::env::var("XKB_DEFAULT_LAYOUT").ok()) {
+        result.keyboard_layout = layout;
+    }
+    Ok(result)
 }
-fn yes(value: bool) -> &'static str { if value { "yes" } else { "no" } }
 fn validate(value: &InputPreferences) -> Result<(), ErrorBody> {
     if !(1..=100).contains(&value.repeat_rate) || !(100..=2000).contains(&value.repeat_delay) {
         return Err(invalid("Keyboard repeat rate must be 1–100 and delay must be 100–2000 ms"));
     }
-    if value.keyboard_layout.len() < 2 || value.keyboard_layout.len() > 3
-        || !value.keyboard_layout.bytes().all(|byte| byte.is_ascii_lowercase()) {
+    if value.keyboard_layout.len() < 2
+        || value.keyboard_layout.len() > 3
+        || !value.keyboard_layout.bytes().all(|byte| byte.is_ascii_lowercase())
+    {
         return Err(invalid("Choose a supported keyboard layout code"));
     }
-    if !value.mouse_speed.is_finite() || !(-1.0..=1.0).contains(&value.mouse_speed)
-        || !value.touchpad_speed.is_finite() || !(-1.0..=1.0).contains(&value.touchpad_speed)
-    { return Err(invalid("Pointer speed must be between -1 and 1")); }
+    if !value.mouse_speed.is_finite()
+        || !(-1.0..=1.0).contains(&value.mouse_speed)
+        || !value.touchpad_speed.is_finite()
+        || !(-1.0..=1.0).contains(&value.touchpad_speed)
+    {
+        return Err(invalid("Pointer speed must be between -1 and 1"));
+    }
     Ok(())
 }
-fn input_block(value: &InputPreferences) -> String {
-    format!(
-        r#"{BEGIN}
-  <libinput>
-    <device category="non-touch">
-      <pointerSpeed>{:.2}</pointerSpeed>
-      <accelProfile>{}</accelProfile>
-      <naturalScroll>{}</naturalScroll>
-      <leftHanded>{}</leftHanded>
-    </device>
-    <device category="touchpad">
-      <pointerSpeed>{:.2}</pointerSpeed>
-      <tap>{}</tap>
-      <tapAndDrag>{}</tapAndDrag>
-      <naturalScroll>{}</naturalScroll>
-      <disableWhileTyping>{}</disableWhileTyping>
-      <scrollMethod>twoFinger</scrollMethod>
-    </device>
-  </libinput>
-  {END}"#,
-      value.mouse_speed, if value.mouse_acceleration { "adaptive" } else { "flat" },
-      yes(value.mouse_natural_scroll), yes(value.mouse_left_handed),
-      value.touchpad_speed, yes(value.tap_to_click), yes(value.tap_and_drag),
-      yes(value.touchpad_natural_scroll), yes(value.disable_while_typing))
-}
-fn update_xml(xml: &str, value: &InputPreferences) -> Result<String, ErrorBody> {
-    if !xml.contains("<labwc_config>") || !xml.contains("</labwc_config>")
-        || !xml.contains("<keyboard>") || !xml.contains("</keyboard>") {
-        return Err(failed("labwc rc.xml does not contain expected configuration sections"));
-    }
-    let mut edited = xml.to_owned();
-    if let Some(start) = edited.find(BEGIN) {
-        let end = edited.find(END).ok_or_else(|| failed("Meridian input section is incomplete"))? + END.len();
-        if end < start { return Err(failed("Meridian input section markers are out of order")); }
-        // Only remove Meridian's marked subtree; never remove neighboring
-        // user-authored XML even when their rc.xml has no line breaks.
-        edited.replace_range(start..end, "");
-    }
-    // For the first install, refuse to override user-defined input profiles.
-    if edited.contains("<libinput>") {
-        return Err(failed("Existing custom libinput profiles detected; configure them in labwc rc.xml first"));
-    }
-    // Override repeat fields inside the existing keyboard section (without altering shortcuts).
-    for tag in ["repeatRate", "repeatDelay"] {
-        let open = format!("<{tag}>");
-        if let Some(start) = edited.find(&open) {
-            let close = format!("</{tag}>");
-            let end = edited[start..].find(&close).ok_or_else(|| failed("Malformed keyboard repeat setting"))?
-                + start + close.len();
-            edited.replace_range(start..end, "");
-        }
-    }
-    // Keep keyboard defaults in their existing section; do not replace shortcuts.
-    if let Some(start) = edited.find("<numlock>") {
-        let end = edited[start..].find("</numlock>").ok_or_else(|| failed("Malformed Num Lock setting"))?
-            + start + "</numlock>".len();
-        edited.replace_range(start..end, "");
-    }
-    edited = edited.replacen("</keyboard>", &format!("    <repeatRate>{}</repeatRate>\n    <repeatDelay>{}</repeatDelay>\n  </keyboard>", value.repeat_rate, value.repeat_delay), 1);
-    edited = edited.replacen("</keyboard>", &format!("    <numlock>{}</numlock>\n  </keyboard>", if value.num_lock { "on" } else { "off" }), 1);
-    Ok(edited.replacen("</labwc_config>", &format!("{}\n</labwc_config>", input_block(value)), 1))
-}
-
 pub fn set(value: InputPreferences) -> Result<InputPreferences, ErrorBody> {
     validate(&value)?;
-    if std::env::var("LABWC_PID").ok().filter(|pid| pid.parse::<u32>().ok().filter(|n| *n > 0).is_some()).is_none() {
-        return Err(ErrorBody::new(ErrorCode::Unavailable, "Input controls require an active labwc session"));
-    }
-    let path = file();
-    let original = fs::read_to_string(&path)
-        .map_err(|_| ErrorBody::new(ErrorCode::Unavailable, "labwc rc.xml is not installed for this session"))?;
-    let edited = update_xml(&original, &value)?;
-    // Preserve original user configuration in case they need to undo the edit.
-    let backup = path.with_extension("xml.meridian-backup");
-    if !backup.exists() { fs::write(&backup, &original).map_err(failed)?; }
-    let env_path = environment_file();
-    let original_env = fs::read_to_string(&env_path).unwrap_or_default();
-    let mut env_lines: Vec<String> = original_env.lines()
-        .filter(|line| !line.trim().starts_with("XKB_DEFAULT_LAYOUT="))
-        .map(str::to_owned).collect();
-    env_lines.push(format!("XKB_DEFAULT_LAYOUT={}", value.keyboard_layout));
-    let env_edited = format!("{}\n", env_lines.join("\n"));
-    if let Some(parent) = env_path.parent() { fs::create_dir_all(parent).map_err(failed)?; }
-    let env_backup = env_path.with_extension("meridian-backup");
-    if env_path.exists() && !env_backup.exists() {
-        fs::write(&env_backup, &original_env).map_err(failed)?;
-    }
-    let temporary = path.with_extension("xml.meridian-new");
-    fs::write(&temporary, &edited).map_err(failed)?;
-    fs::rename(&temporary, &path).map_err(failed)?;
-    if let Err(err) = fs::write(&env_path, &env_edited) {
-        fs::write(&path, &original).map_err(failed)?;
-        return Err(failed(err));
-    }
-    let result = Command::new("labwc").arg("--reconfigure").status();
-    if !result.is_ok_and(|status| status.success()) {
-        fs::write(&path, original).map_err(failed)?;
-        if original_env.is_empty() { let _ = fs::remove_file(&env_path); }
-        else { fs::write(&env_path, original_env).map_err(failed)?; }
-        return Err(failed("labwc could not reload input settings; original configuration restored"));
-    }
-    crate::config::save(&preferences(), &value)?;
-    Ok(value)
+    // labwc does not expose an API to read back per-device libinput settings,
+    // and reconfiguration does not apply changes to its startup environment.
+    // Do not persist or report a successful change we cannot verify.
+    Err(ErrorBody::new(
+        ErrorCode::Unavailable,
+        "Input changes are unsupported until the running compositor can verify them",
+    ))
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
-    fn patches_input_without_replacing_keybindings() {
-        let base = r#"<labwc_config><keyboard><keybind key="W-e" /></keyboard></labwc_config>"#;
-        let prefs = InputPreferences::default();
-        let result = update_xml(base, &prefs).unwrap();
-        assert!(result.contains("keybind key=\"W-e\""));
-        assert!(result.contains("<repeatRate>25</repeatRate>"));
-        assert!(result.contains("<device category=\"touchpad\">"));
-        assert!(update_xml(&result, &prefs).is_ok());
-        let again = update_xml(&result, &prefs).unwrap();
-        assert_eq!(again.matches(BEGIN).count(), 1);
-        assert!(again.contains(r#"keybind key="W-e""#));
+    fn rejects_unverifiable_input_changes() {
+        let error = set(InputPreferences::default()).unwrap_err();
+        assert_eq!(error.code, ErrorCode::Unavailable);
     }
     #[test]
-    fn rejects_existing_custom_libinput() {
-        let xml = "<labwc_config><keyboard></keyboard><libinput></libinput></labwc_config>";
-        assert!(update_xml(xml, &InputPreferences::default()).is_err());
-    }
-    #[test]
-    fn validates_speed_and_repeat_ranges() {
-        let mut prefs = InputPreferences::default();
-        prefs.mouse_speed = 2.0;
+    fn rejects_invalid_input_values() {
+        let mut prefs = InputPreferences { mouse_speed: 2.0, ..InputPreferences::default() };
         assert!(validate(&prefs).is_err());
         prefs.mouse_speed = 0.0;
         prefs.repeat_delay = 0;
