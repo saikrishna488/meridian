@@ -442,3 +442,19 @@ html, body, .settings-app { background: var(--settings-bg); color: var(--setting
 .default-apps-row > div:first-child { min-width: 0; }
 .default-apps-row .meridian-select { width: min(260px, 48%); flex: none; }
 @media (max-width: 640px) { .default-apps-row { flex-direction: column; align-items: stretch; gap: 9px; } .default-apps-row .meridian-select { width: 100%; } }
+
+
+/* Essentials: quiet monochrome input controls integrated with Settings cards. */
+.essentials-panel { display:grid; gap:14px; }
+.essentials-panel .settings-card { display:grid; gap:2px; }
+.essentials-panel .settings-card > h3 { margin:3px 0 12px; font-size:13px; font-weight:650; }
+.essentials-setting { display:flex; align-items:center; justify-content:space-between; gap:18px; min-height:49px; }
+.essentials-setting > span:first-child { min-width:0; display:grid; gap:4px; }
+.essentials-setting strong { font-weight:540; }
+.essentials-setting input[type="checkbox"] {
+  width:18px; height:18px; accent-color:#aaa; flex:none; cursor:pointer;
+}
+.essentials-range { display:flex; align-items:center; gap:10px; width:min(250px,48%); }
+.essentials-range input[type="range"] { width:100%; min-width:50px; accent-color:#ddd; cursor:pointer; }
+.essentials-range output { min-width:61px; text-align:right; color:var(--ink-muted); font-variant-numeric:tabular-nums; }
+@media(max-width:630px) { .essentials-setting { flex-wrap:wrap; } .essentials-range { width:100%; } }
