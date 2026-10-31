@@ -33,7 +33,7 @@ export function InputSettings({ kind }: { kind: "keyboard" | "mouse" }) {
       .catch(e => { if (mounted) setError(errorMessage(e)); });
     return () => { mounted = false; };
   }, []);
-  function update(key: InputKey, value: number | boolean) {
+  function update(key: InputKey, value: number | boolean | string) {
     setDraft(current => current ? { ...current, [key]: value } : current);
     setMessage("");
   }
