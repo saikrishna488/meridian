@@ -110,7 +110,9 @@ fn collect_fdinfo(devices: &[GpuDevice]) -> HashMap<String, HashMap<String, Engi
         let Ok(fds) = fs::read_dir(process.path().join("fdinfo")) else { continue };
         for fd in fds.flatten() {
             let info = read(fd.path());
-            if !info.contains("drm-client-id:") { continue; }
+            if !info.contains("drm-client-id:") {
+                continue;
+            }
             let Some(card) = fdinfo_device(&info, devices) else { continue };
             let Some((client, counters)) = parse_fdinfo(&info) else { continue };
             if seen.insert((card.clone(), client.clone())) {
@@ -188,8 +190,14 @@ impl Nvml {
             Some(Self {
                 library,
                 shutdown: std::mem::transmute::<*mut c_void, unsafe extern "C" fn() -> c_int>(shutdown),
-                by_bus: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*const c_char, *mut *mut c_void) -> c_int>(by_bus),
-                utilization: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*mut c_void, *mut NvmlUtilization) -> c_int>(utilization),
+                by_bus: std::mem::transmute::<
+                    *mut c_void,
+                    unsafe extern "C" fn(*const c_char, *mut *mut c_void) -> c_int,
+                >(by_bus),
+                utilization: std::mem::transmute::<
+                    *mut c_void,
+                    unsafe extern "C" fn(*mut c_void, *mut NvmlUtilization) -> c_int,
+                >(utilization),
                 memory: (!memory.is_null()).then(|| {
                     std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*mut c_void, *mut NvmlMemory) -> c_int>(memory)
                 }),
