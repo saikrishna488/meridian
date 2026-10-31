@@ -148,12 +148,13 @@ function Pulse() {
           <thead><tr>{columns.map(column => <th key={column.key} scope="col" title={column.detail}
             aria-sort={sort === column.key ? ascending ? "ascending" : "descending" : "none"}>
             <button onClick={() => order(column.key)}>{column.label}<span aria-hidden="true">{sort === column.key ? ascending ? " ↑" : " ↓" : ""}</span></button>
-          </th>)}<th scope="col">State</th></tr></thead>
+          </th>)}<th scope="col">RAM %</th><th scope="col">State</th></tr></thead>
           <tbody>{processes.map(process => <tr key={process.pid}>
             <td className="process-name" title={process.name}>{process.name}</td>
             <td>{process.pid}</td>
             <td>{percent(process.cpu)}</td>
             <td>{bytes(process.memory)}</td>
+            <td>{memory?.total && memory.total > 0 ? percent(process.memory / memory.total * 100) : "—"}</td>
             <td>{stateNames[process.state] ?? process.state}</td>
           </tr>)}</tbody>
         </table>
