@@ -521,20 +521,35 @@ const pulseData = {
   ],
 };
 
-test("Pulse displays monochrome resource percentages and a visible process list", async t => {
+test("Pulse sidebar navigates live resource views without charts", async t => {
   const ui = await surface(t, "pulse", req => req.method === "pulse.snapshot" ? pulseData : defaults(req));
-  await waitFor(() => ui.get(".pulse-summary-primary"));
+  await waitFor(() => ui.get(".pulse-overview-metrics"));
   await waitFor(() => ui.get("tbody tr"));
-  assert.ok(ui.get(".pulse-summary-primary").textContent.includes("24.5%"));
-  assert.ok(ui.get(".pulse-summary-primary").textContent.includes("50.0%"));
-  assert.equal(ui.window.document.querySelectorAll(".pulse-resource-row").length, 3);
+  const nav = () => [...ui.window.document.querySelectorAll(".pulse-sidebar nav button")];
+  const choose = label => nav().find(button => button.textContent.includes(label)).click();
+  assert.deepEqual(nav().map(button => button.querySelector("span").textContent), ["Overview", "CPU", "Memory", "GPU", "Storage", "Network"]);
+  assert.equal(ui.get('.pulse-sidebar nav button[aria-current="page"] span').textContent, "Overview");
+  assert.ok(ui.get(".pulse-overview-metrics").textContent.includes("24.5%"));
+  assert.ok(ui.get(".pulse-overview-metrics").textContent.includes("50.0%"));
   assert.ok(ui.get(".pulse-resource-list").textContent.includes("1.0 MiB/s"));
-  assert.ok(ui.get(".pulse-memory-detail").textContent.includes("16.0 GiB"));
-  assert.ok(ui.get(".pulse-resource-list").textContent.includes("Usage unavailable from this driver"));
+  assert.equal(ui.window.document.querySelectorAll(".pulse-resource-row").length, 3);
   assert.equal(ui.window.document.querySelectorAll("svg, canvas, .pulse-chart, .resource-card, .process-dot").length, 0);
-  assert.ok(ui.get("tbody tr").textContent.includes("firefox"));
   assert.ok(ui.get("tbody tr").textContent.includes("1.2%"));
-  assert.ok([...ui.window.document.querySelectorAll("th")].some(th => th.textContent.includes("RAM %")));
+  choose("CPU");
+  await waitFor(() => ui.get(".pulse-detail-hero")?.textContent.includes("24.5%"));
+  assert.equal(ui.get('.pulse-sidebar nav button[aria-current="page"] span').textContent, "CPU");
+  choose("Memory");
+  await waitFor(() => ui.get(".pulse-detail-hero")?.textContent.includes("50.0%"));
+  assert.ok(ui.get(".pulse-detail-hero").textContent.includes("16.0 GiB"));
+  choose("GPU");
+  await waitFor(() => ui.get(".pulse-device-list")?.textContent.includes("GPU"));
+  assert.ok(ui.get(".pulse-device-list").textContent.includes("Usage unavailable from this driver"));
+  assert.ok(ui.get(".pulse-process-caption").textContent.includes("not collected yet"));
+  choose("Storage");
+  await waitFor(() => ui.get(".pulse-device-list")?.textContent.includes("nvme0n1"));
+  choose("Network");
+  await waitFor(() => ui.get(".pulse-device-list")?.textContent.includes("wlan0"));
+  assert.ok(ui.get("tbody tr").textContent.includes("firefox"));
   ui.emit("desktop.changed", { ...desktop, appearance: "dark" });
   await waitFor(() => ui.window.document.documentElement.dataset.theme === "dark");
 });
@@ -558,7 +573,7 @@ test("Pulse has no pause control and stops polling while closed", async t => {
   const ui = await surface(t, "pulse", req => req.method === "pulse.snapshot" ? pulseData : defaults(req));
   await waitFor(() => ui.get("tbody tr"));
   assert.ok(!ui.get(".pause-button"));
-  assert.ok(ui.get(".pulse-header") && !ui.get(".pulse-footer") && !ui.get(".overview-intro"));
+  assert.ok(ui.get(".pulse-sidebar") && ui.get(".pulse-page-header") && !ui.get(".pulse-footer"));
   const count = () => ui.requests.filter(r => r.method === "pulse.snapshot").length;
   const before = count();
   ui.emit("pulse.visibility", false);
