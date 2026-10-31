@@ -12,6 +12,7 @@ mod config;
 mod desktop;
 mod default_apps;
 mod files;
+mod gpu_monitor;
 pub mod greetd;
 pub mod greeter;
 pub mod instance;
