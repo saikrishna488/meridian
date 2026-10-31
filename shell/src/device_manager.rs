@@ -66,6 +66,32 @@ fn sys_devices(sys: &Path) -> Vec<ManagedDevice> {
         d.properties.push(("Adapter".into(), name));
         out.push(d);
     }
+    // A keyboard or mouse may be built-in, PS/2 or wired USB. Surface
+    // user-facing input devices, not the virtual input/event nodes.
+    for (name, p) in entries(&sys.join("class/input")) {
+        if !name.starts_with("input") || !name["input".len()..].bytes().all(|byte| byte.is_ascii_digit()) {
+            continue;
+        }
+        let title = text(p.join("name"));
+        let lower = title.to_ascii_lowercase();
+        if title.is_empty() || lower.contains("power button") || lower.contains("video bus")
+            || lower.contains("lid switch") || lower.contains("sleep button")
+        {
+            continue;
+        }
+        let category = if lower.contains("touchpad") || lower.contains("trackpad") {
+            "Touchpads"
+        } else if lower.contains("keyboard") || lower.contains("kbd") {
+            "Keyboards"
+        } else if lower.contains("mouse") || lower.contains("trackball") {
+            "Mice"
+        } else {
+            continue;
+        };
+        let mut device = item(format!("input:{name}"), category, title, "Connected".into(), &p);
+        device.properties.push(("Connection".into(), "Input device".into()));
+        out.push(device);
+    }
     for (name, p) in entries(&sys.join("block")) {
         if ["loop", "ram", "zram"].iter().any(|s| name.starts_with(s)) {
             continue;
@@ -351,6 +377,19 @@ pub fn action(choice: DeviceAction) -> Result<(), ErrorBody> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn wired_keyboards_and_mice_are_discovered_as_peripherals() {
+        let root = std::env::temp_dir().join(format!("meridian-input-devices-{}", std::process::id()));
+        for (id, label) in [("input2", "USB Optical Mouse"), ("input3", "AT Translated Set 2 keyboard")] {
+            let folder = root.join("class/input").join(id);
+            fs::create_dir_all(&folder).unwrap();
+            fs::write(folder.join("name"), label).unwrap();
+        }
+        let devices = sys_devices(&root);
+        assert!(devices.iter().any(|d| d.category == "Mice" && d.name == "USB Optical Mouse"));
+        assert!(devices.iter().any(|d| d.category == "Keyboards" && d.name.contains("keyboard")));
+        fs::remove_dir_all(root).unwrap();
+    }
     #[test]
     fn groups_network_and_storage_and_reports_the_bound_driver() {
         let root = std::env::temp_dir().join(format!("meridian-hardware-{}", std::process::id()));
