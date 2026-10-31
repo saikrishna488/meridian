@@ -46,6 +46,31 @@ impl Default for InputPreferences {
     }
 }
 
+
+/// Current system clock configuration reported by systemd-timedated.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct TimeState {
+    pub timezone: String,
+    pub ntp: bool,
+    pub synchronized: bool,
+}
+#[derive(Debug, Clone, PartialEq, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct TimeChange {
+    pub timezone: Option<String>,
+    pub ntp: Option<bool>,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct PrinterInventory {
+    pub printers: Vec<String>,
+    pub scanners: Vec<String>,
+    pub cups_available: bool,
+    pub sane_available: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
 #[ts(export)]
@@ -895,6 +920,12 @@ pub enum Request {
     #[serde(rename = "windows.close")]
     WindowsClose(WindowsActivate),
 
+    #[serde(rename = "settings.time")]
+    SettingsTime,
+    #[serde(rename = "settings.time_set")]
+    SettingsTimeSet(TimeChange),
+    #[serde(rename = "settings.printers")]
+    SettingsPrinters,
     #[serde(rename = "settings.input")]
     SettingsInput,
     #[serde(rename = "settings.input_set")]
@@ -1276,7 +1307,10 @@ impl Request {
             Request::SettingsSystemInfo | Request::SettingsCheckUpdates | Request::SettingsOpenReleases => {
                 Some(Capability::Settings)
             }
-            Request::SettingsInput
+            Request::SettingsTime
+            | Request::SettingsTimeSet(_)
+            | Request::SettingsPrinters
+            | Request::SettingsInput
             | Request::SettingsInputSet(_)
             | Request::SettingsPrimaryDisplay
             | Request::SettingsPrimaryDisplaySet(_)
