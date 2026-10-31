@@ -128,17 +128,65 @@ export function NotificationSettings() {
     <p className="section-caption">Per-app notification rules are not supported by the current notification server.</p></>;
 }
 export function DateTimeSettings() {
-  const now = new Date();
-  return <section className="settings-card"><h3>Date &amp; time</h3>
+  const [current, setCurrent] = useState<import("../../lib/generated/TimeState").TimeState | null>(null);
+  const [zone, setZone] = useState("");
+  const [sync, setSync] = useState(false);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    let alive = true;
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    void request({ method: "settings.time" }).then(value => {
+      if (alive) { setCurrent(value); setZone(value.timezone); setSync(value.ntp); }
+    }).catch(e => { if (alive) setError(errorMessage(e)); });
+    return () => { alive = false; clearInterval(timer); };
+  }, []);
+  async function save() {
+    if (!current || busy) return;
+    setBusy(true); setError("");
+    try {
+      const changed = await request({ method: "settings.time_set", params: {
+        timezone: zone !== current.timezone ? zone : null,
+        ntp: sync !== current.ntp ? sync : null,
+      } });
+      setCurrent(changed); setZone(changed.timezone); setSync(changed.ntp);
+    } catch (e) { setError(errorMessage(e)); }
+    finally { setBusy(false); }
+  }
+  const dirty = current && (current.timezone !== zone || current.ntp !== sync);
+  return <><section className="settings-card"><h3>Date &amp; time</h3>
     <div className="settings-row"><span>Current time</span><strong>{now.toLocaleString()}</strong></div>
-    <div className="settings-row"><span>Time zone</span><strong>{Intl.DateTimeFormat().resolvedOptions().timeZone}</strong></div>
-    <p className="section-caption">System time and automatic synchronization are administered by your distribution's timedate service. Meridian does not change system time without an authenticated backend.</p>
-  </section>;
+    <div className="settings-row"><span>Synchronization</span><strong>{current ? current.synchronized ? "Synchronized" : "Not synchronized" : "Unavailable"}</strong></div>
+    <label className="settings-row essentials-setting"><strong>Time zone</strong>
+      <input aria-label="Time zone" className="essentials-timezone" list="meridian-time-zones"
+        value={zone} onChange={event => setZone(event.target.value)} disabled={!current || busy} />
+      <datalist id="meridian-time-zones">{["UTC", "America/Chicago", "America/New_York", "America/Los_Angeles", "Asia/Kolkata", "Europe/London", "Europe/Berlin", "Asia/Tokyo"].map(value => <option key={value} value={value} />)}</datalist>
+    </label>
+    <ToggleRow title="Automatic time synchronization" value={sync} disabled={!current || busy} onChange={setSync} />
+    </section>
+    {error && <p role="alert" className="settings-error">{error}</p>}
+    <div className="settings-actions"><Button disabled={!dirty || busy} onClick={() => void save()}>{busy ? "Applying…" : "Apply changes"}</Button></div>
+    <p className="section-caption">Changes are applied by systemd-timedated and may require administrator authorization. Type any installed IANA time zone, such as America/Chicago.</p>
+  </>;
 }
 export function PrinterSettings() {
-  return <section className="settings-card"><h3>Printers &amp; scanners</h3>
-    <p className="section-caption">Printer management requires the system's CUPS service, and scanner management requires SANE. Meridian does not yet have an integrated device-management backend for these services.</p>
-  </section>;
+  const [data, setData] = useState<import("../../lib/generated/PrinterInventory").PrinterInventory | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let alive = true;
+    void request({ method: "settings.printers" }).then(value => { if (alive) setData(value); })
+      .catch(e => { if (alive) setError(errorMessage(e)); });
+    return () => { alive = false; };
+  }, []);
+  return <><section className="settings-card"><h3>Printers</h3>
+    {data?.printers.length ? data.printers.map(name => <div className="settings-row" key={name}><strong>{name}</strong><small>Installed printer</small></div>)
+      : <p className="section-caption">{data ? data.cups_available ? "No installed printers found." : "CUPS printer discovery is unavailable." : "Finding printers…"}</p>}
+  </section><section className="settings-card"><h3>Scanners</h3>
+    {data?.scanners.length ? data.scanners.map(name => <div className="settings-row" key={name}><span>{name}</span></div>)
+      : <p className="section-caption">{data ? data.sane_available ? "No scanners found." : "SANE scanner discovery is unavailable." : "Finding scanners…"}</p>}
+  </section>{error && <p className="settings-error" role="alert">{error}</p>}
+    <p className="section-caption">Device discovery is read-only. Adding printers or changing drivers still requires distribution printer-management tools.</p></>;
 }
 export function PrivacySettings() {
   return <><section className="settings-card"><h3>Privacy &amp; security</h3>
