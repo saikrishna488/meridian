@@ -834,7 +834,7 @@ test("top bar clock opens the configured Calendar application", async t => {
 
 test("Critical Settings pages expose live input controls and notification preferences", async t => {
   const input = {
-    repeat_rate: 25, repeat_delay: 600, mouse_speed: 0, mouse_acceleration: true,
+    repeat_rate: 25, repeat_delay: 600, keyboard_layout: "us", num_lock: false, mouse_speed: 0, mouse_acceleration: true,
     mouse_natural_scroll: false, mouse_left_handed: false, touchpad_speed: 0,
     tap_to_click: true, tap_and_drag: true, touchpad_natural_scroll: false,
     disable_while_typing: true,
