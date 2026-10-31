@@ -52,13 +52,23 @@ export function InputSettings({ kind }: { kind: "keyboard" | "mouse" }) {
     {kind === "keyboard" ? <>
       <div className="settings-card">
         <h3>Typing</h3>
+        <label className="settings-row essentials-setting"><strong>Keyboard layout</strong>
+          <select aria-label="Keyboard layout" value={draft.keyboard_layout}
+            onChange={event => update("keyboard_layout", event.target.value)}>
+            {!["us", "gb", "in", "de", "fr", "es", "it", "br", "ca", "jp", "ru"].includes(draft.keyboard_layout)
+              && <option value={draft.keyboard_layout}>{draft.keyboard_layout}</option>}
+            {[["us", "English (US)"], ["gb", "English (UK)"], ["in", "English (India)"], ["de", "German"], ["fr", "French"], ["es", "Spanish"], ["it", "Italian"], ["br", "Portuguese (Brazil)"], ["ca", "Canadian"], ["jp", "Japanese"], ["ru", "Russian"]].map(([code, name]) =>
+              <option key={code} value={code}>{name}</option>)}
+          </select>
+        </label>
+        <ToggleRow title="Num Lock on startup" value={draft.num_lock} onChange={value => update("num_lock", value)} />
         <RangeRow title="Key repeat speed" value={draft.repeat_rate} min={1} max={60} step={1} unit=" /sec"
           onChange={value => update("repeat_rate", value)} />
         <RangeRow title="Repeat delay" value={draft.repeat_delay} min={100} max={1200} step={50} unit=" ms"
           onChange={value => update("repeat_delay", value)} />
         <p className="section-caption">These settings control how keys repeat in Meridian's labwc session.</p>
       </div>
-      <p className="section-caption">Keyboard layouts and language switching are currently configured through labwc's XKB environment settings. Custom shortcuts are listed in Keyboard Shortcuts.</p>
+      <p className="section-caption">Keyboard layout changes use labwc XKB configuration. Multiple simultaneous layouts and custom layout-switching shortcuts are not yet supported. Shortcuts are listed in Keyboard Shortcuts.</p>
     </> : <>
       <div className="settings-card"><h3>Mouse</h3>
         <RangeRow title="Pointer speed" value={draft.mouse_speed} min={-1} max={1} step={0.05} unit=""
