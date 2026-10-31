@@ -56,11 +56,9 @@ fn update_xml(xml: &str, value: &InputPreferences) -> Result<String, ErrorBody> 
     if let Some(start) = edited.find(BEGIN) {
         let end = edited.find(END).ok_or_else(|| failed("Meridian input section is incomplete"))? + END.len();
         if end < start { return Err(failed("Meridian input section markers are out of order")); }
-        // Remove the entire generated line range, not only the markers;
-        // otherwise every save accumulates extra blank lines.
-        let line_start = edited[..start].rfind('\n').map_or(0, |index| index + 1);
-        let line_end = edited[end..].find('\n').map_or(end, |index| end + index + 1);
-        edited.replace_range(line_start..line_end, "");
+        // Only remove Meridian's marked subtree; never remove neighboring
+        // user-authored XML even when their rc.xml has no line breaks.
+        edited.replace_range(start..end, "");
     }
     // For the first install, refuse to override user-defined input profiles.
     if edited.contains("<libinput>") {
@@ -115,7 +113,9 @@ mod tests {
         assert!(result.contains("<repeatRate>25</repeatRate>"));
         assert!(result.contains("<device category=\"touchpad\">"));
         assert!(update_xml(&result, &prefs).is_ok());
-        assert_eq!(result, update_xml(&result, &prefs).unwrap());
+        let again = update_xml(&result, &prefs).unwrap();
+        assert_eq!(again.matches(BEGIN).count(), 1);
+        assert!(again.contains("keybind key=\\"W-e\\""));
     }
     #[test]
     fn rejects_existing_custom_libinput() {
