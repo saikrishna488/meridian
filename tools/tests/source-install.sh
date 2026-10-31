@@ -32,6 +32,12 @@ if [ "$status" = 94 ]; then
   echo "Preflight unexpectedly invoked sudo" >&2
   exit 1
 fi
-grep -q 'Checking development and runtime requirements' "$fixture/check"
-grep -q 'Meridian source installer' "$fixture/check"
+if (( EUID == 0 )); then
+  # GitHub Actions' Debian container runs as root. The source installer must
+  # refuse root rather than run its normal-user preflight in that environment.
+  grep -q 'Run as your regular user' "$fixture/check"
+else
+  grep -q 'Checking development and runtime requirements' "$fixture/check"
+  grep -q 'Meridian source installer' "$fixture/check"
+fi
 echo "Source installer syntax, help, invalid options and read-only preflight passed."
