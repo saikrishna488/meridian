@@ -56,7 +56,11 @@ fn update_xml(xml: &str, value: &InputPreferences) -> Result<String, ErrorBody> 
     if let Some(start) = edited.find(BEGIN) {
         let end = edited.find(END).ok_or_else(|| failed("Meridian input section is incomplete"))? + END.len();
         if end < start { return Err(failed("Meridian input section markers are out of order")); }
-        edited.replace_range(start..end, "");
+        // Remove the entire generated line range, not only the markers;
+        // otherwise every save accumulates extra blank lines.
+        let line_start = edited[..start].rfind('\n').map_or(0, |index| index + 1);
+        let line_end = edited[end..].find('\n').map_or(end, |index| end + index + 1);
+        edited.replace_range(line_start..line_end, "");
     }
     // For the first install, refuse to override user-defined input profiles.
     if edited.contains("<libinput>") {
