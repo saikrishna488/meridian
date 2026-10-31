@@ -451,21 +451,13 @@ html, body, .settings-app { background: var(--settings-bg); color: var(--setting
 .essentials-setting { display:flex; align-items:center; justify-content:space-between; gap:18px; min-height:49px; }
 .essentials-setting > span:first-child { min-width:0; display:grid; gap:4px; }
 .essentials-setting strong { font-weight:540; }
-.essentials-setting input[type="checkbox"] {
-  width:18px; height:18px; accent-color:#aaa; flex:none; cursor:pointer;
-}
 .essentials-range { display:flex; align-items:center; gap:10px; width:min(250px,48%); }
-.essentials-range input[type="range"] { width:100%; min-width:50px; accent-color:#ddd; cursor:pointer; }
+.essentials-range > :first-child { flex:1 1 auto; min-width:50px; }
 .essentials-range output { min-width:61px; text-align:right; color:var(--ink-muted); font-variant-numeric:tabular-nums; }
 @media(max-width:630px) { .essentials-setting { flex-wrap:wrap; } .essentials-range { width:100%; } }
 
 
-.essentials-setting select {
-  min-width:180px; max-width:65%; padding:8px 12px; border-radius:9px;
-  border:1px solid rgb(255 255 255 / .16); background:#0d0d0d;
-  color:#fff; font:inherit; cursor:pointer;
-}
-.essentials-setting select:focus-visible { outline:2px solid var(--focus-ring); outline-offset:2px; }
+.essentials-setting .meridian-select { width:min(250px,55%); min-width:0; flex:none; }
 
 
 .essentials-timezone {
@@ -479,13 +471,8 @@ html, body, .settings-app { background: var(--settings-bg); color: var(--setting
 /* Connected devices: compact monochrome hardware inventory. */
 .connected-devices { display:grid; gap:13px; }
 .connected-devices .management-toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-.connected-devices .management-toolbar input,
-.connected-devices .management-toolbar select {
-  min-height:35px; border:1px solid rgb(255 255 255 / .14); border-radius:9px;
-  background:rgb(255 255 255 / .05); color:#fff; padding:7px 12px; font:inherit;
-}
-.connected-devices .management-toolbar input { flex:1 1 180px; min-width:120px; }
-.connected-devices .management-toolbar select { max-width:220px; }
+.connected-devices .management-toolbar > :first-child { flex:1 1 190px; min-width:140px; }
+.connected-devices .management-toolbar .meridian-select { flex:0 1 210px; width:210px; min-width:140px; }
 .connected-device-group { padding-block:10px; }
 .connected-device-group > h3 { font-size:12px; margin:5px 0 10px; font-weight:650; }
 .connected-device-row { border-top:1px solid rgb(255 255 255 / .09); }
@@ -515,3 +502,47 @@ html, body, .settings-app { background: #000; color: #fff; }
 .settings-app :focus-visible { outline: 2px solid #ddd; outline-offset: 2px; }
 @media (prefers-reduced-transparency: reduce) { .settings-sidebar { background: #141414; backdrop-filter: none; } }
 @media (prefers-reduced-motion: reduce) { .settings-app *, .settings-app *::before, .settings-app *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; } }
+
+/* Shared black-glass geometry for the recently added Settings categories.
+   Keep component interactions in Glisse/Select rather than native per-page CSS. */
+.settings-app {
+  --settings-control-height: 34px;
+  --settings-control-radius: 9px;
+  --settings-glass-border: rgb(255 255 255 / .12);
+  --settings-glass-bg: rgb(255 255 255 / .055);
+}
+.settings-content .essentials-panel .meridian-select .select-trigger,
+.settings-content .connected-devices .meridian-select .select-trigger,
+.settings-content .connected-devices .management-toolbar > :first-child {
+  min-height: var(--settings-control-height);
+  border-radius: var(--settings-control-radius);
+}
+.settings-content .essentials-panel .settings-card,
+.settings-content .connected-devices .settings-card {
+  background: var(--settings-card-bg, #080808);
+  border: 1px solid var(--settings-glass-border);
+  border-radius: 12px;
+}
+.settings-content .essentials-panel .settings-row,
+.settings-content .connected-device-row {
+  border-color: var(--settings-divider, #252525);
+}
+.settings-content .essentials-panel .meridian-toggle { flex: none; }
+.settings-content .essentials-range output {
+  color: var(--settings-muted, #aaa);
+  min-width: 62px;
+}
+.settings-content .connected-device-row summary {
+  border-radius: var(--settings-control-radius);
+  transition: background-color 140ms ease;
+}
+.settings-content .connected-device-row[open] summary {
+  background: var(--settings-glass-bg);
+}
+@media (max-width: 620px) {
+  .essentials-setting .meridian-select { width: 100%; max-width: none; }
+  .connected-devices .management-toolbar .meridian-select { flex:1 1 160px; width:auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .settings-content .connected-device-row summary { transition: none; }
+}
