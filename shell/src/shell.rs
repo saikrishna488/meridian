@@ -924,7 +924,10 @@ impl Shell {
                 }
                 serialize(ok())
             }
-            Request::SettingsInput
+            Request::SettingsTime
+            | Request::SettingsTimeSet(_)
+            | Request::SettingsPrinters
+            | Request::SettingsInput
             | Request::SettingsInputSet(_)
             | Request::SettingsPrimaryDisplay
             | Request::SettingsPrimaryDisplaySet(_)
