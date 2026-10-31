@@ -22,7 +22,6 @@ const builtinIcons: Record<string, string> = {
   "meridian-pulse.desktop": "pulse",
   "meridian-settings.desktop": "settings",
   "meridian-finder.desktop": "finder",
-  "meridian-terminal.desktop": "terminal",
   "meridian-control-center.desktop": "control-center",
 };
 export function AppIcon({ name, icon, id }: { name: string; icon?: string | null; id?: string }) {
