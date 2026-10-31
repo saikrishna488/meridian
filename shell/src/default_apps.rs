@@ -59,9 +59,7 @@ pub fn set(choice: &DefaultAppChoice, catalog: &AppCatalog) -> Result<Vec<Defaul
         return Err(ErrorBody::new(ErrorCode::NotFound, "Select an installed application"));
     }
     if SHELL_PURPOSES.contains(&choice.purpose.as_str()) {
-        if id == "meridian-terminal.desktop"
-            || choice.purpose == "terminal" && id == "meridian-finder.desktop"
-        {
+        if id == "meridian-terminal.desktop" || choice.purpose == "terminal" && id == "meridian-finder.desktop" {
             return Err(ErrorBody::new(ErrorCode::InvalidRequest, "This application cannot handle that purpose"));
         }
         let mut config = read();
@@ -76,8 +74,9 @@ pub fn set(choice: &DefaultAppChoice, catalog: &AppCatalog) -> Result<Vec<Defaul
             .ok_or_else(|| ErrorBody::new(ErrorCode::InvalidRequest, "Unknown default app purpose"))?;
         let app = DesktopAppInfo::new(id)
             .ok_or_else(|| ErrorBody::new(ErrorCode::NotFound, "Application desktop entry is unavailable"))?;
-        app.set_as_default_for_type(mime)
-            .map_err(|error| ErrorBody::new(ErrorCode::Failed, format!("Cannot set the default application: {error}")))?;
+        app.set_as_default_for_type(mime).map_err(|error| {
+            ErrorBody::new(ErrorCode::Failed, format!("Cannot set the default application: {error}"))
+        })?;
     }
     Ok(list())
 }
