@@ -458,3 +458,11 @@ html, body, .settings-app { background: var(--settings-bg); color: var(--setting
 .essentials-range input[type="range"] { width:100%; min-width:50px; accent-color:#ddd; cursor:pointer; }
 .essentials-range output { min-width:61px; text-align:right; color:var(--ink-muted); font-variant-numeric:tabular-nums; }
 @media(max-width:630px) { .essentials-setting { flex-wrap:wrap; } .essentials-range { width:100%; } }
+
+
+.essentials-setting select {
+  min-width:180px; max-width:65%; padding:8px 12px; border-radius:9px;
+  border:1px solid rgb(255 255 255 / .16); background:#0d0d0d;
+  color:#fff; font:inherit; cursor:pointer;
+}
+.essentials-setting select:focus-visible { outline:2px solid var(--focus-ring); outline-offset:2px; }
