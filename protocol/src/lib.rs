@@ -21,6 +21,8 @@ use ts_rs::TS;
 pub struct InputPreferences {
     pub repeat_rate: u32,
     pub repeat_delay: u32,
+    pub keyboard_layout: String,
+    pub num_lock: bool,
     pub mouse_speed: f64,
     pub mouse_acceleration: bool,
     pub mouse_natural_scroll: bool,
@@ -35,6 +37,7 @@ impl Default for InputPreferences {
     fn default() -> Self {
         Self {
             repeat_rate: 25, repeat_delay: 600,
+            keyboard_layout: "us".into(), num_lock: false,
             mouse_speed: 0.0, mouse_acceleration: true,
             mouse_natural_scroll: false, mouse_left_handed: false,
             touchpad_speed: 0.0, tap_to_click: true, tap_and_drag: true,
