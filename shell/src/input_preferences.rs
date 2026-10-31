@@ -10,13 +10,26 @@ fn failed(message: impl std::fmt::Display) -> ErrorBody { ErrorBody::new(ErrorCo
 fn file() -> PathBuf { glib::user_config_dir().join("labwc/rc.xml") }
 fn preferences() -> PathBuf { glib::user_config_dir().join("meridian/input-preferences.json") }
 
+fn environment_file() -> PathBuf { glib::user_config_dir().join("labwc/environment") }
+fn current_layout() -> Option<String> {
+    let text = fs::read_to_string(environment_file()).ok()?;
+    text.lines().filter_map(|line| line.trim().strip_prefix("XKB_DEFAULT_LAYOUT="))
+        .last().map(str::to_owned)
+}
 pub fn get() -> Result<InputPreferences, ErrorBody> {
-    Ok(crate::config::read::<InputPreferences>(&preferences()).unwrap_or_default())
+    if let Some(saved) = crate::config::read::<InputPreferences>(&preferences()) { return Ok(saved); }
+    let mut defaults = InputPreferences::default();
+    if let Some(layout) = current_layout() { defaults.keyboard_layout = layout; }
+    Ok(defaults)
 }
 fn yes(value: bool) -> &'static str { if value { "yes" } else { "no" } }
 fn validate(value: &InputPreferences) -> Result<(), ErrorBody> {
     if !(1..=100).contains(&value.repeat_rate) || !(100..=2000).contains(&value.repeat_delay) {
         return Err(invalid("Keyboard repeat rate must be 1–100 and delay must be 100–2000 ms"));
+    }
+    if value.keyboard_layout.len() < 2 || value.keyboard_layout.len() > 3
+        || !value.keyboard_layout.bytes().all(|byte| byte.is_ascii_lowercase()) {
+        return Err(invalid("Choose a supported keyboard layout code"));
     }
     if !value.mouse_speed.is_finite() || !(-1.0..=1.0).contains(&value.mouse_speed)
         || !value.touchpad_speed.is_finite() || !(-1.0..=1.0).contains(&value.touchpad_speed)
@@ -74,7 +87,14 @@ fn update_xml(xml: &str, value: &InputPreferences) -> Result<String, ErrorBody> 
             edited.replace_range(start..end, "");
         }
     }
+    // Keep keyboard defaults in their existing section; do not replace shortcuts.
+    if let Some(start) = edited.find("<numlock>") {
+        let end = edited[start..].find("</numlock>").ok_or_else(|| failed("Malformed Num Lock setting"))?
+            + start + "</numlock>".len();
+        edited.replace_range(start..end, "");
+    }
     edited = edited.replacen("</keyboard>", &format!("    <repeatRate>{}</repeatRate>\n    <repeatDelay>{}</repeatDelay>\n  </keyboard>", value.repeat_rate, value.repeat_delay), 1);
+    edited = edited.replacen("</keyboard>", &format!("    <numlock>{}</numlock>\n  </keyboard>", if value.num_lock { "on" } else { "off" }), 1);
     Ok(edited.replacen("</labwc_config>", &format!("{}\n</labwc_config>", input_block(value)), 1))
 }
 
@@ -90,12 +110,30 @@ pub fn set(value: InputPreferences) -> Result<InputPreferences, ErrorBody> {
     // Preserve original user configuration in case they need to undo the edit.
     let backup = path.with_extension("xml.meridian-backup");
     if !backup.exists() { fs::write(&backup, &original).map_err(failed)?; }
+    let env_path = environment_file();
+    let original_env = fs::read_to_string(&env_path).unwrap_or_default();
+    let mut env_lines: Vec<String> = original_env.lines()
+        .filter(|line| !line.trim().starts_with("XKB_DEFAULT_LAYOUT="))
+        .map(str::to_owned).collect();
+    env_lines.push(format!("XKB_DEFAULT_LAYOUT={}", value.keyboard_layout));
+    let env_edited = format!("{}\n", env_lines.join("\n"));
+    if let Some(parent) = env_path.parent() { fs::create_dir_all(parent).map_err(failed)?; }
+    let env_backup = env_path.with_extension("meridian-backup");
+    if env_path.exists() && !env_backup.exists() {
+        fs::write(&env_backup, &original_env).map_err(failed)?;
+    }
     let temporary = path.with_extension("xml.meridian-new");
     fs::write(&temporary, &edited).map_err(failed)?;
     fs::rename(&temporary, &path).map_err(failed)?;
+    if let Err(err) = fs::write(&env_path, &env_edited) {
+        fs::write(&path, &original).map_err(failed)?;
+        return Err(failed(err));
+    }
     let result = Command::new("labwc").arg("--reconfigure").status();
     if !result.is_ok_and(|status| status.success()) {
         fs::write(&path, original).map_err(failed)?;
+        if original_env.is_empty() { let _ = fs::remove_file(&env_path); }
+        else { fs::write(&env_path, original_env).map_err(failed)?; }
         return Err(failed("labwc could not reload input settings; original configuration restored"));
     }
     crate::config::save(&preferences(), &value)?;
