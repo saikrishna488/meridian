@@ -4,6 +4,18 @@ use super::*;
 impl Shell {
     pub(super) fn dispatch_settings(&self, surface: &Rc<WebSurface>, request: Request) -> Result<Reply, ErrorBody> {
         match request {
+            Request::SettingsTime => Ok(Reply::Later(Box::pin(async move {
+                let state = crate::files::blocking(crate::system_integrations::time).await?;
+                proto::reply_ok(&state).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
+            Request::SettingsTimeSet(change) => Ok(Reply::Later(Box::pin(async move {
+                let state = crate::files::blocking(move || crate::system_integrations::set_time(change)).await?;
+                proto::reply_ok(&state).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
+            Request::SettingsPrinters => Ok(Reply::Later(Box::pin(async move {
+                let state = crate::files::blocking(crate::system_integrations::printers).await?;
+                proto::reply_ok(&state).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
             Request::SettingsInput => Ok(Reply::Later(Box::pin(async move {
                 let value = crate::files::blocking(crate::input_preferences::get).await?;
                 proto::reply_ok(&value).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
