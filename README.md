@@ -32,8 +32,8 @@ extended-use qualification remain open. The project tracks those gaps in
   Flatpak, and Snap packages. Privileged removals can request authentication.
 - Notification history and Pulse system monitoring. Meridian's Calendar and
   Clock entries launch the installed GNOME Calendar and GNOME Clocks apps.
-- GNOME Files for file browsing and Kitty for interactive terminal sessions.
-  They are separate applications launched from Meridian.
+- Meridian Files for file browsing, with Kitty as the default terminal. Kitty
+  remains a separate installed application.
 
 System sharing is not implemented. Hardware controls depend on services such
 as NetworkManager, BlueZ, PipeWire/WirePlumber, and systemd-logind, plus the
@@ -113,7 +113,7 @@ for optional greetd configuration.
 | --- | --- |
 | Super or Super+Space | Open Applications |
 | Super+C | Open Control Center |
-| Super+E | Open GNOME Files |
+| Super+E | Open Meridian Files |
 | Super+I | Open Settings |
 | Super+Enter | Open Kitty |
 | Super+L | Lock the session |
