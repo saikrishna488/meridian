@@ -244,42 +244,6 @@ pub fn open(path: &str) -> Result<(), ErrorBody> {
     });
     Ok(())
 }
-/// Open a directory in GNOME Files, Meridian's system file manager.
-pub fn open_directory(path: &str) -> Result<(), ErrorBody> {
-    let path = absolute(path)?;
-    if !path.is_dir() {
-        return Err(error("The folder no longer exists."));
-    }
-    let mut argv: Vec<std::ffi::OsString> = Vec::new();
-    if std::env::var("MERIDIAN_HOST_APPS").as_deref() == Ok("1") {
-        argv.extend(["flatpak-spawn".into(), "--host".into()]);
-    }
-    argv.extend(["nautilus".into(), "--new-window".into(), path.into_os_string()]);
-    let refs: Vec<_> = argv.iter().map(|s| s.as_os_str()).collect();
-    let process = gio::Subprocess::newv(&refs, gio::SubprocessFlags::NONE).map_err(error)?;
-    process.wait_check_async(gio::Cancellable::NONE, |result| {
-        if let Err(error) = result {
-            log::warn!("GNOME Files failed to open: {error}");
-        }
-    });
-    Ok(())
-}
-/// Open GNOME Files at the user's Trash location.
-pub fn open_trash() -> Result<(), ErrorBody> {
-    let mut argv: Vec<std::ffi::OsString> = Vec::new();
-    if std::env::var("MERIDIAN_HOST_APPS").as_deref() == Ok("1") {
-        argv.extend(["flatpak-spawn".into(), "--host".into()]);
-    }
-    argv.extend(["gio".into(), "open".into(), "trash:///".into()]);
-    let refs: Vec<_> = argv.iter().map(|s| s.as_os_str()).collect();
-    let process = gio::Subprocess::newv(&refs, gio::SubprocessFlags::NONE).map_err(error)?;
-    process.wait_check_async(gio::Cancellable::NONE, |result| {
-        if let Err(error) = result {
-            log::warn!("Could not open Trash: {error}");
-        }
-    });
-    Ok(())
-}
 /// Transfers never overwrite an existing target or follow directory symlinks.
 pub fn transfer(path: &str, destination: &str, moving: bool) -> Result<(), ErrorBody> {
     crate::transfer::run(
