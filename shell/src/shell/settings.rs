@@ -4,6 +4,14 @@ use super::*;
 impl Shell {
     pub(super) fn dispatch_settings(&self, surface: &Rc<WebSurface>, request: Request) -> Result<Reply, ErrorBody> {
         match request {
+            Request::SettingsInput => Ok(Reply::Later(Box::pin(async move {
+                let value = crate::files::blocking(crate::input_preferences::get).await?;
+                proto::reply_ok(&value).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
+            Request::SettingsInputSet(value) => Ok(Reply::Later(Box::pin(async move {
+                let result = crate::files::blocking(move || crate::input_preferences::set(value)).await?;
+                proto::reply_ok(&result).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+            }))),
             Request::SettingsSearch => serialize(proto::reply_ok(&*self.search_preferences.borrow())),
             Request::SettingsSearchSet(value) => {
                 crate::search::save(&value)?;
