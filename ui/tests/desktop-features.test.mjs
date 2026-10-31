@@ -849,11 +849,13 @@ test("Critical Settings pages expose live input controls and notification prefer
   open("Keyboard");
   await waitFor(() => ui.get('[aria-label="Key repeat speed"]'));
   assert.equal(ui.get('[aria-label="Key repeat speed"]').value, "25");
-  type(ui, '[aria-label="Key repeat speed"]', "45");
-  ui.get('[aria-label="Key repeat speed"]').dispatchEvent(new ui.window.Event("change", { bubbles: true }));
-  await waitFor(() => [...ui.window.document.querySelectorAll("button")].some(b => b.textContent === "Apply changes"));
+  const layout = ui.get('[aria-label="Keyboard layout"]');
+  layout.value = "gb";
+  layout.dispatchEvent(new ui.window.Event("change", { bubbles: true }));
+  await waitFor(() => [...ui.window.document.querySelectorAll("button")].some(b => b.textContent === "Apply changes" && !b.disabled));
   [...ui.window.document.querySelectorAll("button")].find(b => b.textContent === "Apply changes").click();
   await waitFor(() => ui.requests.some(req => req.method === "settings.input_set"));
+  assert.equal(ui.requests.find(req => req.method === "settings.input_set").params.keyboard_layout, "gb");
   open("Mouse & Touchpad");
   await waitFor(() => ui.get('[aria-label="Tap to click"]'));
   open("Keyboard Shortcuts");
@@ -866,6 +868,26 @@ test("Critical Settings pages expose live input controls and notification prefer
     open(name);
     await waitFor(() => ui.get("#settings-title")?.textContent === name);
   }
+});
+
+test("Date and Time and device discovery use the native Settings bridge", async t => {
+  const timeState = { timezone: "America/Chicago", ntp: true, synchronized: true };
+  const ui = await surface(t, "settings", req => req.method === "settings.time" ? timeState
+    : req.method === "settings.time_set" ? { ...timeState, ...Object.fromEntries(Object.entries(req.params).filter(([, value]) => value != null)) }
+    : req.method === "settings.printers" ? { printers: ["Office"], scanners: ["device test scanner"], cups_available: true, sane_available: true }
+    : defaults(req));
+  const open = name => [...ui.window.document.querySelectorAll('.settings-sidebar nav button')].find(button => button.textContent === name)?.click();
+  await waitFor(() => ui.get("#settings-title"));
+  open("Date & Time");
+  await waitFor(() => ui.get('[aria-label="Time zone"]')?.value === "America/Chicago");
+  type(ui, '[aria-label="Time zone"]', "Asia/Kolkata");
+  await waitFor(() => [...ui.window.document.querySelectorAll("button")].some(button => button.textContent === "Apply changes" && !button.disabled));
+  [...ui.window.document.querySelectorAll("button")].find(button => button.textContent === "Apply changes").click();
+  await waitFor(() => ui.requests.some(req => req.method === "settings.time_set"));
+  assert.equal(ui.requests.find(req => req.method === "settings.time_set").params.timezone, "Asia/Kolkata");
+  open("Printers & Scanners");
+  await waitFor(() => ui.get(".settings-content")?.textContent.includes("Office"));
+  assert.ok(ui.get(".settings-content").textContent.includes("test scanner"));
 });
 
 test("Power preferences save supported lock timing and explain when it applies", async t => {
