@@ -533,6 +533,8 @@ test("Pulse displays monochrome resource percentages and a visible process list"
   assert.ok(ui.get(".pulse-resource-list").textContent.includes("Usage unavailable from this driver"));
   assert.equal(ui.window.document.querySelectorAll("svg, canvas, .pulse-chart, .resource-card, .process-dot").length, 0);
   assert.ok(ui.get("tbody tr").textContent.includes("firefox"));
+  assert.ok(ui.get("tbody tr").textContent.includes("1.2%"));
+  assert.ok([...ui.window.document.querySelectorAll("th")].some(th => th.textContent.includes("RAM %")));
   ui.emit("desktop.changed", { ...desktop, appearance: "dark" });
   await waitFor(() => ui.window.document.documentElement.dataset.theme === "dark");
 });
