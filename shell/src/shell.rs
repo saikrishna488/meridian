@@ -924,7 +924,9 @@ impl Shell {
                 }
                 serialize(ok())
             }
-            Request::SettingsPrimaryDisplay
+            Request::SettingsInput
+            | Request::SettingsInputSet(_)
+            | Request::SettingsPrimaryDisplay
             | Request::SettingsPrimaryDisplaySet(_)
             | Request::SettingsSearch
             | Request::SettingsSearchSet(_)
