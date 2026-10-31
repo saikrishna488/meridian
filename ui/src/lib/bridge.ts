@@ -19,6 +19,9 @@ import type { WindowInfo } from "./generated/WindowInfo";
 
 /** Result type of each request method. Keep in sync with `shell/src/bridge.rs`. */
 interface ResultMap {
+  "settings.time": import("./generated/TimeState").TimeState;
+  "settings.time_set": import("./generated/TimeState").TimeState;
+  "settings.printers": import("./generated/PrinterInventory").PrinterInventory;
   "settings.input": import("./generated/InputPreferences").InputPreferences;
   "settings.input_set": import("./generated/InputPreferences").InputPreferences;
   "settings.capability": import("./generated/SystemCapability").SystemCapability;
