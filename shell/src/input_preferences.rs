@@ -37,7 +37,8 @@ fn validate(value: &InputPreferences) -> Result<(), ErrorBody> {
     Ok(())
 }
 fn input_block(value: &InputPreferences) -> String {
-    format!(r#"{BEGIN}
+    format!(
+        r#"{BEGIN}
   <libinput>
     <device category="non-touch">
       <pointerSpeed>{:.2}</pointerSpeed>
