@@ -31,7 +31,7 @@ pub fn preferred(purpose: &str) -> Option<String> {
     let config = read();
     match purpose {
         "files" => config.files.or_else(|| Some("meridian-finder.desktop".into())),
-        "terminal" => config.terminal.or_else(|| Some("kitty.desktop".into())),
+        "terminal" => config.terminal.filter(|id| id != "meridian-terminal.desktop").or_else(|| Some("kitty.desktop".into())),
         _ => None,
     }
 }
@@ -54,12 +54,12 @@ pub fn set(choice: &DefaultAppChoice, catalog: &AppCatalog) -> Result<Vec<Defaul
     let _lock = LOCK.lock().map_err(|_| ErrorBody::new(ErrorCode::Failed, "Default app preferences busy"))?;
     let id = choice.app_id.as_str();
     if !catalog.apps().iter().any(|app| app.id == id)
-        && !matches!(id, "meridian-finder.desktop" | "meridian-terminal.desktop")
+        && id != "meridian-finder.desktop"
     {
         return Err(ErrorBody::new(ErrorCode::NotFound, "Select an installed application"));
     }
     if SHELL_PURPOSES.contains(&choice.purpose.as_str()) {
-        if choice.purpose == "files" && id == "meridian-terminal.desktop"
+        if id == "meridian-terminal.desktop"
             || choice.purpose == "terminal" && id == "meridian-finder.desktop"
         {
             return Err(ErrorBody::new(ErrorCode::InvalidRequest, "This application cannot handle that purpose"));
@@ -94,7 +94,7 @@ pub fn launch_file_manager(path: &str) -> Result<bool, ErrorBody> {
 
 pub fn launch_terminal() -> bool {
     let Some(id) = preferred("terminal") else { return false };
-    if id == "kitty.desktop" || id == "meridian-terminal.desktop" { return false }
+    if id == "kitty.desktop" || id == "net.kovidgoyal.kitty.desktop" { return false }
     let Some(app) = DesktopAppInfo::new(&id) else { return false };
     if let Err(error) = app.launch(&[], None::<&gio::AppLaunchContext>) {
         log::warn!("Default terminal failed to open: {error}");
