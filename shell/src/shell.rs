@@ -1178,9 +1178,7 @@ impl Shell {
             .iter()
             .map(|w| WindowInfo {
                 id: w.id,
-                name: if matches!(w.title.as_str(), "Terminal" | "Meridian Terminal") {
-                    "Meridian Terminal".into()
-                } else if matches!(w.title.as_str(), "Orbit" | "File Manager" | "Meridian Finder") {
+                name: if matches!(w.title.as_str(), "Orbit" | "File Manager" | "Meridian Finder") {
                     "File Manager".into()
                 } else if matches!(w.title.as_str(), "Settings" | "Meridian Settings") {
                     "Settings".into()
