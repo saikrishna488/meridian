@@ -832,6 +832,35 @@ test("top bar clock opens the configured Calendar application", async t => {
   assert.deepEqual(ui.requests.find(r => r.method === "search.activate").params, { provider: "apps", item_id: "org.gnome.Calendar.desktop" });
 });
 
+test("Devices lists peripherals separately from actual storage volumes", async t => {
+  const hardware = [
+    { id: "input:input3", category: "Keyboards", name: "Laptop Keyboard", status: "Connected", properties: [["Driver", "atkbd"]], actions: [] },
+    { id: "input:input6", category: "Mice", name: "USB Optical Mouse", status: "Connected", properties: [["Driver", "usbhid"]], actions: [] },
+    { id: "usb:1-1", category: "USB devices", name: "Wireless Receiver", status: "Connected", properties: [["Hardware ID", "1234:5678"]], actions: [] },
+    { id: "usb:usb1", category: "USB devices", name: "USB root hub", status: "Connected", properties: [], actions: [] },
+    { id: "storage:sda", category: "Storage", name: "External SSD", status: "Connected", properties: [], actions: [] },
+    { id: "printer:office", category: "Printers", name: "Office Printer", status: "Ready", properties: [], actions: [] },
+    { id: "pci:0000:00:00.0", category: "System devices", name: "PCI Host Bridge", status: "Connected", properties: [], actions: [] },
+  ];
+  const bluetooth = [{ path: "/org/bluez/hci0/dev_11", address: "11:22:33:44:55:66",
+    name: "Bluetooth Mouse", icon: "input-mouse", connected: true, paired: true, trusted: true, battery: 70 }];
+  const ui = await surface(t, "settings", request => request.method === "settings.devices" ? hardware
+    : request.method === "settings.bluetooth_devices" ? bluetooth
+    : defaults(request));
+  ui.emit("preferences.page", { page: "devices" });
+  await waitFor(() => ui.get("#settings-title")?.textContent === "Devices");
+  await waitFor(() => ui.get(".connected-devices")?.textContent.includes("External SSD"));
+  const devices = ui.get(".connected-devices").textContent;
+  for (const label of ["Laptop Keyboard", "USB Optical Mouse", "Wireless Receiver", "External SSD", "Office Printer", "Bluetooth Mouse"]) {
+    assert.ok(devices.includes(label), label);
+  }
+  assert.ok(!devices.includes("USB root hub"));
+  assert.ok(!devices.includes("PCI Host Bridge"));
+  type(ui, '[aria-label="Search connected devices"]', "Keyboard");
+  await waitFor(() => ui.window.document.querySelectorAll(".connected-device-row").length === 1);
+  assert.ok(ui.get(".connected-device-row").textContent.includes("Laptop Keyboard"));
+});
+
 test("Critical Settings pages expose live input controls and notification preferences", async t => {
   const input = {
     repeat_rate: 25, repeat_delay: 600, keyboard_layout: "us", num_lock: false, mouse_speed: 0, mouse_acceleration: true,
