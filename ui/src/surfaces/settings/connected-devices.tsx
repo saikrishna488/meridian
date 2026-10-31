@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../../components/ui/button";
+import { Select } from "../../components/Select";
+import { SearchField } from "glisse";
 import { request } from "../../lib/bridge";
 import { errorMessage } from "../../lib/react";
 import type { ManagedDevice } from "../../lib/generated/ManagedDevice";
@@ -87,10 +89,10 @@ export function ConnectedDevices() {
   return <div className="connected-devices" aria-busy={loading}>
     <p className="section-caption">Connected hardware, including wired USB peripherals, input devices, Bluetooth accessories, printers, and physical storage. Disk operations remain in Storage.</p>
     <div className="settings-actions management-toolbar">
-      <input type="search" aria-label="Search connected devices" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search devices" />
-      <select aria-label="Device category" value={filter} onChange={event => setFilter(event.target.value)}>
+      <SearchField aria-label="Search connected devices" value={query} onValueChange={setQuery} placeholder="Search devices" />
+      <Select aria-label="Device category" value={filter} onChange={event => setFilter(event.target.value)}>
         <option>All devices</option>{categories.map(category => <option key={category}>{category}</option>)}
-      </select>
+      </Select>
       <Button disabled={loading} onClick={() => void refresh()}>{loading ? "Refreshing…" : "Refresh"}</Button>
     </div>
     <p role="status" className="section-caption">{loading ? "Detecting peripherals…" : `${items.length} devices shown`}</p>
