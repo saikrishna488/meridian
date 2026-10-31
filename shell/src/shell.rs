@@ -419,7 +419,6 @@ impl Shell {
                     let name = match app.id.as_str() {
                         "meridian-settings.desktop" => "Settings",
                         "meridian-finder.desktop" => "Files",
-                        "meridian-terminal.desktop" => "Meridian Terminal",
                         "meridian-pulse.desktop" => "Pulse",
                         _ => return Err(ErrorBody::new(ErrorCode::NotFound, "Unknown application")),
                     };
@@ -488,7 +487,7 @@ impl Shell {
                     match item.target.as_str() {
                         "meridian-settings.desktop" => self.open_preferences(),
                         "meridian-finder.desktop" => self.open_finder(),
-                        "meridian-terminal.desktop" => self.open_meridian_terminal(),
+                        "meridian-terminal.desktop" => self.open_terminal(),
                         "meridian-calendar.desktop" => self
                             .catalog
                             .borrow()
@@ -772,7 +771,7 @@ impl Shell {
             Request::DockList => serialize(proto::reply_ok(&read_dock(&self.catalog.borrow()))),
             Request::DockPin(pin) => {
                 if pin.pinned
-                    && !["meridian-settings.desktop", "meridian-pulse.desktop", "meridian-terminal.desktop", "meridian-finder.desktop"].contains(&pin.id.as_str())
+                    && !["meridian-settings.desktop", "meridian-pulse.desktop", "meridian-finder.desktop"].contains(&pin.id.as_str())
                     && !self.catalog.borrow().apps().iter().any(|app| app.id == pin.id)
                 {
                     return Err(ErrorBody::new(ErrorCode::NotFound, "no such application"));
@@ -802,7 +801,6 @@ impl Shell {
                         "utilities-system-monitor",
                     ),
                     ("meridian-settings.desktop", "Settings", "Meridian settings preferences", "preferences-system"),
-                    ("meridian-terminal.desktop", "Terminal", "Meridian terminal beta interactive shell command line", "utilities-terminal"),
                     ("meridian-finder.desktop", "Files", "Meridian Files beta file manager folders browser", "system-file-manager"),
                 ];
                 let items = builtins
@@ -819,7 +817,7 @@ impl Shell {
                     .map(|(id, name, icon)| proto::SearchItem {
                         id: id.into(),
                         title: name.into(),
-                        subtitle: Some(if matches!(id, "meridian-terminal.desktop" | "meridian-finder.desktop") {
+                        subtitle: Some(if id == "meridian-finder.desktop" {
                             "Beta · Meridian built-in app".into()
                         } else {
                             format!("Meridian {name}")
@@ -877,10 +875,6 @@ impl Shell {
                 }
                 if a.item_id == "meridian-pulse.desktop" {
                     self.open_pulse();
-                    return serialize(ok());
-                }
-                if a.item_id == "meridian-terminal.desktop" {
-                    self.open_meridian_terminal();
                     return serialize(ok());
                 }
                 if a.item_id == "meridian-finder.desktop" {
@@ -1552,6 +1546,9 @@ fn read_dock(catalog: &AppCatalog) -> Vec<String> {
         .ok()
         .and_then(|data| serde_json::from_slice(&data).ok())
         .unwrap_or_else(|| default_dock(catalog))
+        .into_iter()
+        .filter(|id: &String| id != "meridian-terminal.desktop")
+        .collect()
 }
 
 fn system_info() -> proto::SystemInfo {
