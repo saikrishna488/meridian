@@ -474,3 +474,31 @@ html, body, .settings-app { background: var(--settings-bg); color: var(--setting
   background:rgb(255 255 255 / .05); color:#fff; font:inherit;
 }
 .essentials-timezone:focus-visible { outline:2px solid var(--focus-ring); outline-offset:2px; }
+
+
+/* Connected devices: compact monochrome hardware inventory. */
+.connected-devices { display:grid; gap:13px; }
+.connected-devices .management-toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.connected-devices .management-toolbar input,
+.connected-devices .management-toolbar select {
+  min-height:35px; border:1px solid rgb(255 255 255 / .14); border-radius:9px;
+  background:rgb(255 255 255 / .05); color:#fff; padding:7px 12px; font:inherit;
+}
+.connected-devices .management-toolbar input { flex:1 1 180px; min-width:120px; }
+.connected-devices .management-toolbar select { max-width:220px; }
+.connected-device-group { padding-block:10px; }
+.connected-device-group > h3 { font-size:12px; margin:5px 0 10px; font-weight:650; }
+.connected-device-row { border-top:1px solid rgb(255 255 255 / .09); }
+.connected-device-row summary {
+  display:flex; justify-content:space-between; align-items:center; gap:12px;
+  min-height:59px; padding:10px 4px; cursor:pointer; list-style:none;
+}
+.connected-device-row summary::-webkit-details-marker { display:none; }
+.connected-device-row summary:hover { background:rgb(255 255 255 / .045); }
+.connected-device-name { display:grid; min-width:0; gap:5px; }
+.connected-device-name strong { font-size:12px; overflow-wrap:anywhere; font-weight:560; }
+.connected-device-name small,.connected-device-status { font-size:10px; color:rgb(255 255 255 / .58); }
+.connected-device-status { text-align:right; flex:none; }
+.connected-device-meta { padding:0 5px 12px; display:grid; gap:7px; }
+.connected-device-meta > div { display:flex; justify-content:space-between; gap:14px; font-size:10px; color:rgb(255 255 255 / .64); }
+.connected-device-meta > div span:last-child { text-align:right; overflow-wrap:anywhere; }
