@@ -33,7 +33,7 @@ export function ApplicationsSettings() {
       const applicationItems = response.sections
         .filter(section => section.provider === "apps" || section.title.toLowerCase() === "applications")
         .flatMap(section => section.items);
-      setApps(Array.from(new Map(applicationItems.map(app => [app.id, app])).values()));
+      setApps(Array.from(new Map(applicationItems.filter(app => app.id !== "meridian-terminal.desktop").map(app => [app.id, app])).values()));
     } catch (e) {
       if (mine === serial.current) setError(errorMessage(e, "Couldn’t load applications"));
     } finally {
@@ -79,8 +79,8 @@ export function ApplicationsSettings() {
   ] as const;
   const defaultOptions = (purpose: string) => {
     const builtins = purpose === "files" ? [{ id: "meridian-finder.desktop", title: "Meridian Files" }]
-      : purpose === "terminal" ? [{ id: "meridian-terminal.desktop", title: "Meridian Terminal" }] : [];
-    const listed = apps.filter(app => !isBuiltinApp(app.id) || (purpose === "files" && app.id === "meridian-finder.desktop") || (purpose === "terminal" && app.id === "meridian-terminal.desktop"));
+      : [];
+    const listed = apps.filter(app => !isBuiltinApp(app.id) || (purpose === "files" && app.id === "meridian-finder.desktop"));
     const options = [...builtins, ...listed];
     return Array.from(new Map(options.map(option => [option.id, option.title])).entries());
   };
