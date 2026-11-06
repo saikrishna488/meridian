@@ -1,15 +1,24 @@
-window.meridian-app { background: #000000; color: #ffffff; border: 2px solid #ffffff; }
-.meridian-app headerbar { min-height: 46px; background: #000000; color: #ffffff; border-bottom: 1px solid #ffffff; box-shadow: none; }
+window.meridian-app { background: #f3f4f6; color: #20272b; border: 1px solid #d6dcdf; }
+.meridian-app headerbar { min-height: 46px; background: #f3f4f6; color: #20272b; border-bottom: 1px solid #d6dcdf; box-shadow: none; }
 .meridian-app button { border-radius: 8px; min-height: 28px; box-shadow: none; }
-.meridian-app button:hover { background: #087cf0; color: white; }
+.meridian-app button:hover { background: #00CC00; color: #061006; }
 .meridian-app entry { border-radius: 10px; min-height: 32px; }
-.meridian-app entry:focus-within { outline: 2px solid #087cf0; outline-offset: 1px; }
+.meridian-app *:focus-visible { outline: 2px solid #00CC00; outline-offset: 2px; }
 .meridian-app notebook > header { padding: 4px 8px; background: alpha(@theme_fg_color, .035); }
 .meridian-app notebook > header tab { border-radius: 8px; margin: 2px; padding: 6px 12px; }
-.meridian-app notebook > header tab:checked { background: alpha(#087cf0, .14); }
+.meridian-app notebook > header tab:checked { background: alpha(#00CC00, .14); }
 .volume-card { padding: 16px; border: 1px solid alpha(@theme_fg_color, .14); border-radius: 12px; background: alpha(@theme_base_color, .7); }
-.volume-card:hover { border-color: #087cf0; }
+.volume-card:hover { border-color: #00CC00; }
 .volume-heading { font-weight: 700; font-size: 15px; }
-.volume-icon { color: #087cf0; }
+.volume-icon { color: #00CC00; }
 .meridian-app progressbar trough { min-height: 4px; border-radius: 4px; }
-.meridian-app progressbar progress { background: #087cf0; border-radius: 4px; }
+.meridian-app progressbar progress { background: #00CC00; border-radius: 4px; }
+
+window.meridian-app.meridian-dark { background:#15191c; color:#edf2ef; border-color:#45524a; }
+.meridian-app.meridian-dark headerbar { background:#1b2024; color:#edf2ef; border-color:#45524a; }
+
+.meridian-preferences:backdrop .meridian-window-button { opacity: 0.65; }
+.meridian-preferences:backdrop .meridian-window-button:hover { opacity: 1; }
+
+/* Shared Meridian accent for native application controls. */
+.meridian-app button.suggested-action, .meridian-app switch:checked, .meridian-app scale highlight, .meridian-app check:checked, .meridian-app radio:checked { background: #00CC00; color: #061006; border-color: #00CC00; }

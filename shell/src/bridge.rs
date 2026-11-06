@@ -23,6 +23,8 @@ thread_local! {
     static PENDING: Cell<usize> = const { Cell::new(0) };
 }
 
+pub(crate) fn has_pending() -> bool { PENDING.with(|n| n.get() > 0) }
+
 struct Pending;
 impl Drop for Pending {
     fn drop(&mut self) {
@@ -104,6 +106,7 @@ fn send(reply: &ScriptMessageReply, ctx: &javascriptcore::Context, result: Reply
     let json = result.unwrap_or_else(|e| {
         // Error messages from system services may contain user input.
         log::warn!("component=bridge event=request_failed code={:?}", e.code);
+        crate::workflows::record_error(format!("Request failed ({:?}); see the originating control for details.", e.code));
         proto::reply_err(&e)
     });
     reply.return_value(&javascriptcore::Value::new_string(ctx, Some(&json)));

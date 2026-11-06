@@ -7,7 +7,7 @@ use std::os::fd::{AsRawFd, FromRawFd};
 use std::os::unix::process::CommandExt;
 use std::process::{Child, Command, Stdio};
 
-use meridian_protocol::{ErrorBody, ErrorCode, TerminalChunk, TerminalSession, TerminalSize};
+use meridian_protocol::{ErrorBody, ErrorCode, TerminalChunk, TerminalSession, TerminalSize, TerminalLaunch, TerminalInfo};
 
 const MAX_SESSIONS: usize = 16;
 const MAX_INPUT: usize = 1024 * 1024;
@@ -41,11 +41,35 @@ impl Terminals {
             .ok()
             .filter(|p| p.starts_with('/') && std::path::Path::new(p).is_file())
             .unwrap_or_else(|| "/bin/bash".into());
-        let pty = Pty::spawn(&shell, cwd.as_deref()).map_err(failed)?;
+        let pty = Pty::spawn_config(&shell, cwd.as_deref(), None, None, false, true).map_err(failed)?;
         self.next_id = self.next_id.checked_add(1).ok_or_else(|| invalid("Terminal session limit reached."))?;
         let id = self.next_id;
         self.sessions.insert(id, pty);
         Ok(TerminalSession { id, shell })
+    }
+    pub fn launch(&mut self, config: TerminalLaunch) -> Result<TerminalSession, ErrorBody> {
+        if self.sessions.len() >= MAX_SESSIONS { return Err(invalid("Terminal supports up to 16 panes.")); }
+        let shell = config.shell.filter(|s| !s.is_empty()).unwrap_or_else(|| std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".into()));
+        if !shell.starts_with('/') || !std::path::Path::new(&shell).is_file() { return Err(invalid("Choose an installed shell using its absolute path.")); }
+        if let Some(host) = &config.ssh_host {
+            if host.is_empty() || host.len() > 253 || host.starts_with('-') || !host.bytes().all(|b| b.is_ascii_alphanumeric() || b"@._-:".contains(&b)) {
+                return Err(invalid("Use an SSH host or user@host, without command arguments."));
+            }
+        }
+        if config.ssh_port == Some(0) { return Err(invalid("SSH port must be 1–65535.")); }
+        let cwd = config.cwd.filter(|p| !p.is_empty()).map(std::fs::canonicalize).transpose().map_err(failed)?;
+        if cwd.as_ref().is_some_and(|p| !p.is_dir()) { return Err(invalid("The profile folder is unavailable.")); }
+        let pty = Pty::spawn_config(&shell, cwd.as_deref(), config.ssh_host.as_deref(), config.ssh_port, config.integration, true).map_err(failed)?;
+        self.next_id = self.next_id.checked_add(1).ok_or_else(|| invalid("Session limit reached"))?;
+        let id = self.next_id; self.sessions.insert(id, pty);
+        Ok(TerminalSession { id, shell })
+    }
+    pub fn info(&mut self, id: u32) -> Result<TerminalInfo, ErrorBody> { Ok(self.get(id)?.info()) }
+    pub fn has_jobs(&mut self) -> bool {
+        self.sessions.values_mut().any(|pty| {
+            let info = pty.info();
+            info.busy || pty.child.as_ref().is_some_and(|child| crate::terminal_supervisor::descendants(child.id() as i32).len() > 1)
+        })
     }
     fn get(&mut self, id: u32) -> Result<&mut Pty, ErrorBody> {
         self.sessions.get_mut(&id).ok_or_else(|| invalid("This terminal session has closed."))
@@ -80,10 +104,17 @@ struct Pty {
     child: Option<Child>,
     pending: VecDeque<u8>,
     eof: bool,
+    supervised: bool,
+    exit_code: Option<i32>,
+    initial_cwd: String,
 }
 
 impl Pty {
+    #[cfg(test)]
     fn spawn(shell: &str, cwd: Option<&std::path::Path>) -> std::io::Result<Self> {
+        Self::spawn_config(shell, cwd, None, None, false, false)
+    }
+    fn spawn_config(shell: &str, cwd: Option<&std::path::Path>, ssh: Option<&str>, port: Option<u16>, integration: bool, supervised: bool) -> std::io::Result<Self> {
         let mut master = -1;
         let mut slave = -1;
         let size = libc::winsize { ws_row: 24, ws_col: 80, ws_xpixel: 0, ws_ypixel: 0 };
@@ -100,9 +131,27 @@ impl Pty {
                 return Err(std::io::Error::last_os_error());
             }
         }
-        let mut command = Command::new(shell);
+        let mut command = if supervised {
+            let mut cmd = Command::new(std::env::current_exe()?);
+            cmd.arg("--terminal-supervisor"); cmd
+        } else { Command::new(shell) };
+        if let Some(host) = ssh {
+            command.arg("/usr/bin/ssh");
+            if let Some(port) = port { command.arg("-p").arg(port.to_string()); }
+            command.arg("--").arg(host);
+        } else {
+            if supervised { command.arg(shell); }
+            if integration && std::path::Path::new(shell).file_name().is_some_and(|s| s == "bash") {
+                let folder = gtk::glib::user_config_dir().join("meridian/terminal");
+                std::fs::create_dir_all(&folder)?;
+                let rc = folder.join("bash-integration.bash");
+                std::fs::write(&rc, include_str!("terminal-integration.bash"))?;
+                command.arg("--rcfile").arg(rc);
+            }
+            command.arg("-i");
+        }
+        let parent_pid = std::process::id() as i32;
         command
-            .arg("-i")
             .env("TERM", "xterm-256color")
             .env("COLORTERM", "truecolor")
             .stdin(Stdio::from(slave.try_clone()?))
@@ -116,7 +165,9 @@ impl Pty {
         // SAFETY: the child only calls async-signal-safe syscalls between fork and exec.
         // Establish a separate session and controlling terminal for job control / Ctrl+C.
         unsafe {
-            command.pre_exec(|| {
+            command.pre_exec(move || {
+                libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM);
+                if libc::getppid() != parent_pid { return Err(std::io::Error::from_raw_os_error(libc::ECHILD)); }
                 if libc::setsid() < 0 || libc::ioctl(0, libc::TIOCSCTTY, 0) < 0 {
                     return Err(std::io::Error::last_os_error());
                 }
@@ -135,7 +186,24 @@ impl Pty {
             return Err(std::io::Error::last_os_error());
         }
         let child = command.spawn()?;
-        Ok(Self { master, child: Some(child), pending: VecDeque::new(), eof: false })
+        Ok(Self { master, child: Some(child), pending: VecDeque::new(), eof: false, supervised, exit_code: None, initial_cwd: cwd.map(|p| p.to_string_lossy().into_owned()).unwrap_or_else(|| std::env::var("HOME").unwrap_or_else(|_| "/".into())) })
+    }
+    fn info(&mut self) -> TerminalInfo {
+        if self.exit_code.is_some() { return TerminalInfo { cwd:self.initial_cwd.clone(), command:String::new(), busy:false, exit_code:self.exit_code }; }
+        let root = self.child.as_ref().map(|c| c.id() as i32).unwrap_or(0);
+        let main = if self.supervised {
+            std::fs::read_to_string(format!("/proc/{root}/task/{root}/children")).ok()
+                .and_then(|s| s.split_whitespace().next().and_then(|v| v.parse::<i32>().ok())).unwrap_or(root)
+        } else { root };
+        let foreground = unsafe { libc::tcgetpgrp(self.master.as_raw_fd()) };
+        let pid = if foreground > 0 && foreground != root { foreground } else { main };
+        let command = std::fs::read_to_string(format!("/proc/{pid}/comm")).unwrap_or_default().trim().to_owned();
+        let cwd = std::fs::read_link(format!("/proc/{main}/cwd")).map(|p| p.to_string_lossy().into_owned()).unwrap_or_else(|_| self.initial_cwd.clone());
+        let background = std::fs::read_to_string(format!("/proc/{main}/task/{main}/children")).is_ok_and(|s| !s.trim().is_empty());
+        let detached = std::fs::read_to_string(format!("/proc/{root}/task/{root}/children")).is_ok_and(|s| s.split_whitespace().count() > 1);
+        self.initial_cwd = cwd.clone();
+        let busy = !self.eof && (detached || background || foreground > 0 && foreground != main && foreground != root || command == "ssh");
+        TerminalInfo { cwd, command, busy, exit_code: self.exit_code }
     }
     fn resize(&self, cols: u16, rows: u16) -> std::io::Result<()> {
         let size = libc::winsize { ws_row: rows, ws_col: cols, ws_xpixel: 0, ws_ypixel: 0 };
@@ -181,7 +249,7 @@ impl Pty {
         };
         data.truncate(n);
         if let Some(child) = &mut self.child {
-            let _ = child.try_wait()?;
+            if let Some(status) = child.try_wait()? { self.exit_code = status.code().or(Some(128)); }
         }
         Ok(TerminalChunk { data, exited: self.eof && n == 0 })
     }
@@ -190,6 +258,12 @@ impl Pty {
 impl Drop for Pty {
     fn drop(&mut self) {
         if let Some(mut child) = self.child.take() {
+            if self.supervised {
+                // Child remains unreaped until this owner waits, so its PID cannot be reused.
+                if child.try_wait().ok().flatten().is_none() { unsafe { libc::kill(child.id() as i32, libc::SIGTERM); } }
+                std::thread::spawn(move || { let _ = child.wait(); });
+                return;
+            }
             let session = child.id() as i32;
             terminate_session(session, libc::SIGTERM);
             // Never wait on the UI thread. Reap session jobs even when a

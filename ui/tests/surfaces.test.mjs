@@ -209,19 +209,16 @@ test("wallpaper initializes desktop state without file-management requests", asy
 });
 
 
-test("top bar hosts Meridian and Control Center while the dock hosts applications", async t => {
+test("bottom panel hosts Meridian, Control Center, and application dock", async t => {
   const dock = await surface(t, "panel");
-  assert.ok(dock.get(".taskbar > .bar"));
-  assert.equal(dock.get(".menu-brand"), null);
-  assert.equal(dock.get("#options"), null);
-  const ui = await surface(t, "topbar");
-  assert.ok(ui.get(".topbar > .menu-brand"));
-  assert.equal(ui.get(".bar"), null);
-  ui.get(".system-tray .tray-indicator").click();
-  await waitFor(() => ui.requests.some(r => r.method === "popover.toggle"));
-  assert.deepEqual(ui.requests.at(-1), { method: "popover.toggle", params: { popover: "options" } });
-  ui.emit("popover.state", { options: true, applications: false });
-  await waitFor(() => ui.get(".system-tray .tray-indicator").getAttribute("aria-expanded") === "true");
+  assert.ok(dock.get(".taskbar .bar"));
+  assert.ok(dock.get(".menu-brand"));
+  assert.ok(dock.get(".system-tray"));
+  dock.get(".system-tray .tray-indicator").click();
+  await waitFor(() => dock.requests.some(r => r.method === "popover.toggle"));
+  assert.deepEqual(dock.requests.at(-1), { method: "popover.toggle", params: { popover: "options" } });
+  dock.emit("popover.state", { options: true, applications: false });
+  await waitFor(() => dock.get(".system-tray .tray-indicator").getAttribute("aria-expanded") === "true");
 });
 
 test("dock groups app windows and keeps pinned apps after their windows close", async t => {
@@ -633,4 +630,98 @@ test("Storage error has a retry and recovers without unrelated hardware probes",
   [...ui.get('[role="alert"]').querySelectorAll('button')].find(b => b.textContent === 'Retry').click();
   await waitFor(() => ui.get('.storage-overview'));
   assert.equal(ui.requests.some(r => r.method === 'settings.devices'), false);
+});
+
+
+test("panel hides the focused title and keeps unpinned windows after pinned apps", async t => {
+  const ui = await surface(t, "panel", request => {
+    if (request.method === "dock.list") return ["files.desktop"];
+    if (request.method === "dock.layout_get") return ["browser.desktop", "files.desktop", "@applications"];
+    if (request.method === "search.query") return searchResult(request.params.serial, [app("files.desktop", "Files"), app("browser.desktop", "Browser")]);
+    if (request.method === "windows.list") return [{ id: 1, name: "Browser", title: "Web", active: true }];
+    return null;
+  });
+  await waitFor(() => ui.get('[data-dock-key="files.desktop"]') && ui.get('[data-dock-key="browser.desktop"]'));
+  assert.equal(ui.get(".focused-app"), null);
+  assert.deepEqual([...ui.window.document.querySelectorAll("[data-dock-key]")].map(el => el.dataset.dockKey), ["@applications", "files.desktop", "browser.desktop"]);
+  assert.ok(ui.get('[data-dock-key="browser.desktop"]').parentElement.classList.contains("dock-running-start"));
+});
+
+test("dock previews a reordered pin during drag and saves it on drop", async t => {
+  const ui = await surface(t, "panel", request => {
+    if (request.method === "dock.list") return ["files.desktop", "browser.desktop"];
+    if (request.method === "search.query") return searchResult(request.params.serial, [app("files.desktop", "Files"), app("browser.desktop", "Browser")]);
+    return null;
+  });
+  await waitFor(() => ui.get('[data-dock-key="browser.desktop"]'));
+  const data = new Map();
+  const transfer = { types: ["application/x-meridian-dock-item"], setData: (key, value) => data.set(key, value), getData: key => data.get(key) ?? "" };
+  const drag = (target, type) => {
+    const event = new ui.window.Event(type, { bubbles: true, cancelable: true });
+    Object.defineProperties(event, { dataTransfer: { value: transfer }, clientX: { value: 100 } });
+    target.dispatchEvent(event);
+  };
+  drag(ui.get('[data-dock-key="files.desktop"]'), "dragstart");
+  drag(ui.get('[data-dock-key="browser.desktop"]'), "dragover");
+  const keys = () => [...ui.window.document.querySelectorAll("[data-dock-key]")].map(el => el.dataset.dockKey);
+  await waitFor(() => keys()[1] === "browser.desktop");
+  assert.equal(ui.requests.filter(r => r.method === "dock.layout_set").length, 0);
+  drag(ui.get(".bar"), "drop");
+  await waitFor(() => ui.requests.some(r => r.method === "dock.layout_set"));
+  assert.deepEqual(ui.requests.find(r => r.method === "dock.layout_set").params.items, ["@applications", "browser.desktop", "files.desktop"]);
+});
+
+test("running apps use resolved desktop icons even without a launcher name match", async t => {
+  const ui = await surface(t, "panel", request => {
+    if (request.method === "dock.list") return ["com.example.ChatGPT.desktop"];
+    if (request.method === "windows.list") return [
+      { id: 31, name: "chatgpt-wrapper", app_id: "com.example.ChatGPT.desktop", icon: "/opt/chatgpt/icon.png", title: "Chat", active: true },
+      { id: 32, name: "chatgpt-wrapper", app_id: "org.other.ChatGPT.desktop", icon: "other-chat", title: "Other", active: false },
+    ];
+    return null;
+  });
+  await waitFor(() => ui.get('[data-dock-key="com.example.ChatGPT.desktop"] img'));
+  const first = ui.get('[data-dock-key="com.example.ChatGPT.desktop"]');
+  const second = ui.get('[data-dock-key="org.other.ChatGPT.desktop"]');
+  assert.ok(first.querySelector("img").getAttribute("src").startsWith("meridian://app-icons/com.example.ChatGPT.desktop"));
+  assert.ok(second.querySelector("img").getAttribute("src").startsWith("meridian://app-icons/org.other.ChatGPT.desktop"));
+  assert.equal(ui.window.document.querySelectorAll(".window").length, 2);
+  second.click();
+  await waitFor(() => ui.requests.some(r => r.method === "windows.activate"));
+  assert.equal(ui.requests.find(r => r.method === "windows.activate").params.id, 32);
+});
+
+const engineConfig = { font_profile: "balanced", acceleration: "automatic", performance: "balanced", animations: true, transparency: true };
+const engineState = (config = engineConfig) => ({ config, active: engineConfig, restart_required: config.font_profile !== engineConfig.font_profile || config.acceleration !== engineConfig.acceleration,
+  font_config_loaded: true, font_status: "Grayscale antialiasing loaded", backends: "FreeType · Fontconfig · Pango · Cairo",
+  animations_enabled: config.animations && config.performance !== "efficient", transparency_enabled: config.transparency && config.performance !== "efficient",
+  icon_raster_size: 128, memory_total_mib: 12000, memory_available_mib: 6000, memory_pressure_avg10: 0.25, cpu_threads: 8 });
+
+test("engine policy updates every UI surface and preserves the active font until restart", async t => {
+  const ui = await surface(t, "panel", request => request.method === "engines.get" ? engineState() : null);
+  await waitFor(() => ui.window.document.documentElement.dataset.engineFont === "balanced");
+  ui.emit("engines.changed", engineState({ ...engineConfig, font_profile: "crisp", performance: "efficient" }));
+  await waitFor(() => ui.window.document.documentElement.dataset.engineAnimations === "off");
+  assert.equal(ui.window.document.documentElement.dataset.engineTransparency, "off");
+  assert.equal(ui.window.document.documentElement.dataset.engineFont, "balanced");
+});
+
+test("Engines saves settings, reports pending restart, and shows native diagnostics", async t => {
+  let saved = engineState();
+  const ui = await surface(t, "settings", request => {
+    if (request.method === "engines.get") return saved;
+    if (request.method === "engines.set") { saved = engineState(request.params); return saved; }
+    return null;
+  });
+  ui.emit("preferences.page", { page: "engines" });
+  await waitFor(() => ui.get("#engine-font"));
+  assert.match(ui.get(".engine-backends").textContent, /FreeType/);
+  assert.ok(ui.get('.engine-preview img').getAttribute('src').startsWith('meridian://engine-preview/'));
+  const select = ui.get("#engine-font");
+  select.value = "crisp"; select.dispatchEvent(new ui.window.Event("change", { bubbles: true }));
+  await waitFor(() => [...ui.window.document.querySelectorAll("button")].some(button => button.textContent === "Save settings" && !button.disabled));
+  [...ui.window.document.querySelectorAll("button")].find(button => button.textContent === "Save settings").click();
+  await waitFor(() => ui.requests.some(request => request.method === "engines.set"));
+  assert.equal(ui.requests.find(request => request.method === "engines.set").params.font_profile, "crisp");
+  await waitFor(() => ui.get(".engine-notice")?.textContent.includes("Sign out"));
 });

@@ -182,24 +182,37 @@ impl AppCatalog {
         info.launch(&[], ctx).map_err(|e| LaunchError::Failed(e.to_string()))
     }
 
-    /// Display name for a window's Wayland app id (or X11 WM class).
-    pub fn name_for_window(&self, app_id: &str) -> Option<&str> {
+    /// Resolve compositor identities to installed artwork and launch IDs.
+    pub fn app_for_window(&self, app_id: &str) -> Option<&App> {
         if app_id.is_empty() {
             return None;
         }
-        let desktop_id = format!("{app_id}.desktop");
+        let identity = app_id.strip_suffix(".desktop").unwrap_or(app_id);
         self.apps
             .iter()
-            .find(|a| a.id.eq_ignore_ascii_case(&desktop_id))
+            .find(|a| a.id.trim_end_matches(".desktop").eq_ignore_ascii_case(identity))
             .or_else(|| {
                 self.apps.iter().find(|a| a.wm_class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case(app_id)))
             })
             .or_else(|| {
-                // Reverse-DNS ids: "org.gnome.TextEditor" → "texteditor"-ish match.
-                let last = app_id.rsplit('.').next()?;
-                self.apps.iter().find(|a| a.id.trim_end_matches(".desktop").rsplit('.').next() == Some(last))
+                // Short compositor IDs and reverse-DNS desktop IDs are common.
+                // Only accept a unique suffix/name match to avoid unrelated apps.
+                let last = identity.rsplit('.').next()?;
+                let mut matches = self.apps.iter().filter(|a| {
+                    a.id.trim_end_matches(".desktop")
+                        .rsplit('.')
+                        .next()
+                        .is_some_and(|part| part.eq_ignore_ascii_case(last))
+                        || a.name.eq_ignore_ascii_case(identity)
+                });
+                let app = matches.next()?;
+                matches.next().is_none().then_some(app)
             })
-            .map(|a| a.name.as_str())
+    }
+
+    /// Display name for a window's Wayland app id (or X11 WM class).
+    pub fn name_for_window(&self, app_id: &str) -> Option<&str> {
+        self.app_for_window(app_id).map(|app| app.name.as_str())
     }
 }
 
@@ -360,6 +373,25 @@ mod tests {
         assert_eq!(catalog.name_for_window("firefox"), Some("Firefox"));
         assert_eq!(catalog.name_for_window("unknown.app"), None);
         assert_eq!(catalog.name_for_window(""), None);
+    }
+
+    #[test]
+    fn window_identity_preserves_installed_icon() {
+        let mut chat = App::for_test("ChatGPT", None, &[], None);
+        chat.id = "com.example.ChatGPT.desktop".into();
+        chat.wm_class = Some("chatgpt-wrapper".into());
+        chat.icon = Some("/opt/chatgpt/icon.png".into());
+        let mut other = App::for_test("Other ChatGPT", None, &[], None);
+        other.id = "org.other.ChatGPT.desktop".into();
+        let mut catalog = AppCatalog { apps: vec![chat], host: None };
+        for identity in ["chatgpt-wrapper", "CHATGPT", "com.example.ChatGPT.desktop"] {
+            let app = catalog.app_for_window(identity).unwrap();
+            assert_eq!(app.id, "com.example.ChatGPT.desktop");
+            assert_eq!(app.icon.as_deref(), Some("/opt/chatgpt/icon.png"));
+        }
+        catalog.apps.push(other);
+        assert!(catalog.app_for_window("org.unknown.ChatGPT").is_none());
+        assert!(catalog.app_for_window("unrelated").is_none());
     }
 
     #[test]

@@ -11,7 +11,15 @@ id: number,
 /**
  * Application name (from its desktop entry when known, else its app id).
  */
-name: string, title: string, 
+name: string, 
+/**
+ * Resolved installed desktop entry; independent of the display name.
+ */
+app_id?: string, 
+/**
+ * Installed icon, including file icons used by web apps and wrappers.
+ */
+icon?: string, title: string, 
 /**
  * Whether the window has focus.
  */

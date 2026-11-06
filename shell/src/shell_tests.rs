@@ -208,6 +208,8 @@ fn validate_dock(shell: &Rc<Shell>, preferences: &Rc<WebSurface>) {
             .map(|id| proto::WindowInfo {
                 id: 1000 + id,
                 name: format!("Overflow {id}"),
+                app_id: None,
+                icon: None,
                 title: format!("Window {id}"),
                 active: false,
             })
@@ -434,7 +436,6 @@ pub(super) fn nested_wayland_smoke() {
     wait_until("critical surface startup", || {
         let state = shell.state.borrow();
         state.panel.as_ref().is_some_and(|surface| surface.is_ready())
-            && state.topbar.as_ref().is_some_and(|surface| surface.is_ready())
             && state.popovers.values().all(|surface| surface.is_ready())
     });
     wait_until("native wallpaper first buffer", || {
@@ -553,7 +554,6 @@ pub(super) fn nested_wayland_smoke() {
     wait_until("bars after primary change", || {
         let state = shell.state.borrow();
         state.panel.as_ref().is_some_and(|surface| surface.is_ready())
-            && state.topbar.as_ref().is_some_and(|surface| surface.is_ready())
     });
     assert_eq!(
         bridge_request(
@@ -751,13 +751,13 @@ pub(super) fn nested_wayland_smoke() {
     });
     shell.open_preferences();
     shell.state.borrow().preferences.as_ref().unwrap().window.set_visible(false);
-    let topbar = shell.state.borrow().topbar.clone().unwrap();
+    let panel = shell.state.borrow().panel.clone().unwrap();
     assert_eq!(
-        bridge_request(&topbar, r#"{"method":"notifications.do_not_disturb","params":{"enabled":true}}"#)["result"]["do_not_disturb"],
+        bridge_request(&panel, r#"{"method":"notifications.do_not_disturb","params":{"enabled":true}}"#)["result"]["do_not_disturb"],
         true
     );
     assert_eq!(
-        bridge_request(&topbar, r#"{"method":"notifications.do_not_disturb","params":{"enabled":false}}"#)["result"]["do_not_disturb"],
+        bridge_request(&panel, r#"{"method":"notifications.do_not_disturb","params":{"enabled":false}}"#)["result"]["do_not_disturb"],
         false
     );
 

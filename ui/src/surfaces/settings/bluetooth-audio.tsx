@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Button } from "../../components/ui/button";
+import { Button } from "../../meridian-ui";
 import { request } from "../../lib/bridge";
 import { errorMessage } from "../../lib/react";
 import type { BluetoothAudioMode } from "../../lib/generated/BluetoothAudioMode";
@@ -8,8 +8,15 @@ import type { BluetoothAudioState } from "../../lib/generated/BluetoothAudioStat
 export function BluetoothAudioSettings() {
   const [audio, setAudio] = useState<BluetoothAudioState>({ mode: "auto", active_codec: null, active_device: null });
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [notice, setNotice] = useState("");
+  const refreshing = useRef(false);
   const pending = useRef(false), alive = useRef(true);
-  async function load() { try { const result = await request({ method: "settings.bluetooth_audio" }); if (alive.current) setAudio(result); } catch (e) { if (alive.current) setError(errorMessage(e)); } }
+  async function load() {
+    if (refreshing.current) return;
+    refreshing.current = true;
+    try { const result = await request({ method:"settings.bluetooth_audio" }); if (alive.current) { setAudio(result); setError(""); } }
+    catch (e) { if (alive.current) setError(errorMessage(e)); }
+    finally { refreshing.current = false; }
+  }
   useEffect(() => {
     alive.current = true; void load();
     const refresh = () => { if (!document.hidden) void load(); };

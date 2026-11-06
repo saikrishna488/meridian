@@ -1,7 +1,7 @@
 export class Terminal {
   constructor(options?: Record<string, unknown>);
   cols: number; rows: number;
-  readonly buffer: { active: { type: "normal" | "alternate"; viewportY: number; baseY: number } };
+  readonly buffer: { active: { type: "normal" | "alternate"; viewportY: number; baseY: number; length:number; getLine(y:number): { isWrapped:boolean; translateToString(trimRight?:boolean):string; getCell(x:number): { getChars():string; getWidth():number } | undefined } | undefined } };
   readonly modes: { mouseTrackingMode: string };
   scrollLines(lines: number): void;
   scrollPages(pages: number): void;
@@ -9,7 +9,7 @@ export class Terminal {
   scrollToBottom(): void;
   onScroll(callback: (position: number) => void): { dispose(): void };
   attachCustomWheelEventHandler(callback: (event: WheelEvent) => boolean): void;
-  options: { theme?: Record<string, string>; fontSize?: number; disableStdin?: boolean };
+  options: { theme?: Record<string, string>; fontSize?: number; disableStdin?: boolean; fontFamily?:string; cursorStyle?:"bar"|"block"|"underline"; scrollback?:number; screenReaderMode?:boolean };
   open(element: HTMLElement): void;
   loadAddon(addon: unknown): void;
   write(data: Uint8Array | string, callback?: () => void): void;
@@ -24,5 +24,10 @@ export class Terminal {
   hasSelection(): boolean;
   getSelection(): string;
   selectAll(): void;
+  select(column:number, row:number, length:number):void;
+  scrollToLine(line:number):void;
+  clearSelection():void;
+  parser: { registerOscHandler(id:number, callback:(data:string)=>boolean):{dispose():void} };
+  registerLinkProvider(provider:{provideLinks(y:number, callback:(links:{range:{start:{x:number;y:number};end:{x:number;y:number}};text:string;activate:(event:MouseEvent,text:string)=>void}[]|undefined)=>void):void}):{dispose():void};
   paste(data: string): void;
 }

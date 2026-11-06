@@ -1,21 +1,7 @@
 import type { SVGProps } from "react";
-/** Meridian: a horizon intersecting a rising, folded M. */
+/** Original geometric lettering, drawn as vectors without an icon or font dependency. */
 export function MeridianLogo(props: SVGProps<SVGSVGElement>) {
-  return <svg className="meridian-logo" viewBox="0 0 32 32" width="26" height="26" aria-hidden="true" {...props}>
-    <defs>
-      <radialGradient id="meridian-orb" cx="28%" cy="22%" r="78%">
-        <stop stopColor="#d6e8ff" />
-        <stop offset=".28" stopColor="#78b5ff" />
-        <stop offset=".68" stopColor="#4285f4" />
-        <stop offset="1" stopColor="#6554c8" />
-      </radialGradient>
-      <linearGradient id="meridian-orb-shine" x1=".15" y1="0" x2=".8" y2="1">
-        <stop stopColor="#fff" stopOpacity=".72" />
-        <stop offset="1" stopColor="#fff" stopOpacity="0" />
-      </linearGradient>
-    </defs>
-    <circle cx="16" cy="16" r="15" fill="url(#meridian-orb)" />
-    <path d="M7.5 10.5c2-4.3 7-6.6 11.6-5.5 2.1.5 3.9 1.6 5.3 3.2-4.5-.8-9.1.1-12.4 2.5-2 1.4-3.6 3.3-4.7 5.5-.7-1.7-.6-3.8.2-5.7Z" fill="url(#meridian-orb-shine)" />
-    <circle cx="16" cy="16" r="14.5" fill="none" stroke="#fff" strokeOpacity=".38" />
+  return <svg {...props} className={`meridian-logo ${props.className ?? ""}`} viewBox="0 0 268 28" width="144" height="18" aria-hidden="true" fill="none">
+    <path d="M2 25V3L14 17 26 3V25 M60 3H38V25H60 M38 14H57 M72 25V3H87Q96 3 96 9Q96 14 87 14H72 M85 14L98 25 M110 3H126 M118 3V25 M110 25H126 M138 25V3H150Q164 3 164 14Q164 25 150 25Z M176 3H192 M184 3V25 M176 25H192 M204 25L216 3 228 25 M208 17H224 M240 25V3L264 25V3" stroke="currentColor" strokeWidth="2.6" strokeLinecap="square" strokeLinejoin="miter" />
   </svg>;
 }

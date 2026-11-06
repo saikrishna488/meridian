@@ -5,19 +5,26 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$ROOT/tools/distro.sh"
+source "$ROOT/tools/privilege.sh"
 
 usage() {
   cat <<'HELP'
 Meridian source installer
 
-Usage: bash install.sh [--install | --check | --update | --repair | --uninstall] [--yes]
+Usage: bash install.sh [--gui] [--install | --update | --repair | --compile | --check | --uninstall]
+       bash install.sh --cli [--install | --update | --repair | --compile | --check | --uninstall] [--prepared] [--yes]
 
-  --install     Install from this checkout (default): dependencies, build, install.
-  --check       Read-only preflight; report compatibility and build prerequisites.
-  --update      Rebuild this checkout and reinstall (does NOT run git pull).
-  --repair      Rebuild this checkout and reinstall missing/damaged files.
+  (no flags)    Open the native graphical installer (default).
+  --gui         Explicitly select the graphical interface.
+  --cli         Use the terminal interface; required for unattended operation.
+  --install     Compile and install from this checkout (default action).
+  --update      Compile and reinstall this checkout (does NOT run git pull).
+  --repair      Compile and reinstall missing/damaged files.
+  --compile     Install prerequisites and compile a verified release; do not install Meridian files.
+  --check       Read-only preflight in CLI mode; preselect checks in the GUI.
   --uninstall   Remove Meridian-managed files; keep personal settings and dependencies.
-  --yes, -y     Confirm the system package installation prompt (for automation).
+  --prepared    Install a verified prepared release without compiling or build dependencies.
+  --yes, -y     Confirm package installation in CLI mode (for automation).
   --help, -h    Show this help.
 
 Run without sudo. The script elevates only package installation and the
@@ -32,11 +39,22 @@ warn() { printf 'warning: %s\n' "$*" >&2; }
 mode=install
 yes=0
 mode_seen=0
+prepared=0
+interface=gui
+# Existing native installer versions also set this marker on worker processes.
+# Keep their internal calls headless while user launches default to the GUI.
+if [[ ${MERIDIAN_GUI_AUTH:-0} == 1 ]]; then interface=cli; fi
+interface_seen=0
 while (($#)); do
   case "$1" in
-    --install|--check|--update|--repair|--uninstall)
+    --install|--check|--update|--repair|--compile|--uninstall)
       ((mode_seen == 0)) || die "Choose only one installation mode"
       mode="${1#--}"; mode_seen=1 ;;
+    --gui|--cli)
+      selected_interface="${1#--}"
+      ((interface_seen == 0)) || [[ $interface == "$selected_interface" ]] || die "Choose either --gui or --cli."
+      interface="$selected_interface"; interface_seen=1 ;;
+    --prepared) prepared=1 ;;
     --yes|-y) yes=1 ;;
     --help|-h) usage; exit 0 ;;
     *) usage >&2; die "Unknown argument: $1" ;;
@@ -47,7 +65,34 @@ done
 (( EUID != 0 )) || die "Run as your regular user, not sudo. Privileges are requested only when needed."
 [[ -f "$ROOT/Cargo.toml" && -f "$ROOT/tools/install.sh" ]] || die "Run from a complete Meridian source checkout."
 [[ "$(uname -s)" == Linux ]] || die "Meridian requires Linux."
-command -v sudo >/dev/null 2>&1 || { [[ $mode == check ]] || die "sudo is required for system installation"; }
+((prepared == 0)) || [[ $mode == install || $mode == update || $mode == repair ]] || die "--prepared is only for install, update or repair."
+if [[ $interface == gui ]]; then
+  ((yes == 0)) || die "--yes requires --cli; confirm graphical operations in the window."
+  [[ -n ${WAYLAND_DISPLAY:-} || -n ${DISPLAY:-} ]] || die "No graphical display is available. Use: bash install.sh --cli"
+  gui_args=(--source "$ROOT")
+  if ((mode_seen)); then gui_args+=(--action "$mode"); fi
+  if ((prepared)); then gui_args+=(--prepared); fi
+  architecture="$(uname -m)"
+  bundled="$ROOT/tools/bin/meridian-installer-linux-$architecture"
+  if [[ -f "$bundled" ]]; then
+    [[ -x "$bundled" ]] || die "Bundled installer is not executable. Run: chmod +x tools/bin/meridian-installer-linux-$architecture"
+    [[ -r "$bundled.sha256" ]] || die "Bundled installer checksum is missing. Obtain a complete checkout/release."
+    (cd "$ROOT/tools/bin" && sha256sum --check --status "${bundled##*/}.sha256") || die "Bundled installer checksum failed. Obtain a fresh checkout/release."
+    if command -v ldd >/dev/null 2>&1; then
+      runtime_report="$(ldd "$bundled" 2>&1)" || die "Bundled installer cannot load on this system: $runtime_report. See tools/bin/README.md."
+      if [[ $runtime_report == *"not found"* ]]; then
+        die "Bundled installer needs system runtime libraries: $runtime_report. See tools/bin/README.md."
+      fi
+    fi
+    exec "$bundled" "${gui_args[@]}"
+  fi
+  # Developer-built binaries are usable on architectures without a bundled GUI.
+  for binary in "$ROOT/target/release/meridian-installer" "$ROOT/target/debug/meridian-installer"; do
+    if [[ -x "$binary" ]]; then exec "$binary" "${gui_args[@]}"; fi
+  done
+  die "No precompiled GUI for $architecture is included. Obtain a release containing tools/bin/meridian-installer-linux-$architecture, or use: bash install.sh --cli"
+fi
+if [[ $mode != check ]]; then meridian_privilege_runner || die "Administrator authentication is unavailable."; fi
 meridian_load_packages || die "Unsupported distribution. See tools/INSTALLER.md."
 note "Meridian source installer • $DISTRO • $(uname -m)"
 
@@ -98,11 +143,21 @@ preflight() {
     fi
   fi
   if ((problems)); then
-    warn "Prerequisites are missing or outdated. Run: bash install.sh --install"
+    warn "Prerequisites are missing or outdated. Run: bash install.sh --cli --install"
     return 1
   fi
   note "Preflight passed."
 }
+
+if [[ $mode != check ]]; then
+  # Serialize builds/installations across this user's source checkouts. No cache
+  # directories are created by the read-only --check mode.
+  command -v flock >/dev/null 2>&1 || die "Install util-linux (flock) before installing Meridian."
+  lock_dir="${XDG_CACHE_HOME:-$HOME/.cache}/meridian"
+  mkdir -p "$lock_dir"
+  exec {install_lock}>"$lock_dir/install.lock"
+  flock -n "$install_lock" || die "Another Meridian installation is already running."
+fi
 
 case "$mode" in
   check)
@@ -111,10 +166,20 @@ case "$mode" in
     ;;
   uninstall)
     note "Uninstalling Meridian (personal settings and dependency packages are preserved)"
-    sudo "$ROOT/tools/install.sh" --uninstall
+    "${MERIDIAN_PRIVILEGE[@]}" "$ROOT/tools/install.sh" --uninstall
     exit 0
     ;;
 esac
+
+
+if ((prepared)); then
+  note "Checking prepared release integrity (no compilation)"
+  "$ROOT/tools/install.sh" --check-build
+  note "Installing the prepared release transactionally"
+  "${MERIDIAN_PRIVILEGE[@]}" "$ROOT/tools/install.sh"
+  note "Complete. Sign out and back into Meridian to load this version."
+  exit 0
+fi
 
 # Source upgrades are explicit: never fetch or reset a user's working tree.
 if [[ "$mode" == update ]]; then
@@ -122,10 +187,15 @@ if [[ "$mode" == update ]]; then
 fi
 
 if (( ! yes )); then
-  printf '\nThis will install or update system packages using %s and install Meridian\n' "$(
+  printf '\nThis will install or update dependency packages using %s\n' "$(
     case "$DISTRO" in debian) echo APT;; fedora) echo DNF;; arch) echo pacman;; esac
   )"
-  printf 'under /usr/local. On Arch, the package step may upgrade the system.\n'
+  if [[ $mode == compile ]]; then
+    printf 'and compile a release only; Meridian system files will not be installed.\n'
+  else
+    printf 'and compile and install Meridian under /usr/local.\n'
+  fi
+  printf 'On Arch, the package step may upgrade the system.\n'
   printf 'Your existing login manager will NOT be changed.\n'
   if [[ ! -t 0 ]]; then
     die "Confirmation requires a terminal. Pass --yes only if you approve these changes."
@@ -138,11 +208,15 @@ note "Installing development and runtime dependencies"
 "$ROOT/tools/dev-env.sh"
 note "Compiling and verifying the Meridian release as $(id -un)"
 "$ROOT/tools/compile_meridian.sh"
+if [[ $mode == compile ]]; then
+  note "Compilation complete. Install this prepared release with: bash install.sh --cli --prepared"
+  exit 0
+fi
 note "Checking release integrity"
 "$ROOT/tools/install.sh" --check-build
-note "Installing the release transactionally (sudo)"
-sudo "$ROOT/tools/install.sh"
+note "Installing the release transactionally (administrator authentication)"
+"${MERIDIAN_PRIVILEGE[@]}" "$ROOT/tools/install.sh"
 note "Installation complete"
 printf 'Select Meridian from your existing login screen after signing out.\n'
-printf 'To update from newer code: git pull, then bash install.sh --update\n'
-printf 'To remove Meridian: bash install.sh --uninstall\n'
+printf 'To update from newer code: git pull, then bash install.sh --cli --update\n'
+printf 'To remove Meridian: bash install.sh --cli --uninstall\n'

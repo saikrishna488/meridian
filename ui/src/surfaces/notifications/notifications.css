@@ -1,4 +1,4 @@
-.menu.notification-center { right:12px; top:12px; bottom:auto; width:min(390px,calc(100vw - 24px)); max-height:calc(100vh - 24px); overflow:hidden; color:#fff; background:#000000; padding:16px; gap:14px; border:1px solid rgb(255 255 255 / .14); border-radius:var(--radius-lg); box-shadow:var(--shadow-lg); backdrop-filter:none; -webkit-backdrop-filter:none; }
+.menu.notification-center { right:12px; bottom:12px; top:auto; transform-origin:bottom right; width:min(390px,calc(100vw - 24px)); max-height:calc(100vh - 24px); overflow:hidden; color:#fff; background:#000000; padding:16px; gap:14px; border:1px solid rgb(255 255 255 / .14); border-radius:var(--radius-lg); box-shadow:var(--shadow-lg); backdrop-filter:none; -webkit-backdrop-filter:none; }
 .notification-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-shrink:0; }
 .notification-heading h1 { margin:0; font-size:17px; font-weight:600; }
 .notification-center button { border:0; border-radius:var(--radius-sm); background:transparent; color:rgb(255 255 255 / .7); cursor:pointer; padding:6px 8px; font:inherit; font-size:11px; min-height:28px; }

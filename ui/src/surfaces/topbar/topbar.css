@@ -72,3 +72,4 @@ body { height: var(--topbar-height); background: transparent; }
   .topbar .taskbar-calendar { font-size: 9px; padding-inline: 2px; }
   .topbar .when { font-size: 10px; }
 }
+.topbar .meridian-logo { width:112px; height:16px; }

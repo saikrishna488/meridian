@@ -6,10 +6,12 @@ const iconListeners = new Set<() => void>();
 let stopIconEvents: (() => void) | undefined;
 function subscribeIconRevision(listener: () => void) {
   iconListeners.add(listener);
-  stopIconEvents ??= on("search.invalidated", () => {
-    iconRevision++;
-    iconListeners.forEach(notify => notify());
-  });
+  stopIconEvents ??= (() => {
+    const invalidate = () => { iconRevision++; iconListeners.forEach(notify => notify()); };
+    const offCatalog = on("search.invalidated", invalidate);
+    const offEngines = on("engines.changed", invalidate);
+    return () => { offCatalog(); offEngines(); };
+  })();
   return () => {
     iconListeners.delete(listener);
     if (!iconListeners.size) { stopIconEvents?.(); stopIconEvents = undefined; }
@@ -21,6 +23,7 @@ const builtinIcons: Record<string, string> = {
   "meridian-clock.desktop": "clock",
   "meridian-pulse.desktop": "pulse",
   "meridian-settings.desktop": "settings",
+  "meridian-engines.desktop": "settings",
   "meridian-finder.desktop": "finder",
   "meridian-control-center.desktop": "control-center",
 };

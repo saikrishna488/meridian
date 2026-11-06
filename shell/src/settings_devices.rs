@@ -765,12 +765,16 @@ pub fn display_decide(choice: DisplayDecision) -> Result<(), ErrorBody> {
             *pending = Some(trial);
             return Err(error("This display trial has expired. Revert the changes before trying again."));
         }
-        let directory = glib::user_config_dir().join("meridian");
         let saved = (|| {
-            std::fs::create_dir_all(&directory).map_err(error)?;
-            let temporary = directory.join("displays.json.tmp");
-            std::fs::write(&temporary, serde_json::to_vec_pretty(&trial.after).map_err(error)?).map_err(error)?;
-            std::fs::rename(temporary, directory.join("displays.json")).map_err(error)
+            let outputs = meridian_services::displays::list().map_err(error)?;
+            let path = glib::user_config_dir().join("meridian/display-profiles.json");
+            let mut profiles = crate::config::read_versioned::<std::collections::BTreeMap<String,Vec<DisplayConfig>>>(&path).unwrap_or_default();
+            let key = display_profile_key(&outputs);
+            if profiles.len() >= 16 && !profiles.contains_key(&key) {
+                return Err(error("Sixteen monitor combinations are already saved. Remove an unused entry from display-profiles.json before saving another."));
+            }
+            profiles.insert(key, trial.after.clone());
+            crate::config::save_versioned(&path, &profiles)
         })();
         if let Err(e) = saved {
             if let Err(rollback) = restore(&trial.before) {
@@ -782,13 +786,39 @@ pub fn display_decide(choice: DisplayDecision) -> Result<(), ErrorBody> {
     }
     Ok(())
 }
+fn display_profile_key(outputs: &[meridian_protocol::DisplayOutput]) -> String {
+    let mut identities: Vec<_> = outputs.iter().map(|output| {
+        let edid = connector_edid(&output.name).map(|(bytes,_)| bytes.iter().map(|b|format!("{b:02x}")).collect::<String>()).unwrap_or_default();
+        format!("{}:{}:{}", output.name, output.description, edid)
+    }).collect();
+    identities.sort(); identities.join("|")
+}
+static LAST_PROFILE: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
+static FORCE_PROFILE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+pub fn forget_display_inventory() { FORCE_PROFILE.store(true, std::sync::atomic::Ordering::Relaxed); }
 pub fn apply_saved_displays() -> Result<(), ErrorBody> {
-    let path = glib::user_config_dir().join("meridian/displays.json");
-    if !path.exists() {
-        return Ok(());
+    // Serialize with confirmation trials; a hotplug must never override an unconfirmed edit.
+    let pending = TRIAL.try_lock().map_err(|_| error("Display operation in progress"))?;
+    if pending.is_some() { return Ok(()); }
+    let outputs = meridian_services::displays::list().map_err(error)?;
+    if outputs.is_empty() { return Ok(()); }
+    let key = display_profile_key(&outputs);
+    let mut last = LAST_PROFILE.lock().map_err(error)?;
+    if *last == key && !FORCE_PROFILE.swap(false, std::sync::atomic::Ordering::Relaxed) { return Ok(()); }
+    let path = glib::user_config_dir().join("meridian/display-profiles.json");
+    let profiles = crate::config::read_versioned::<std::collections::BTreeMap<String,Vec<DisplayConfig>>>(&path).unwrap_or_default();
+    let edits = if let Some(saved) = profiles.get(&key) { Some(saved.clone()) }
+        else if !path.exists() {
+            crate::config::read::<Vec<DisplayConfig>>(&glib::user_config_dir().join("meridian/displays.json"))
+                .filter(|edits| edits.len() == outputs.len() && edits.iter().all(|e| outputs.iter().any(|o|o.name==e.name)))
+        } else { None };
+    // Mark before applying to avoid a feedback loop from compositor output events.
+    *last = key;
+    if let Some(edits) = edits {
+        let before = meridian_services::displays::snapshot(&outputs);
+        if let Err(failure) = restore(&edits) { let _ = restore(&before); last.clear(); return Err(failure); }
     }
-    let edits: Vec<DisplayConfig> = serde_json::from_slice(&std::fs::read(path).map_err(error)?).map_err(error)?;
-    restore(&edits)
+    Ok(())
 }
 #[cfg(test)]
 mod tests {

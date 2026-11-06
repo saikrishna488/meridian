@@ -30,7 +30,7 @@ meridian_load_packages() {
             ;;
         fedora)
             BUILD_PACKAGES=(gcc gcc-c++ make pkgconf-pkg-config rust cargo rustfmt clippy
-                nodejs npm gtk4-devel webkitgtk6.0-devel gtk4-layer-shell-devel pam-devel clang-devel pipewire-devel)
+                nodejs npm fontconfig-devel freetype-devel pango-devel cairo-devel gtk4-devel webkitgtk6.0-devel gtk4-layer-shell-devel pam-devel clang-devel pipewire-devel)
             PIPEWIRE_BUILD_PACKAGES=(pkgconf-pkg-config pipewire-devel)
             RUNTIME_PACKAGES=("${common[@]}" glib2 libnotify webkitgtk6.0 gtk4-layer-shell
                 xorg-x11-server-Xwayland greetd-selinux pipewire-utils pipewire-pulseaudio pipewire-libs
@@ -40,11 +40,11 @@ meridian_load_packages() {
                 gstreamer1-plugins-bad-free ffmpeg-free)
             ;;
         arch)
-            BUILD_PACKAGES=(base-devel rust nodejs npm gtk4 webkitgtk-6.0 gtk4-layer-shell pam clang pipewire)
+            BUILD_PACKAGES=(base-devel rust nodejs npm fontconfig freetype2 pango cairo gtk4 webkitgtk-6.0 gtk4-layer-shell pam clang pipewire)
             PIPEWIRE_BUILD_PACKAGES=(pkgconf pipewire)
             RUNTIME_PACKAGES=("${common[@]}" glib2 libnotify webkitgtk-6.0 gtk4-layer-shell
                 xorg-xwayland pipewire pipewire-audio pipewire-pulse inter-font noto-fonts
-                ttf-dejavu ttf-liberation cups networkmanager pam polkit polkit-gnome dbus)
+                ttf-dejavu ttf-liberation cups networkmanager pam polkit mate-polkit dbus)
             MEDIA_PACKAGES=(gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav ffmpeg)
             ;;
     esac

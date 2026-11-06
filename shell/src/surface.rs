@@ -25,6 +25,7 @@ pub struct WebEnv {
 
 impl WebEnv {
     pub fn new(scheme: SchemeHandler, dev: bool) -> Self {
+        crate::rendering::apply_gtk_font_settings();
         let scheme = Rc::new(scheme);
         let theme_signal = gdk::Display::default().map(|display| {
             let weak = Rc::downgrade(&scheme);
@@ -51,11 +52,14 @@ impl WebEnv {
         let s = webkit6::Settings::new();
         let software_test =
             cfg!(feature = "integration-tests") && std::env::var("MERIDIAN_NESTED_TEST").as_deref() == Ok("1");
-        s.set_hardware_acceleration_policy(if software_test {
-            webkit6::HardwareAccelerationPolicy::Never
-        } else {
-            webkit6::HardwareAccelerationPolicy::Always
-        });
+        let engine = crate::rendering::active_config();
+        if software_test {
+            s.set_hardware_acceleration_policy(webkit6::HardwareAccelerationPolicy::Never);
+        } else if engine.gpu_enabled {
+            s.set_hardware_acceleration_policy(webkit6::HardwareAccelerationPolicy::Always);
+        }
+        // Automatic retains WebKitGTK 6's default policy (there is no OnDemand
+        // policy in this API). A requested policy is not proof of GPU use.
         s.set_enable_developer_extras(self.dev);
         s.set_enable_back_forward_navigation_gestures(false);
         s.set_allow_file_access_from_file_urls(false);
@@ -74,6 +78,12 @@ impl WebEnv {
     fn create_view(&self, ucm: &UserContentManager) -> WebView {
         // Separate contexts and sessions isolate renderer crashes and storage.
         let context = WebContext::new();
+        // WebKit's sandbox must be able to read the scoped Fontconfig file.
+        // Expose only the active profile/base files, never the config directory.
+        for path in crate::rendering::font_sandbox_paths() {
+            context.add_path_to_sandbox(path, true);
+        }
+
         let security = context.security_manager().expect("WebContext always has a security manager");
         security.register_uri_scheme_as_secure(SCHEME);
         security.register_uri_scheme_as_cors_enabled(SCHEME);
@@ -103,6 +113,7 @@ pub struct WebSurface {
     /// Set once the page has completed the `shell.hello` handshake;
     /// events sent earlier are coalesced until the handshake.
     ready: Cell<bool>,
+    pub idle_since: Cell<Option<std::time::Instant>>,
     recovery: RefCell<crate::recovery::Recovery>,
     recovery_timer: RefCell<Option<glib::SourceId>>,
     queued: RefCell<Vec<Event>>,
@@ -111,6 +122,10 @@ pub struct WebSurface {
 }
 
 impl WebSurface {
+    pub fn set_panel_auto_hide(&self, hidden: bool) {
+        self.window.set_exclusive_zone(if hidden { 4 } else { PANEL_HEIGHT });
+    }
+
     pub fn set_dock_input_region(&self, bounds: &meridian_protocol::DockInputRegion) {
         let Some(surface) = self.window.surface() else { return };
         let region = gtk::cairo::Region::create();
@@ -151,7 +166,7 @@ impl WebSurface {
                 | SurfaceKind::Finder
                 | SurfaceKind::Terminal
                 | SurfaceKind::Calendar
-                | SurfaceKind::Clock
+                | SurfaceKind::Clock | SurfaceKind::Photos | SurfaceKind::Media
                 | SurfaceKind::Pulse
         ) {
             configure_layer(&window, kind, monitor);
@@ -163,7 +178,7 @@ impl WebSurface {
                 | SurfaceKind::Finder
                 | SurfaceKind::Terminal
                 | SurfaceKind::Calendar
-                | SurfaceKind::Clock
+                | SurfaceKind::Clock | SurfaceKind::Photos | SurfaceKind::Media
                 | SurfaceKind::Pulse
         ) {
             let title = match kind {
@@ -171,6 +186,8 @@ impl WebSurface {
                 SurfaceKind::Terminal => "Terminal",
                 SurfaceKind::Calendar => "Calendar",
                 SurfaceKind::Clock => "Clock",
+                SurfaceKind::Photos => "Photos",
+                SurfaceKind::Media => "Music & Video",
                 SurfaceKind::Pulse => "Pulse",
                 _ => "Settings",
             };
@@ -182,15 +199,24 @@ impl WebSurface {
             }
             let header = gtk::HeaderBar::new();
             header.set_show_title_buttons(false);
-            let controls = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+            let controls = gtk::Box::new(gtk::Orientation::Horizontal, 8);
             controls.add_css_class("meridian-window-controls");
-            for (name, class) in [("Minimize", "minimize"), ("Maximize", "maximize"), ("Close", "close")] {
+            for (name, class) in [("Close", "close"), ("Minimize", "minimize"), ("Maximize", "maximize")] {
                 let button = gtk::Button::new();
                 button.update_property(&[gtk::accessible::Property::Label(name)]);
                 let glyph = gtk::DrawingArea::new();
                 glyph.set_content_width(16);
                 glyph.set_content_height(16);
-                glyph.set_draw_func(move |glyph, cairo, _, _| {
+                glyph.set_halign(gtk::Align::Center);
+                glyph.set_valign(gtk::Align::Center);
+                glyph.set_hexpand(false);
+                glyph.set_vexpand(false);
+                let glyph_window = window.downgrade();
+                glyph.set_draw_func(move |glyph, cairo, width, height| {
+                    // GTK can allocate more than the requested 16 px. Draw around
+                    // the real allocation's center so hover backgrounds never expose
+                    // a glyph stranded at the top-left corner.
+                    cairo.translate((f64::from(width) - 16.0) / 2.0, (f64::from(height) - 16.0) / 2.0);
                     let color = glyph.color();
                     cairo.set_source_rgba(
                         color.red().into(),
@@ -198,27 +224,42 @@ impl WebSurface {
                         color.blue().into(),
                         color.alpha().into(),
                     );
-                    cairo.set_line_width(1.25);
+                    cairo.set_line_width(1.6);
+                    cairo.set_line_cap(gtk::cairo::LineCap::Round);
+                    cairo.set_line_join(gtk::cairo::LineJoin::Round);
                     match class {
                         "close" => {
-                            cairo.move_to(5., 5.);
-                            cairo.line_to(11., 11.);
-                            cairo.move_to(11., 5.);
-                            cairo.line_to(5., 11.);
+                            cairo.move_to(4.5, 4.5);
+                            cairo.line_to(11.5, 11.5);
+                            cairo.move_to(11.5, 4.5);
+                            cairo.line_to(4.5, 11.5);
                         }
                         "minimize" => {
-                            cairo.move_to(4.5, 8.);
-                            cairo.line_to(11.5, 8.);
+                            cairo.move_to(4.0, 8.0);
+                            cairo.line_to(12.0, 8.0);
+                        }
+                        _ if glyph_window.upgrade().is_some_and(|window| window.is_maximized()) => {
+                            // Restore: two offset panes, with no overlapping strokes.
+                            cairo.move_to(6.5, 4.0);
+                            cairo.line_to(12.0, 4.0);
+                            cairo.line_to(12.0, 9.5);
+                            cairo.rectangle(4.0, 6.5, 5.5, 5.5);
                         }
                         _ => {
-                            cairo.rectangle(4.5, 4.5, 7., 7.);
+                            // Expand: four original corner brackets around the center.
+                            for (x, y, dx, dy) in [(4.0, 4.0, 3.0, 3.0), (12.0, 4.0, -3.0, 3.0),
+                                (4.0, 12.0, 3.0, -3.0), (12.0, 12.0, -3.0, -3.0)] {
+                                cairo.move_to(x + dx, y);
+                                cairo.line_to(x, y);
+                                cairo.line_to(x, y + dy);
+                            }
                         }
                     }
                     let _ = cairo.stroke();
                 });
                 button.set_valign(gtk::Align::Center);
                 button.set_halign(gtk::Align::Center);
-                button.set_size_request(34, 28);
+                button.set_size_request(32, 32);
                 button.set_child(Some(&glyph));
                 button.set_tooltip_text(Some(name));
                 button.add_css_class("meridian-window-button");
@@ -234,21 +275,58 @@ impl WebSurface {
                         }
                     }
                 });
+                if class == "maximize" {
+                    button.set_tooltip_text(Some("Maximize · Right-click for window layout (Alt+Space)"));
+                    let gesture = gtk::GestureClick::new();
+                    gesture.set_button(3);
+                    let weak = window.downgrade();
+                    gesture.connect_pressed(move |gesture, _, _, _| {
+                        if let (Some(window), Some(event)) = (weak.upgrade(), gesture.current_event()) {
+                            if let Some(toplevel) = window.surface().and_then(|s| s.downcast::<gdk::Toplevel>().ok()) {
+                                toplevel.show_window_menu(&event);
+                            }
+                        }
+                    });
+                    button.add_controller(gesture);
+                    let weak_button = button.downgrade();
+                    let weak_glyph = glyph.downgrade();
+                    window.connect_maximized_notify(move |window| {
+                        if let Some(button) = weak_button.upgrade() {
+                            let label = if window.is_maximized() { "Restore" } else { "Maximize" };
+                            button.set_tooltip_text(Some(&format!("{label} · Right-click for window layout (Alt+Space)")));
+                            button.update_property(&[gtk::accessible::Property::Label(label)]);
+                        }
+                        if let Some(glyph) = weak_glyph.upgrade() { glyph.queue_draw(); }
+                    });
+                }
                 controls.append(&button);
             }
-            header.pack_end(&controls);
+            if crate::desktop::get().layout.window_buttons == "right" { header.pack_end(&controls); }
+            else { header.pack_start(&controls); }
+            if let Some(settings) = gtk::Settings::default() {
+                let weak_header = header.downgrade();
+                let weak_controls = controls.downgrade();
+                let handler = settings.connect_gtk_decoration_layout_notify(move |settings| {
+                    if let (Some(header), Some(controls)) = (weak_header.upgrade(), weak_controls.upgrade()) {
+                        header.remove(&controls);
+                        if settings.gtk_decoration_layout().is_some_and(|layout| layout.starts_with(':')) { header.pack_end(&controls); }
+                        else { header.pack_start(&controls); }
+                    }
+                });
+                let handler = std::cell::RefCell::new(Some(handler));
+                header.connect_destroy(move |_| { if let Some(handler) = handler.borrow_mut().take() { settings.disconnect(handler); } });
+            }
             let title_label = gtk::Label::new(Some(title));
-            title_label.set_margin_start(8);
-            header.pack_start(&title_label);
-            header.set_title_widget(Some(&gtk::Box::new(gtk::Orientation::Horizontal, 0)));
+            header.set_title_widget(Some(&title_label));
             window.set_titlebar(Some(&header));
-            if matches!(kind, SurfaceKind::Finder | SurfaceKind::Calendar | SurfaceKind::Clock | SurfaceKind::Pulse) {
+            if matches!(kind, SurfaceKind::Finder | SurfaceKind::Calendar | SurfaceKind::Clock | SurfaceKind::Photos | SurfaceKind::Media | SurfaceKind::Pulse) {
                 window.set_default_size(1100, 720);
             } else {
                 window.set_default_size(840, 600);
             }
             let closing = close_animation.clone();
             window.connect_close_request(move |window| {
+                if kind == SurfaceKind::Terminal { return glib::Propagation::Proceed; }
                 if closing.replace(true) {
                     return glib::Propagation::Stop;
                 }
@@ -275,13 +353,16 @@ impl WebSurface {
         }
         let ucm = bridge::content_manager();
         let view = env.create_view(&ucm);
+        if kind == SurfaceKind::Media {
+            webkit6::prelude::WebViewExt::settings(&view).unwrap().set_enable_media(true);
+        }
         let windowed = matches!(
             kind,
             SurfaceKind::Preferences
                 | SurfaceKind::Finder
                 | SurfaceKind::Terminal
                 | SurfaceKind::Calendar
-                | SurfaceKind::Clock
+                | SurfaceKind::Clock | SurfaceKind::Photos | SurfaceKind::Media
                 | SurfaceKind::Pulse
         );
         if windowed {
@@ -410,11 +491,16 @@ impl WebSurface {
             window,
             view,
             ready: Cell::new(false),
+            idle_since: Cell::new(Some(std::time::Instant::now())),
             recovery: RefCell::default(),
             recovery_timer: RefCell::default(),
             queued: RefCell::default(),
             restorable: RefCell::default(),
             fallback,
+        });
+        let weak_idle = Rc::downgrade(&surface);
+        surface.window.connect_visible_notify(move |window| {
+            if let Some(surface) = weak_idle.upgrade() { surface.idle_since.set(if window.is_visible() { None } else { Some(std::time::Instant::now()) }); }
         });
         bridge::attach(&ucm, Rc::downgrade(&surface), dispatch.clone());
         surface.install_fallback(dispatch);
@@ -452,6 +538,18 @@ impl WebSurface {
         self.fallback.is_visible()
     }
 
+    pub fn apply_comfort(&self) {
+        let p = crate::workflows::preferences();
+        // Zoom application windows; fixed compositor panel geometry stays stable.
+        if matches!(self.kind, SurfaceKind::Preferences | SurfaceKind::Finder | SurfaceKind::Pulse | SurfaceKind::Calendar | SurfaceKind::Clock | SurfaceKind::Photos | SurfaceKind::Media) { self.view.set_zoom_level(p.text_scale); }
+        self.view.evaluate_javascript(&format!("document.documentElement.dataset.highContrast='{}';document.documentElement.dataset.reducedMotion='{}';", p.high_contrast, p.reduced_motion), None, None, gio::Cancellable::NONE, |_| {});
+    }
+    pub fn reclaimable(&self) -> bool {
+        if self.window.is_visible() { self.idle_since.set(None); return false; }
+        let since = self.idle_since.get().unwrap_or_else(|| { let now = std::time::Instant::now(); self.idle_since.set(Some(now)); now });
+        since.elapsed() >= std::time::Duration::from_secs(300)
+    }
+
     pub fn is_ready(&self) -> bool {
         self.ready.get()
     }
@@ -461,6 +559,7 @@ impl WebSurface {
             return;
         }
         self.fallback.set_visible(false);
+        self.apply_comfort();
         if let Some(timer) = self.recovery_timer.borrow_mut().take() {
             timer.remove();
         }
@@ -474,7 +573,8 @@ impl WebSurface {
         }
     }
 
-    fn recover(self: &Rc<Self>) {
+    pub fn recover(self: &Rc<Self>) {
+        crate::workflows::record_error(format!("{:?}: renderer recovery requested", self.kind));
         self.ready.set(false);
         self.fallback.set_visible(true);
         if self.recovery_timer.borrow().is_some() {
@@ -609,7 +709,7 @@ fn entry_dir(kind: SurfaceKind) -> &'static str {
         SurfaceKind::Preferences => "surfaces/settings",
         SurfaceKind::Finder => "surfaces/finder",
         SurfaceKind::Terminal => "surfaces/terminal",
-        SurfaceKind::Calendar | SurfaceKind::Clock => "surfaces/utilities",
+        SurfaceKind::Calendar | SurfaceKind::Clock | SurfaceKind::Photos | SurfaceKind::Media => "surfaces/utilities",
         SurfaceKind::Pulse => "surfaces/pulse",
         SurfaceKind::DesktopMenu => "surfaces/desktop-menu",
         SurfaceKind::Greeter => "surfaces/greeter",
@@ -635,7 +735,7 @@ fn configure_layer(window: &gtk::Window, kind: SurfaceKind, monitor: Option<&gdk
         | SurfaceKind::Finder
         | SurfaceKind::Terminal
         | SurfaceKind::Calendar
-        | SurfaceKind::Clock
+        | SurfaceKind::Clock | SurfaceKind::Photos | SurfaceKind::Media
         | SurfaceKind::Pulse => {
             unreachable!("preferences is a normal desktop window")
         }
@@ -648,7 +748,7 @@ fn configure_layer(window: &gtk::Window, kind: SurfaceKind, monitor: Option<&gdk
         | SurfaceKind::Finder
         | SurfaceKind::Terminal
         | SurfaceKind::Calendar
-        | SurfaceKind::Clock
+        | SurfaceKind::Clock | SurfaceKind::Photos | SurfaceKind::Media
         | SurfaceKind::Pulse => {
             unreachable!("preferences is a normal desktop window")
         }
@@ -669,7 +769,7 @@ fn configure_layer(window: &gtk::Window, kind: SurfaceKind, monitor: Option<&gdk
             window.set_layer(Layer::Top);
             window.set_keyboard_mode(KeyboardMode::OnDemand);
             window.set_default_size(1, PANEL_HEIGHT + PANEL_ANIMATION_OVERFLOW);
-            window.set_exclusive_zone(PANEL_HEIGHT);
+            window.set_exclusive_zone(if crate::desktop::get().taskbar.auto_hide { 4 } else { PANEL_HEIGHT });
         }
         SurfaceKind::Topbar => {
             window.set_layer(Layer::Bottom);
@@ -687,19 +787,24 @@ fn configure_layer(window: &gtk::Window, kind: SurfaceKind, monitor: Option<&gdk
         | SurfaceKind::Finder
         | SurfaceKind::Terminal
         | SurfaceKind::Calendar
-        | SurfaceKind::Clock
+        | SurfaceKind::Clock | SurfaceKind::Photos | SurfaceKind::Media
         | SurfaceKind::Pulse => {
             unreachable!("preferences is a normal desktop window")
         }
         SurfaceKind::Locker => unreachable!("the locker uses gtk4_session_lock, not layer-shell"),
-        SurfaceKind::Applications | SurfaceKind::Options | SurfaceKind::DesktopMenu | SurfaceKind::Notifications => {
+        SurfaceKind::Applications => {
+            window.set_layer(Layer::Overlay);
+            // Fill the entire output, including space reserved by both bars.
+            window.set_exclusive_zone(-1);
+            window.set_keyboard_mode(KeyboardMode::Exclusive);
+        }
+        SurfaceKind::Options | SurfaceKind::DesktopMenu | SurfaceKind::Notifications => {
             window.set_layer(Layer::Overlay);
             // Exclusive zone 0: placed above the dock, which stays clickable
             // while a menu is open.
             window.set_exclusive_zone(0);
-            // The Applications menu takes the keyboard so typing searches
-            // immediately; Options only when clicked.
-            window.set_keyboard_mode(if matches!(kind, SurfaceKind::Applications | SurfaceKind::DesktopMenu) {
+            // The desktop menu takes the keyboard; Options only when clicked.
+            window.set_keyboard_mode(if matches!(kind, SurfaceKind::DesktopMenu) {
                 KeyboardMode::Exclusive
             } else {
                 KeyboardMode::OnDemand

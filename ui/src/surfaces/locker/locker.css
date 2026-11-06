@@ -125,7 +125,7 @@
 .card { background: rgb(20 25 36 / .92); border-color: #ffffff26; border-radius: 12px; color: #f5f7fb; backdrop-filter: none; }
 .field input, .field select { border-color: #ffffff35; border-radius: 6px; background: #ffffff0d; color: #f5f7fb; }
 .field-label { color: #ced5e2; font-size: 10px; font-weight: 500; letter-spacing: .5px; }
-.card .submit { border-radius: 6px; background: #f5f7fb; color: #171b24; box-shadow: none; }
+.card .submit { border-radius: 6px; background: var(--muk-green-fill); color: var(--muk-green-ink); box-shadow: none; }
 .field input:focus, .field select:focus { border-color: #a9cfff; box-shadow: 0 0 0 2px #8bbaff30; }
 
 /* Authentication stays clear and familiar in both desktop appearances. */
@@ -137,3 +137,12 @@
 .card .field input { border-radius: 10px; }
 .card .submit { border-radius: 10px; cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { .card.shake { animation: none; } }
+
+/* Responsive lock-screen authentication card. */
+.lock { gap:24px; padding:32px 16px; overflow-y:auto; }
+.lock .card { width:min(380px,100%); box-sizing:border-box; padding:24px; gap:16px; background:rgb(26 29 32 / .96); border-color:rgb(255 255 255 / .14); border-radius:18px; }
+@media(max-height:800px) { .lock { justify-content:flex-start; gap:20px; padding-top:32px; } .lock .clock { font-size:clamp(40px,7vw,64px); } }
+@media(forced-colors:active) { .lock .card { background:Canvas; color:CanvasText; border-color:ButtonText; } }
+
+.lock .card .submit { width:100%; min-height:40px; padding:8px 12px; background:var(--muk-green-fill); color:var(--muk-green-ink); }
+.lock .card .submit:hover:not(:disabled) { background:var(--button-primary-hover); }

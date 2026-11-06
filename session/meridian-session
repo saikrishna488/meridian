@@ -20,4 +20,7 @@ fi
 
 # `-s`: if the shell crashes, apps keep running (log out with Super+Shift+Q).
 export MERIDIAN_SHELL="${MERIDIAN_SHELL:-meridian-shell}"
-exec labwc -C "${MERIDIAN_LABWC_CONFIG:-$share/labwc}" -s "sh \"$share/shell-supervisor\""
+export MERIDIAN_LABWC_BASE="${MERIDIAN_LABWC_CONFIG:-$share/labwc}"
+MERIDIAN_LABWC_CONFIG=$("$MERIDIAN_SHELL" --prepare-session-config "$MERIDIAN_LABWC_BASE")
+export MERIDIAN_LABWC_CONFIG
+exec labwc -C "$MERIDIAN_LABWC_CONFIG" -s "sh \"$share/shell-supervisor\""

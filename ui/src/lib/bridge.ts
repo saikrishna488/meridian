@@ -19,6 +19,22 @@ import type { WindowInfo } from "./generated/WindowInfo";
 
 /** Result type of each request method. Keep in sync with `shell/src/bridge.rs`. */
 interface ResultMap {
+  "pulse.view_get": import("./generated/PulseView").PulseView;
+  "pulse.view_set": null;
+  "workflow.get": import("./generated/WorkflowState").WorkflowState;
+  "workflow.set": import("./generated/WorkflowState").WorkflowState;
+  "notifications.configure": import("./generated/NotificationState").NotificationState;
+  "desktop.layout_undo": import("./generated/DesktopState").DesktopState;
+  "dock.undo": null;
+  "terminal.launch": import("./generated/TerminalSession").TerminalSession;
+  "terminal.info": import("./generated/TerminalInfo").TerminalInfo;
+  "terminal.link": null;
+  "terminal.quit": null;
+  "terminal.notify": null;
+  "desktop.layout_set": import("./generated/DesktopState").DesktopState;
+  "windows.show_desktop": boolean;
+  "engines.get": import("./generated/EngineState").EngineState;
+  "engines.set": import("./generated/EngineState").EngineState;
   "settings.time": import("./generated/TimeState").TimeState;
   "settings.time_set": import("./generated/TimeState").TimeState;
   "settings.printers": import("./generated/PrinterInventory").PrinterInventory;
@@ -35,6 +51,7 @@ interface ResultMap {
   "files.preview": FilePreview;
   "shell.hello": SurfaceInfo;
   "desktop.font_set": import("./generated/DesktopState").DesktopState;
+  "desktop.taskbar_set": import("./generated/DesktopState").DesktopState;
   "desktop.appearance_set": import("./generated/DesktopState").DesktopState;
   "desktop.hover_background_set": import("./generated/DesktopState").DesktopState;
   "desktop.dock_style_set": import("./generated/DesktopState").DesktopState;
@@ -182,7 +199,44 @@ export class BridgeError extends Error {
   }
 }
 
+// Bound read-only Settings discovery. Never time out and silently retry writes or authentication.
+const settingsReads = new Set<string>([
+  "workflow.get", "pulse.view_get",
+  "desktop.get", "engines.get", "settings.get", "settings.time", "settings.input",
+  "settings.capability", "settings.storage", "settings.primary_display", "settings.search",
+  "settings.idle", "settings.displays", "settings.monitor_brightness", "settings.wifi_networks",
+  "settings.wifi_profiles", "settings.wifi_config", "settings.bluetooth_devices", "settings.bluetooth_audio",
+  "settings.system_info", "settings.default_apps", "settings.startup", "settings.startup_apps",
+  "settings.check_updates", "settings.users", "settings.devices", "settings.drivers", "settings.audio",
+  "settings.printers", "notifications.get", "power.status", "search.query", "system.info",
+]);
+async function readWithDeadline(pending: Promise<unknown>): Promise<unknown> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([pending, new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new BridgeError("unavailable", "This service did not respond within 30 seconds. Retry when it is available.")), 30_000);
+    })]);
+  } finally { clearTimeout(timer); }
+}
+
+export type PreferenceSaveEvent = { state: "saving" | "saved" | "failed"; method: string; restart: boolean; applied: boolean };
+const saveListeners = new Set<(event: PreferenceSaveEvent) => void>();
+export function onPreferenceSave(listener: (event: PreferenceSaveEvent) => void) {
+  saveListeners.add(listener); return () => { saveListeners.delete(listener); };
+}
 export async function request<R extends Request>(req: R): Promise<ResultMap[R["method"]]> {
+  const tracked = req.method.endsWith("_set") || req.method === "engines.set" || req.method === "notifications.do_not_disturb" || req.method === "notifications.configure" || req.method === "workflow.set" || req.method === "settings.audio_action" || req.method.startsWith("settings.set_");
+  const notify = (state: PreferenceSaveEvent["state"], restart = false) => {
+    if (tracked) for (const listener of saveListeners) listener({state, method:req.method, restart, applied: !restart && ["settings.audio_action", "notifications.configure", "notifications.do_not_disturb", "desktop.appearance_set", "desktop.layout_set", "desktop.taskbar_set", "desktop.dock_style_set"].includes(req.method)});
+  };
+  notify("saving");
+  try {
+    const result = await sendRequest(req);
+    const restart = req.method === "settings.idle_set" || !!(result && typeof result === "object" && "restart_required" in result && result.restart_required);
+    notify("saved", restart); return result;
+  } catch (cause) { notify("failed"); throw cause; }
+}
+async function sendRequest<R extends Request>(req: R): Promise<ResultMap[R["method"]]> {
   const handler = window.webkit?.messageHandlers?.meridian;
   if (!handler) {
     throw new BridgeError("unavailable", "not running inside meridian-shell");
@@ -191,7 +245,8 @@ export async function request<R extends Request>(req: R): Promise<ResultMap[R["m
   if (new TextEncoder().encode(message).length > 2 * 1024 * 1024) {
     throw new BridgeError("invalid_request", "Request exceeds the 2 MiB limit.");
   }
-  const raw = await handler.postMessage(message);
+  const pending = handler.postMessage(message);
+  const raw = await (settingsReads.has(req.method) ? readWithDeadline(pending) : pending);
   if (typeof raw !== "string") {
     throw new BridgeError("failed", `malformed reply to ${req.method}`);
   }

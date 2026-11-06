@@ -1,192 +1,148 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
+import { Button, ConfirmDialog, Dialog, Input, Select, SurfaceButton } from "../../meridian-ui";
 import { hello, on, request } from "../../lib/bridge";
-import { errorMessage, mount, useMenuFocus, useWindowKey } from "../../lib/react";
-import { currentAppearance, useAppearance } from "../../lib/appearance";
-import { Terminal as Emulator } from "../../vendor/xterm";
-import { FitAddon } from "../../vendor/addon-fit";
-import { Icon } from "../../components/Icon";
-import { wheelScroller } from "./scroll";
-import { terminalTheme } from "./theme";
+import { errorMessage, mount, useWindowKey } from "../../lib/react";
+import { useAppearance } from "../../lib/appearance";
+import { Session } from "./session";
+import { loadPreferences, localProfile, PreferencesDialog, type Profile } from "./preferences";
+import type { TerminalInfo } from "../../lib/generated/TerminalInfo";
 
-function colors() { return terminalTheme(currentAppearance()); }
-function Session({ active, fontSize, cwd, appearance, onExit }: { active: boolean; fontSize: number; cwd?: string; appearance: string; onExit: () => void }) {
-  const container = useRef<HTMLDivElement>(null);
-  const emulator = useRef<Emulator | null>(null);
-  const fit = useRef<FitAddon | null>(null);
-  const activeRef = useRef(active); activeRef.current = active;
-  const refit = useRef<(() => void) | null>(null);
-  const [error, setError] = useState("");
-  const [scrolledUp, setScrolledUp] = useState(false);
-  const [context, setContext] = useState<{ x: number; y: number } | null>(null);
-  const contextMenu = useRef<HTMLDivElement>(null);
-  useMenuFocus(contextMenu, !!context, () => setContext(null));
-  useEffect(() => {
-    if (!context) return;
-    const dismiss = (event: PointerEvent) => { if (!contextMenu.current?.contains(event.target as Node)) setContext(null); };
-    document.addEventListener("pointerdown", dismiss);
-    return () => document.removeEventListener("pointerdown", dismiss);
-  }, [context]);
-  const exit = useRef(onExit); exit.current = onExit;
-  useEffect(() => {
-    let alive = true, id: number | null = null, timer: ReturnType<typeof setTimeout> | undefined;
-    let observer: ResizeObserver | undefined;
-    let removePaste: (() => void) | undefined;
-    let frame = 0;
-    const repaint = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        const element = container.current, term = emulator.current;
-        if (!alive || !activeRef.current || !element?.clientWidth || !element.clientHeight || !term) return;
-        const size = fit.current?.proposeDimensions();
-        if (size && Number.isFinite(size.cols) && Number.isFinite(size.rows)) {
-          const cols = Math.max(2, Math.min(500, size.cols)), rows = Math.max(1, Math.min(250, size.rows));
-          if (cols !== term.cols || rows !== term.rows) term.resize(cols, rows);
-        }
-        term.refresh(0, term.rows - 1);
-        term.focus();
-      });
-    };
-    refit.current = repaint;
-    window.addEventListener("resize", repaint);
-    document.addEventListener("fullscreenchange", repaint);
-    window.addEventListener("focus", repaint);
-    const theme = () => { if (emulator.current) emulator.current.options.theme = colors(); repaint(); };
-    window.addEventListener("meridian-theme", theme);
-    const fail = (e: unknown) => { if (alive) setError(errorMessage(e)); };
-    async function start() {
-      try {
-        const session = cwd ? await request({ method: "terminal.start_at", params: { path: cwd } }) : await request({ method: "terminal.start" });
-        id = session.id;
-        if (!alive) { await request({ method: "terminal.close", params: { id } }); return; }
-        const term = new Emulator({ fontSize, fontFamily: '"DejaVu Sans Mono", "Cascadia Code", monospace', cursorBlink: true, cursorStyle: "bar", letterSpacing: 0, lineHeight: 1, scrollback: 5000, allowProposedApi: false, minimumContrastRatio: 4.5, theme: colors() });
-        const addon = new FitAddon(); emulator.current = term; fit.current = addon;
-        term.loadAddon(addon); term.open(container.current!);
-        // Own native/context-menu paste before xterm's textarea and container
-        // listeners can handle the same bubbling event.
-        const paste = (event: ClipboardEvent) => {
-          event.preventDefault();
-          event.stopPropagation();
-          const text = event.clipboardData?.getData("text/plain");
-          if (text) term.paste(text);
-        };
-        const screen = container.current!;
-        screen.addEventListener("paste", paste, true);
-        removePaste = () => screen.removeEventListener("paste", paste, true);
-        const scroll = wheelScroller();
-        const updateScroll = () => { if (alive) setScrolledUp(term.buffer.active.type === "normal" && term.buffer.active.viewportY < term.buffer.active.baseY); };
-        term.onScroll(updateScroll);
-        // Handle normal scrollback directly rather than relying on WebKit's
-        // asynchronous native viewport scrolling. Leave application mouse modes alone.
-        term.attachCustomWheelEventHandler(event => {
-          if (event.ctrlKey || term.buffer.active.type !== "normal" || term.modes.mouseTrackingMode !== "none" || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return true;
-          const height = container.current?.querySelector<HTMLElement>(".xterm-screen")?.clientHeight ?? 0;
-          const lines = scroll(event.deltaY, event.deltaMode, height ? height / term.rows : fontSize, term.rows);
-          if (lines) term.scrollLines(lines);
-          event.preventDefault();
-          return false;
-        });
-        let inputQueue = Promise.resolve();
-        term.onData(data => { inputQueue = inputQueue.then(async () => { if (alive && id !== null) await request({ method: "terminal.write", params: { id, data } }); }).catch(fail); });
-        term.onResize(({ cols, rows }) => { inputQueue = inputQueue.then(async () => { if (alive && id !== null && cols >= 2 && rows >= 1) await request({ method: "terminal.resize", params: { id, cols: Math.min(500, cols), rows: Math.min(250, rows) } }); }).catch(fail); });
-        // Ctrl+C copies a selection, or interrupts the shell without one.
-        term.attachCustomKeyEventHandler(event => {
-          // Let the application own tab shortcuts before xterm can send a
-          // control character to the foreground shell.
-          if (event.ctrlKey && ((event.shiftKey && ["t", "w"].includes(event.key.toLowerCase())) || ["PageUp", "PageDown"].includes(event.key))) return false;
-          if (event.ctrlKey && !event.altKey && !event.metaKey) {
-            const key = event.key.toLowerCase();
-            if (key === "c" && (event.shiftKey || term.getSelection())) {
-              event.preventDefault();
-              if (event.type === "keydown" && !event.repeat) {
-                const text = term.getSelection();
-                if (text) void request({ method: "terminal.copy", params: { data: text } }).catch(fail);
-              }
-              return false;
-            }
-            if (key === "v") {
-              // Returning false only stops xterm; cancel WebKit's native paste
-              // as well, so the clipboard is inserted exactly once.
-              event.preventDefault();
-              if (event.type === "keydown" && !event.repeat) {
-                void request({ method: "terminal.paste" }).then(text => { if (alive && text) term.paste(text); }).catch(fail);
-              }
-              return false;
-            }
-          }
-          if (event.type === "keydown" && event.shiftKey && !event.ctrlKey && !event.altKey && ["PageUp", "PageDown", "Home", "End"].includes(event.key)) {
-            event.preventDefault();
-            if (event.key === "Home") term.scrollToTop();
-            else if (event.key === "End") term.scrollToBottom();
-            else term.scrollPages(event.key === "PageUp" ? -1 : 1);
-            return false;
-          }
-          return true;
-        });
-        observer = new ResizeObserver(repaint);
-        observer.observe(container.current!);
-        if (document.fonts) await document.fonts.ready;
-        if (!alive) return;
-        repaint();
-        async function poll() {
-          if (!alive || id === null) return;
-          try {
-            const chunk = await request({ method: "terminal.read", params: { id } });
-            if (!alive) return;
-            if (chunk.data.length) { await new Promise<void>(resolve => term.write(new Uint8Array(chunk.data), resolve)); updateScroll(); }
-            if (chunk.exited) { term.writeln("\r\n[Session ended]"); term.options.disableStdin = true; await request({ method: "terminal.close", params: { id } }); id = null; exit.current(); return; }
-            timer = setTimeout(() => void poll(), chunk.data.length ? 0 : 25);
-          } catch (e) { fail(e); }
-        }
-        void poll();
-      } catch (e) { fail(e); }
-    }
-    void start();
-    return () => { alive = false; clearTimeout(timer); cancelAnimationFrame(frame); window.removeEventListener("resize", repaint); document.removeEventListener("fullscreenchange", repaint); window.removeEventListener("focus", repaint); window.removeEventListener("meridian-theme", theme); refit.current = null; observer?.disconnect(); removePaste?.(); emulator.current?.dispose(); emulator.current = null; fit.current = null; if (id !== null) void request({ method: "terminal.close", params: { id } }).catch(() => {}); };
-  }, []);
-  useEffect(() => {
-    if (emulator.current) {
-      emulator.current.options.fontSize = fontSize;
-      // Repaint existing terminal cells when the desktop appearance changes.
-      emulator.current.options.theme = colors();
-      if (emulator.current.rows) emulator.current.refresh(0, emulator.current.rows - 1);
-    }
-    if (active) refit.current?.();
-  }, [active, fontSize, appearance]);
-  return <section className={`terminal-session${active ? " active" : ""}`} role="tabpanel" aria-label="Terminal output" aria-hidden={!active} onContextMenu={event => { event.preventDefault(); event.stopPropagation(); setContext({ x: event.clientX, y: event.clientY }); }}>{scrolledUp && <button className="terminal-follow" onClick={() => { emulator.current?.scrollToBottom(); emulator.current?.focus(); }}>Jump to latest output</button>}<div className="terminal-screen" ref={container} aria-label="Interactive terminal" />{error && <p className="terminal-error" role="alert">{error}</p>}
-    {context && <div ref={contextMenu} className="terminal-context" role="menu" aria-label="Terminal actions" style={{ left: Math.max(8, Math.min(context.x, window.innerWidth - 190)), top: Math.max(8, Math.min(context.y, window.innerHeight - 150)) }}>
-      <button role="menuitem" disabled={!emulator.current?.hasSelection()} onClick={() => { const text = emulator.current?.getSelection(); if (text) void request({ method: "terminal.copy", params: { data: text } }).catch(e => setError(errorMessage(e))); setContext(null); }}>Copy</button>
-      <button role="menuitem" onClick={() => { void request({ method: "terminal.paste" }).then(text => { if (text) emulator.current?.paste(text); }).catch(e => setError(errorMessage(e))); setContext(null); }}>Paste</button>
-      <button role="menuitem" onClick={() => { emulator.current?.selectAll(); emulator.current?.focus(); setContext(null); }}>Select all</button>
-    </div>}
-  </section>;
+type Pane = {key:number; profile:Profile; cwd?:string; session?:number; info?:TerminalInfo; ended?:boolean};
+type Tab = {key:number; name:string; panes:Pane[]; focused:number; direction:"row"|"column"; sizes:number[]; zoom:boolean};
+type SavedTab = {name:string; direction:"row"|"column"; panes:{cwd:string;profile:string}[]};
+function loadWorkspace(): SavedTab[] {
+  try {
+    const value:unknown=JSON.parse(localStorage.getItem("meridian.terminal.workspace")??"[]");
+    if(!Array.isArray(value))return [];
+    let count=0;
+    return value.slice(0,16).filter(t=>t && typeof t.name==="string" && Array.isArray(t.panes)).map(t=>({name:t.name.slice(0,60),direction:t.direction==="column" ? "column" as const:"row" as const,panes:t.panes.slice(0,4).filter((p:{cwd?:unknown;profile?:unknown})=>p && typeof p.cwd==="string" && typeof p.profile==="string" && ++count<=16)})).filter(t=>t.panes.length);
+  } catch{return [];}
 }
 function Terminal() {
-  const appearance = useAppearance();
-  const [ready, setReady] = useState(false), [error, setError] = useState("");
-  const [tabs, setTabs] = useState<{ id: number; ended: boolean; cwd?: string }[]>([]), [active, setActive] = useState(1), [fontSize, setFontSize] = useState(() => { try { const value = Number(localStorage.getItem("meridian.terminal-font-size")); return Number.isInteger(value) && value >= 11 && value <= 24 ? value : 13; } catch { return 13; } });
-  useEffect(() => { try { localStorage.setItem("meridian.terminal-font-size", String(fontSize)); } catch {} }, [fontSize]);
-  const next = useRef(1);
-  const tabsRef = useRef(tabs); tabsRef.current = tabs;
-  useEffect(() => {
-    const opened = on("terminal.opened", () => { if (!tabsRef.current.length) newTab(); });
-    const openedAt = on("terminal.opened_at", event => newTab(event.data.path));
-    const closed = on("terminal.closed", () => { tabsRef.current = []; setTabs([]); setActive(0); });
-    void hello().then(() => setReady(true)).catch(e => setError(errorMessage(e)));
-    return () => { opened(); openedAt(); closed(); };
-  }, []);
-  function newTab(cwd?: string) { const id = next.current++; tabsRef.current = [...tabsRef.current, { id, ended: false, cwd }]; setTabs(tabsRef.current); setActive(id); }
-  function close(id: number) { setTabs(old => old.filter(t => t.id !== id)); if (active === id) setActive(tabs.find(t => t.id !== id)?.id ?? 0); }
-  useWindowKey(event => {
-    if (!event.ctrlKey) return;
-    if (event.shiftKey && event.key.toLowerCase() === "t" && ready && tabs.length < 16) { event.preventDefault(); newTab(); }
-    if (event.shiftKey && event.key.toLowerCase() === "w" && active) { event.preventDefault(); close(active); }
-    if (["PageUp", "PageDown"].includes(event.key) && tabs.length) {
-      event.preventDefault(); const index = tabs.findIndex(t => t.id === active);
-      setActive(tabs[(index + (event.key === "PageDown" ? 1 : tabs.length - 1)) % tabs.length]!.id);
-    }
+  const appearance=useAppearance(), [preferences,setPreferences]=useState(loadPreferences);
+  const [tabs,setTabs]=useState<Tab[]>([]), [active,setActive]=useState(0), [ready,setReady]=useState(false), [error,setError]=useState("");
+  const [preferencesOpen,setPreferencesOpen]=useState(false), [profileId,setProfileId]=useState(preferences.defaultProfile);
+  const [rename,setRename]=useState<number|null>(null), [name,setName]=useState("");
+  const [confirm,setConfirm]=useState<{tab:number;pane?:number}|null>(null), [restoring,setRestoring]=useState(false);
+  const [saved,setSaved]=useState<SavedTab[]>(loadWorkspace), [find,setFind]=useState({pane:0,revision:0});
+  const next=useRef(1), tabsRef=useRef(tabs), activeRef=useRef(active), prefsRef=useRef(preferences), closing=useRef(false), checking=useRef(false);
+  tabsRef.current=tabs;activeRef.current=active;prefsRef.current=preferences;
+  const current=tabs.find(t=>t.key===active), currentPane=current?.panes.find(p=>p.key===current.focused);
+  const paneCount=tabs.reduce((sum,t)=>sum+t.panes.length,0);
+  function update(fn:(tabs:Tab[])=>Tab[]) {const updated=fn(tabsRef.current);tabsRef.current=updated;setTabs(updated);}
+  function newTab(cwd?:string, selected?:Profile) {
+    if(!readyRef.current || tabsRef.current.reduce((n,t)=>n+t.panes.length,0)>=16)return;
+    closing.current=false;
+    const profile=selected ?? prefsRef.current.profiles.find(p=>p.id===(selectedProfile.current || prefsRef.current.defaultProfile)) ?? localProfile;
+    const pane:Pane={key:next.current++,profile,cwd}, tab:Tab={key:next.current++,name:"",panes:[pane],focused:pane.key,direction:"row",sizes:[100],zoom:false};
+    const updated=[...tabsRef.current,tab];tabsRef.current=updated;setTabs(updated);setActive(tab.key);
+  }
+  const readyRef=useRef(false), selectedProfile=useRef(profileId); selectedProfile.current=profileId;
+  useEffect(()=>{
+    const opened=on("terminal.opened",()=>{closing.current=false;if(!tabsRef.current.length)newTab();});
+    const openedAt=on("terminal.opened_at",event=>{closing.current=false;newTab(event.data.path,{...localProfile,shell:prefsRef.current.profiles.find(p=>p.id===prefsRef.current.defaultProfile)?.shell??""});});
+    const closed=on("terminal.closed",()=>{
+      if(tabsRef.current.length){const snapshot:SavedTab[]=tabsRef.current.map(t=>({name:t.name,direction:t.direction,panes:t.panes.map(p=>({cwd:p.info?.cwd||p.cwd||p.profile.cwd,profile:p.profile.id}))}));try{localStorage.setItem("meridian.terminal.workspace",JSON.stringify(snapshot));setSaved(snapshot);}catch{}}
+      closing.current=true;tabsRef.current=[];setTabs([]);setActive(0);setConfirm(null);setPreferencesOpen(false);setRename(null);setRestoring(false);});
+    // Queue surface events until the handshake finishes so early open-at commands survive.
+    readyRef.current=true;
+    void hello().then(()=>setReady(true)).catch(e=>{readyRef.current=false;setError(errorMessage(e));});
+    return ()=>{readyRef.current=false;opened();openedAt();closed();};
+  },[]);
+  useEffect(()=>{
+    if(!tabs.length || closing.current)return;
+    const timer=setTimeout(()=>{
+      const snapshot:SavedTab[]=tabs.map(t=>({name:t.name,direction:t.direction,panes:t.panes.map(p=>({cwd:p.info?.cwd||p.cwd||p.profile.cwd,profile:p.profile.id}))}));
+      try{localStorage.setItem("meridian.terminal.workspace",JSON.stringify(snapshot));}catch{setError("Could not save the folder layout.");}
+    },500);
+    return ()=>clearTimeout(timer);
+  },[tabs]);
+  function tabTitle(tab:Tab) {
+    const pane=tab.panes.find(p=>p.key===tab.focused)??tab.panes[0]!;
+    return tab.name || (pane.info?.busy ? pane.info.command : (pane.info?.cwd||pane.cwd||pane.profile.cwd).split("/").filter(Boolean).pop()) || pane.profile.name;
+  }
+  function patchPane(tabKey:number,paneKey:number,change:Partial<Pane>) {update(old=>old.map(t=>t.key===tabKey?{...t,panes:t.panes.map(p=>p.key===paneKey?{...p,...change}:p)}:t));}
+  function split(direction:"row"|"column") {
+    if(!current || paneCount>=16 || current.panes.length>=4)return;
+    const pane:Pane={key:next.current++,profile:currentPane?.profile??localProfile,cwd:currentPane?.info?.cwd||currentPane?.cwd};
+    update(old=>old.map(t=>t.key===active?{...t,panes:[...t.panes,pane],focused:pane.key,direction,zoom:false,sizes:Array(t.panes.length+1).fill(100/(t.panes.length+1))}:t));
+  }
+  async function remove(tabKey:number,paneKey?:number) {
+    const tab=tabsRef.current.find(t=>t.key===tabKey);if(!tab)return;
+    const panes=tab.panes.filter(p=>paneKey===undefined||p.key===paneKey);
+    // Stop sessions before removing their output, and surface backend errors.
+    await Promise.all(panes.filter(p=>p.session!==undefined).map(p=>request({method:"terminal.close",params:{id:p.session!}})));
+    update(old=>old.flatMap(t=>{
+      if(t.key!==tabKey)return[t];const remaining=t.panes.filter(p=>!panes.some(removed=>removed.key===p.key));
+      return remaining.length?[{...t,panes:remaining,focused:remaining.some(p=>p.key===t.focused)?t.focused:remaining[0]!.key,sizes:remaining.map(()=>100/remaining.length),zoom:false}]:[];
+    }));
+    if(!tabsRef.current.some(t=>t.key===activeRef.current))setActive(tabsRef.current[0]?.key??0);
+  }
+  async function close(tabKey:number,paneKey?:number) {
+    if(checking.current)return;checking.current=true;setError("");
+    try {
+      const panes=tabsRef.current.find(t=>t.key===tabKey)?.panes.filter(p=>paneKey===undefined||p.key===paneKey)??[];
+      const states=await Promise.all(panes.filter(p=>p.session!==undefined&&!p.ended).map(p=>request({method:"terminal.info",params:{id:p.session!}})));
+      if(states.some(info=>info.busy))setConfirm({tab:tabKey,pane:paneKey});else await remove(tabKey,paneKey);
+    }catch(e){setError(errorMessage(e));}finally{checking.current=false;}
+  }
+  function focusNext(delta:number) {
+    if(!current)return;const index=current.panes.findIndex(p=>p.key===current.focused), key=current.panes[(index+delta+current.panes.length)%current.panes.length]!.key;
+    update(old=>old.map(t=>t.key===active?{...t,focused:key}:t));
+  }
+  function resize(tabKey:number,index:number,delta:number) {
+    update(old=>old.map(t=>{
+      if(t.key!==tabKey)return t;const sizes=[...t.sizes],sum=sizes[index]!+sizes[index+1]!;
+      sizes[index]=Math.max(10,Math.min(sum-10,sizes[index]!+delta));sizes[index+1]=sum-sizes[index]!;return{...t,sizes};
+    }));
+  }
+  function restore() {
+    const available=16-paneCount;let count=0;
+    const restored=saved.flatMap(t=>{
+      const panes=t.panes.filter(()=>++count<=available).map(p=>({key:next.current++,cwd:p.cwd,profile:preferences.profiles.find(profile=>profile.id===p.profile)??localProfile}));
+      return panes.length?[{key:next.current++,name:t.name,panes,focused:panes[0]!.key,direction:t.direction,sizes:panes.map(()=>100/panes.length),zoom:false}]:[];
+    });
+    if(restored.length){closing.current=false;update(old=>[...old,...restored]);setActive(restored[0]!.key);}setRestoring(false);
+  }
+  useWindowKey(event=>{
+    if(preferencesOpen||rename!==null||confirm||restoring||document.querySelector('[role="dialog"],[role="alertdialog"]'))return;
+    if(!event.ctrlKey || event.altKey)return;
+    const key=event.key.toLowerCase();
+    if(event.shiftKey){
+      if(key==="t"){event.preventDefault();newTab();}
+      else if(key==="w"&&current){event.preventDefault();void close(current.key);}
+      else if(key==="q"){event.preventDefault();void request({method:"terminal.quit"}).catch(e=>setError(errorMessage(e)));}
+      else if(key==="d"||key==="e"){event.preventDefault();split(key==="d"?"row":"column");}
+      else if(key==="f"&&currentPane){event.preventDefault();setFind({pane:currentPane.key,revision:find.revision+1});}
+      else if(key==="enter"&&current){event.preventDefault();update(old=>old.map(t=>t.key===active?{...t,zoom:!t.zoom}:t));}
+      else if(["arrowleft","arrowup","arrowright","arrowdown"].includes(key)){event.preventDefault();focusNext(["arrowleft","arrowup"].includes(key)?-1:1);}
+    }else if(["PageUp","PageDown"].includes(event.key)&&tabs.length){event.preventDefault();const index=tabs.findIndex(t=>t.key===active);setActive(tabs[(index+(event.key==="PageDown"?1:tabs.length-1))%tabs.length]!.key);}
   });
-  return <main className="terminal-app"><header className="terminal-tabs"><div role="tablist" aria-label="Terminal sessions">{tabs.map(tab => <div className="terminal-tab" key={tab.id}><button role="tab" aria-selected={tab.id === active} tabIndex={tab.id === active ? 0 : -1} onKeyDown={event => { if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) { event.preventDefault(); const index = tabs.findIndex(t => t.id === tab.id); const target = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length; setActive(tabs[target]!.id); event.currentTarget.closest('[role="tablist"]')?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[target]?.focus(); } }} onClick={() => setActive(tab.id)}><span className={`session-dot${tab.ended ? " ended" : ""}`} />Session {tab.id}{tab.ended ? " · ended" : ""}</button><button aria-label={`Close session ${tab.id}`} onClick={() => close(tab.id)}><Icon name="close" width="12" height="12" /></button></div>)}</div><button className="new-session" aria-label="New terminal session" disabled={!ready || tabs.length >= 16} onClick={() => newTab()} title="New terminal session (Ctrl+Shift+T)"><Icon name="plus" width="17" height="17" /></button><div className="terminal-tools"><button aria-label="Decrease text size" disabled={fontSize <= 11} onClick={() => setFontSize(fontSize - 1)}>A−</button><button aria-label="Increase text size" disabled={fontSize >= 24} onClick={() => setFontSize(fontSize + 1)}>A+</button></div></header>
-    {error && <p role="alert">{error}</p>}{ready && tabs.map(tab => <Session key={tab.id} active={tab.id === active} fontSize={fontSize} cwd={tab.cwd} appearance={appearance} onExit={() => setTabs(old => old.map(t => t.id === tab.id ? { ...t, ended: true } : t))} />)}{!tabs.length && <div className="terminal-empty"><Icon name="terminal" width="40" height="40" /><h1>Ready when you are</h1><p>Open a terminal to start a new shell session.</p><span className="terminal-shortcut">Ctrl + Shift + T</span><button onClick={() => newTab()}>Open a terminal</button></div>}
+  const mode=preferences.theme==="system"?appearance:preferences.theme;
+  return <main className="terminal-app" data-terminal-theme={mode}>
+    <header className="terminal-tabs"><div role="tablist" aria-label="Terminal tabs">{tabs.map(tab=><div className="terminal-tab" key={tab.key} draggable onDragStart={e=>e.dataTransfer.setData("application/x-meridian-terminal-tab",String(tab.key))} onDragOver={e=>{if(e.dataTransfer.types.includes("application/x-meridian-terminal-tab"))e.preventDefault();}} onDrop={e=>{const from=Number(e.dataTransfer.getData("application/x-meridian-terminal-tab"));if(!from)return;e.preventDefault();update(old=>{const source=old.find(t=>t.key===from);if(!source)return old;const reordered=old.filter(t=>t.key!==from);reordered.splice(reordered.findIndex(t=>t.key===tab.key),0,source);return reordered;});}}>
+      <SurfaceButton role="tab" aria-selected={active===tab.key} tabIndex={active===tab.key?0:-1} title={tabTitle(tab)} onDoubleClick={()=>{setRename(tab.key);setName(tab.name);}} onKeyDown={e=>{if(["ArrowLeft","ArrowRight","Home","End"].includes(e.key)){e.preventDefault();const index=tabs.findIndex(t=>t.key===tab.key),n=e.key==="Home"?0:e.key==="End"?tabs.length-1:(index+(e.key==="ArrowRight"?1:tabs.length-1))%tabs.length;setActive(tabs[n]!.key);e.currentTarget.closest('[role="tablist"]')?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[n]?.focus();}}} onClick={()=>setActive(tab.key)}>{tabTitle(tab)}{tab.panes.every(p=>p.ended)?" · ended":""}</SurfaceButton><SurfaceButton aria-label={`Close ${tabTitle(tab)}`} onClick={()=>void close(tab.key)}>×</SurfaceButton>
+    </div>)}</div><SurfaceButton disabled={!ready||paneCount>=16} title="New tab (Ctrl+Shift+T)" onClick={()=>newTab()}>＋</SurfaceButton><SurfaceButton onClick={()=>setPreferencesOpen(true)}>Preferences</SurfaceButton><SurfaceButton onClick={()=>void request({method:"terminal.quit"}).catch(e=>setError(errorMessage(e)))}>Quit</SurfaceButton></header>
+    <nav className="terminal-actions" aria-label="Terminal actions"><Select aria-label="Profile for new tabs" value={profileId} onChange={e=>setProfileId(e.target.value)}>{preferences.profiles.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</Select>
+      <Button disabled={!current||paneCount>=16||current.panes.length>=4} onClick={()=>split("row")} title="Ctrl+Shift+D">Split side by side</Button><Button disabled={!current||paneCount>=16||current.panes.length>=4} onClick={()=>split("column")} title="Ctrl+Shift+E">Split top/bottom</Button>
+      <Button disabled={!currentPane} onClick={()=>currentPane&&setFind({pane:currentPane.key,revision:find.revision+1})}>Find</Button><Button disabled={!currentPane||paneCount>=16} onClick={()=>newTab(currentPane?.info?.cwd||currentPane?.cwd,currentPane?.profile)}>Duplicate folder</Button>
+      <Button disabled={!current} onClick={()=>{if(current){setRename(current.key);setName(current.name);}}}>Rename tab</Button><Button disabled={!current||tabs.findIndex(t=>t.key===active)===0} onClick={()=>update(old=>{const i=old.findIndex(t=>t.key===active);if(i<1)return old;const copy=[...old];[copy[i-1],copy[i]]=[copy[i]!,copy[i-1]!];return copy;})}>Move tab left</Button>
+      <Button disabled={!saved.length||paneCount>=16} onClick={()=>setRestoring(true)}>Reopen saved folders…</Button>
+    </nav>
+    {error&&<p role="alert" className="terminal-error">{error}<Button onClick={()=>setError("")}>Dismiss</Button></p>}
+    {ready&&tabs.map(tab=><section key={tab.key} hidden={active!==tab.key} className="terminal-workspace" style={{flexDirection:tab.direction}} aria-label={`${tabTitle(tab)} panes`}>
+      {tab.panes.map((pane,index)=><Fragment key={pane.key}><div className="terminal-pane" hidden={tab.zoom&&pane.key!==tab.focused} data-focused={pane.key===tab.focused} style={{flexBasis:tab.zoom?"100%":`${tab.sizes[index]}%`}}>
+        <div className="terminal-pane-heading"><SurfaceButton aria-label="Focus pane" onClick={()=>update(old=>old.map(t=>t.key===tab.key?{...t,focused:pane.key}:t))}>{pane.info?.busy?pane.info.command:pane.info?.cwd||pane.cwd||pane.profile.name}{pane.ended?` · ended${pane.info?.exit_code!=null?` (${pane.info.exit_code})`:""}`:""}</SurfaceButton>
+          <SurfaceButton title="Maximize/restore pane (Ctrl+Shift+Enter)" aria-label="Maximize or restore pane" onClick={()=>update(old=>old.map(t=>t.key===tab.key?{...t,focused:pane.key,zoom:!t.zoom}:t))}>{tab.zoom?"Restore":"Expand"}</SurfaceButton><SurfaceButton aria-label="Close pane" onClick={()=>void close(tab.key,pane.key)}>×</SurfaceButton></div>
+        <Session active={active===tab.key&&(!tab.zoom||tab.focused===pane.key)} focused={active===tab.key&&tab.focused===pane.key} cwd={pane.cwd} profile={pane.profile} preferences={preferences} appearance={appearance} searchRequest={find.pane===pane.key?find.revision:0} onFocus={()=>{if(tab.focused!==pane.key)update(old=>old.map(t=>t.key===tab.key?{...t,focused:pane.key}:t));}} onReady={session=>patchPane(tab.key,pane.key,{session})} onState={info=>{const old=tabsRef.current.find(t=>t.key===tab.key)?.panes.find(p=>p.key===pane.key)?.info;if(JSON.stringify(old)!==JSON.stringify(info))patchPane(tab.key,pane.key,{info});}} onExit={()=>patchPane(tab.key,pane.key,{ended:true})}/>
+      </div>{index<tab.panes.length-1&&!tab.zoom&&<div role="separator" aria-label="Resize panes" aria-orientation={tab.direction==="row"?"vertical":"horizontal"} aria-valuenow={Math.round(tab.sizes[index]!)} aria-valuemin={10} aria-valuemax={90} tabIndex={0} className="terminal-divider" onKeyDown={e=>{if(["ArrowLeft","ArrowUp","ArrowRight","ArrowDown"].includes(e.key)){e.preventDefault();resize(tab.key,index,["ArrowLeft","ArrowUp"].includes(e.key)?-3:3);}}} onPointerDown={e=>{e.currentTarget.setPointerCapture(e.pointerId);e.currentTarget.dataset.last=String(tab.direction==="row"?e.clientX:e.clientY);}} onPointerMove={e=>{if(!e.currentTarget.hasPointerCapture(e.pointerId))return;const coordinate=tab.direction==="row"?e.clientX:e.clientY,last=Number(e.currentTarget.dataset.last),rect=e.currentTarget.parentElement!.getBoundingClientRect();e.currentTarget.dataset.last=String(coordinate);resize(tab.key,index,(coordinate-last)/(tab.direction==="row"?rect.width:rect.height)*100);}} onPointerUp={e=>{if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}}/>}</Fragment>)}
+    </section>)}
+    {!tabs.length&&<div className="terminal-empty"><h1>Terminal</h1><p>Open a shell, or reopen saved folders as new sessions.</p><Button disabled={!ready} onClick={()=>newTab()}>New terminal</Button></div>}
+    <footer className="terminal-hints">Ctrl+Shift+F find · Ctrl+Shift+arrows switch panes · Ctrl+click links · Drag files to insert quoted paths · 16 panes maximum</footer>
+    {preferencesOpen&&<PreferencesDialog value={preferences} onClose={()=>setPreferencesOpen(false)} onSave={value=>{setPreferences(value);setProfileId(value.defaultProfile);}}/>}
+    {rename!==null&&<Dialog open aria-label="Rename tab" onClose={()=>setRename(null)}><h2>Rename tab</h2><Input autoFocus aria-label="Tab name" value={name} maxLength={60} onChange={e=>setName(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){update(old=>old.map(t=>t.key===rename?{...t,name:name.trim()}:t));setRename(null);}}}/><p>Leave blank to show the current folder or running program.</p><Button onClick={()=>{update(old=>old.map(t=>t.key===rename?{...t,name:name.trim()}:t));setRename(null);}}>Save name</Button></Dialog>}
+    <ConfirmDialog open={!!confirm} title="Stop running jobs?" confirmLabel="Stop and close" danger onClose={()=>setConfirm(null)} onConfirm={async()=>{if(confirm)await remove(confirm.tab,confirm.pane);}}>Closing this {confirm?.pane===undefined?"tab":"pane"} stops its shell and child processes. Unsaved work in terminal programs will be lost.</ConfirmDialog>
+    <ConfirmDialog open={restoring} title="Reopen saved folders?" confirmLabel="Open new sessions" onClose={()=>setRestoring(false)} onConfirm={async()=>restore()}>This starts new shells or SSH connections using saved profiles and folders, up to the 16-pane limit. It does not recover processes, replay commands or restore previous output.</ConfirmDialog>
   </main>;
 }
-mount(<Terminal />);
+mount(<Terminal/>);

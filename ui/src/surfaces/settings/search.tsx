@@ -1,7 +1,8 @@
+import { Section } from "../../meridian-ui";
 import { useEffect, useRef, useState } from "react";
 import { request } from "../../lib/bridge";
 import { errorMessage } from "../../lib/react";
-import { Toggle } from "../../components/Toggle";
+import { Toggle } from "../../meridian-ui";
 import type { SearchPreferences } from "../../lib/generated/SearchPreferences";
 export function SearchSettings() {
   const [value, setValue] = useState<SearchPreferences | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState("");
@@ -13,5 +14,5 @@ export function SearchSettings() {
     try { setValue(await request({ method: "settings.search_set", params: { ...value, [key]: enabled } })); }
     catch (e) { setError(errorMessage(e)); } finally { pending.current = false; setBusy(false); }
   }
-  return <><p className="section-caption">Installed applications are always searchable. Searches stay on this computer.</p><div className="settings-card">{([['settings','System settings','Find settings such as Wi-Fi, displays and sound.'],['calculator','Calculator','Calculate arithmetic expressions. Select a result to copy it.']] as const).map(([key,label,description]) => <div className="settings-row" key={key}><div><strong>{label}</strong><small className="row-detail">{description}</small></div><Toggle label={`Search ${label.toLowerCase()}`} checked={value?.[key] === true} disabled={!value || busy} onChange={enabled => void save(key, enabled)} /></div>)}</div>{error && <p role="alert" className="settings-error">{error}</p>}</>;
+  return <>{!value && <p role={error ? "alert" : "status"} className="settings-notice">{error ? "Search preferences are unavailable. Use Reload page to retry." : "Loading search preferences…"}</p>}<p className="section-caption">Installed applications are always searchable. Searches stay on this computer.</p><Section title="Search providers">{([['settings','System settings','Find settings such as Wi-Fi, displays and sound.'],['calculator','Calculator','Calculate arithmetic expressions. Select a result to copy it.']] as const).map(([key,label,description]) => <div className="settings-row" key={key}><div><strong>{label}</strong><small className="row-detail">{description}</small></div><Toggle label={`Search ${label.toLowerCase()}`} checked={value?.[key] === true} disabled={!value || busy} onChange={enabled => void save(key, enabled)} /></div>)}</Section>{error && <p role="alert" className="settings-error">{error}</p>}</>;
 }

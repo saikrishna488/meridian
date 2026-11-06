@@ -868,6 +868,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "meridian-installer"
+version = "0.1.1"
+dependencies = [
+ "gio",
+ "glib",
+ "gtk4",
+ "libc",
+ "serde_json",
+]
+
+[[package]]
 name = "meridian-protocol"
 version = "0.1.1"
 dependencies = [
@@ -895,6 +906,7 @@ dependencies = [
 name = "meridian-shell"
 version = "0.1.1"
 dependencies = [
+ "cc",
  "env_logger",
  "gio",
  "gio-unix",
@@ -907,6 +919,7 @@ dependencies = [
  "meridian-protocol",
  "meridian-services",
  "pam-client",
+ "pkg-config",
  "semver",
  "serde",
  "serde_json",

@@ -85,6 +85,7 @@ impl Greeter {
             r.map(Reply::Now).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
         };
         match request {
+            Request::EnginesGet => serialize(proto::reply_ok(&crate::rendering::state())),
             Request::Hello => {
                 if let Some(surface) = self.surface.borrow().as_ref() {
                     surface.mark_ready();

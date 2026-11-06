@@ -1,0 +1,41 @@
+#!/bin/sh
+# Supervise the desktop's password agent, never the privileged command itself.
+# One supervisor per login session; never collect or log passwords.
+set -u
+[ -n "${XDG_RUNTIME_DIR:-}" ] && [ -d "$XDG_RUNTIME_DIR" ] || exit 1
+session=$(printf '%s' "${XDG_SESSION_ID:-${WAYLAND_DISPLAY:-${DISPLAY:-desktop}}}" | tr -c 'a-zA-Z0-9_-' '_')
+exec 9>"$XDG_RUNTIME_DIR/meridian-polkit-$session.lock"
+flock -n 9 || exit 0
+child=
+stop() {
+    trap '' TERM INT HUP
+    if [ -n "$child" ]; then kill -TERM "$child" 2>/dev/null || true; wait "$child" 2>/dev/null || true; fi
+    exit 0
+}
+trap stop TERM INT HUP
+# Prefer MATE: the legacy GNOME agent can crash while opening a password prompt.
+while :; do
+    found=0
+    for agent in /usr/libexec/polkit-mate-authentication-agent-1 /usr/lib/mate-polkit/polkit-mate-authentication-agent-1 /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1 /usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1 /usr/libexec/polkit-gnome-authentication-agent-1; do
+        [ -x "$agent" ] || continue
+        found=1
+        "$agent" 9>&- &
+        child=$!
+        wait "$child"
+        status=$?
+        child=
+        # A clean exit can mean another desktop agent already owns the session.
+        [ "$status" -eq 0 ] && exit 0
+        echo "component=polkit event=agent_exited agent=$agent status=$status" >&2
+        sleep 2 &
+        child=$!
+        wait "$child" || true
+        child=
+    done
+    [ "$found" -eq 1 ] || { echo 'No graphical Polkit agent installed. Install mate-polkit or use the terminal installer.' >&2; exit 1; }
+    # Avoid a rapid crash/restart loop when all installed agents fail.
+    sleep 15 &
+    child=$!
+    wait "$child" || true
+    child=
+done

@@ -1,13 +1,19 @@
 # Beta 0.8 desktop workflow work
 
+> **Historical milestone record.** The current source includes Meridian Files,
+> Meridian Terminal, light/dark themes and the
+> [desktop workflow additions](DESKTOP-WORKFLOWS.md). Old implementation names,
+> measurements and completed checks below are preserved as historical evidence;
+> they do not validate the current build or supersede README/features.md.
+
+
 Status: **initial core workflow implementation; Phase 3 is incomplete**. This is
 not a Public Beta release. The package version remains unchanged. The Phase 1
 security/hardware gates and Phase 2 performance gates remain prerequisites.
 
-> This milestone records an earlier implementation. The Orbit/Finder and
-> embedded PTY Terminal interfaces described below remain in legacy source but
-> are excluded from the current production UI bundle. The shipped session
-> launches GNOME Files and Kitty instead. See the current
+> This milestone records earlier Orbit/Finder and PTY Terminal implementations.
+> Both Files and Terminal are in the current production bundle; the historical
+> checks below do not qualify those newer implementations. See the current
 > [README](../README.md) and [architecture](ARCHITECTURE.md).
 
 ## Implemented workflows
@@ -73,7 +79,7 @@ security/hardware gates and Phase 2 performance gates remain prerequisites.
 
 - Do Not Disturb is saved across sessions and suppresses unread badges. Existing
   messages become read when enabled; new messages remain available in this session's
-  history. Meridian currently has no notification toast layer; the UI explains the
+  history. At this milestone Meridian had no notification toast layer; the UI explains the
   badge behavior. Notification contents are not persisted by this change.
 - History groups by day and application. Action channels are invalidated when their
   D-Bus sender disconnects, so terminated applications do not leave active actions.

@@ -26,4 +26,4 @@ else
     grim "$image" || fail "Could not capture the desktop."
 fi
 trap - EXIT HUP INT TERM
-notify "Screenshot saved" "$image"
+printf '%s\n' "$image"

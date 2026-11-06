@@ -1,0 +1,160 @@
+/* Precision / Classic: shared by every Meridian web surface.
+   Loaded after the UI kit so both surfaces use the same opaque foundation. */
+:root, :root[data-theme] {
+  color-scheme: light;
+  --canvas: #f3f4f6;
+  --surface: #f7f8f9;
+  --surface-raised: #ffffff;
+  --surface-subtle: #eef1f3;
+  --surface-hover: var(--brand-green-soft);
+  --ink: #20272b;
+  --ink-muted: #606b70;
+  --line: #d6dcdf;
+  --selection: var(--brand-green-soft);
+  --selection-ink: #006600;
+  --action: #006600;
+  --button-primary: var(--brand-green);
+  --on-primary: var(--brand-green-ink);
+  --focus-ring: var(--brand-green);
+  --control-track: #c8ced0;
+  --muk-green-fill: var(--brand-green);
+  --muk-green: #006600;
+  --muk-green-ink: var(--brand-green-ink);
+  --muk-green-soft: var(--brand-green-soft);
+  --muk-blue: #006600;
+  --muk-blue-fill: var(--brand-green);
+  --muk-blue-soft: var(--brand-green-soft);
+  --muk-orange: #815012;
+  --muk-red: #a52d38;
+  --accent: var(--brand-green);
+  --success: #006600;
+  --button-primary-hover: var(--brand-green-hover);
+  --action-hover: #004d00;
+  --danger: #a52d38;
+  --glass-background-strong: #ffffff;
+  --glass-border: #d6dcdf;
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+}
+:root .menu.control-center {
+  width: min(416px, calc(100vw - 16px));
+  padding: 18px;
+  overflow-y: auto;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / .16);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+:root .control-center .control-heading { margin-bottom: 16px; }
+:root .control-center .control-heading h1 { font-size: 17px; }
+:root .control-center .control-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+:root .control-center .control-card {
+  min-height: 70px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-raised);
+  color: var(--ink);
+}
+:root .control-center .control-connection { grid-template-columns: 24px minmax(0, 1fr) auto; gap: 6px; }
+:root .control-center .control-connection > .control-symbol { width: 24px; height: 28px; background: transparent; }
+:root .control-center .control-connection .muk-icon-tile { width: 24px; background: transparent; color: var(--selection-ink); box-shadow: none; }
+:root .control-center .control-connection[data-enabled="true"] { background: var(--selection); border-color: var(--brand-green); }
+:root .control-center .control-card strong { font-size: 12px; }
+:root .control-center .control-card small { color: var(--ink-muted); font-size: 11px; }
+:root .control-center .control-dnd { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+:root .control-center .control-dnd > .control-symbol { display: none; }
+:root .control-center .control-symbol { background: var(--surface-subtle); color: var(--ink-muted); border-radius: 8px; }
+:root .control-center .control-symbol.enabled { background: var(--selection); color: var(--selection-ink); }
+:root .control-center .control-wide { grid-column: 1 / -1; min-height: 76px; }
+:root .control-center .control-card-title { margin-bottom: 6px; }
+:root .control-center .control-heading button,
+:root .control-center .control-card-title button { color: var(--ink); border-color: var(--line); }
+:root .control-center .control-card-title .muk-icon-tile { background: var(--surface-subtle); color: var(--ink-muted); }
+.control-session { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.control-session h2 { font-size: 12px; margin: 0 0 10px; font-weight: 600; }
+.control-session-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+:root .control-session-actions button {
+  min-width: 0; min-height: 32px; padding: 6px 8px;
+  border: 1px solid var(--line); border-radius: 6px;
+  background: var(--surface-raised); color: var(--ink); font: inherit; font-size: 12px;
+}
+:root .control-session-actions button:hover:enabled { background: var(--surface-hover); }
+:root .control-session-actions .session-shutdown { color: var(--danger); }
+:root .control-session-actions .armed { border-color: var(--danger); background: #fbecee; color: var(--danger); }
+.session-hint { font-size: 10px; color: var(--ink-muted); line-height: 1.5; margin: 10px 0 0; }
+:root body:has(.settings-app), :root .settings-app {
+  background: var(--canvas); color: var(--ink);
+  --settings-bg: var(--canvas); --settings-sidebar-bg: var(--surface-subtle);
+  --settings-card-bg: var(--surface-raised); --settings-text: var(--ink);
+  --settings-muted: var(--ink-muted); --settings-border: var(--line);
+  --settings-divider: var(--line); --settings-control-bg: var(--surface);
+  --settings-control-text: var(--ink); --settings-hover-bg: var(--surface-hover);
+  --settings-soft-bg: var(--surface-subtle);
+  --settings-glass-border: var(--line); --settings-glass-bg: var(--surface);
+}
+:root .settings-app .settings-sidebar { background: var(--surface-subtle); color: var(--ink); border-color: var(--line); -webkit-backdrop-filter: none; backdrop-filter: none; }
+:root .settings-app .settings-content { background: var(--canvas); color: var(--ink); }
+:root .settings-app .settings-card { background: var(--surface-raised); border: 1px solid var(--line); border-radius: 12px; box-shadow: none; }
+:root .settings-app .settings-row + .settings-row { border-top-color: var(--line); }
+:root .settings-app .settings-sidebar nav button { color: var(--ink); border-radius: 6px; }
+:root .settings-app .settings-sidebar nav button:hover { background: var(--surface-hover); }
+:root .settings-app .settings-sidebar nav button[aria-current="page"] { color: var(--selection-ink); background: var(--selection); }
+:root .settings-app :is(.muted, .section-caption, .prototype-note, .connected-device-status, .connected-device-name small, .connected-device-meta > div) { color: var(--ink-muted); }
+:root .settings-app .settings-content button:not(.meridian-toggle):not(.wallpaper-choice):not(.settings-hub-card) { border-radius: 6px; }
+:root .settings-app :is(input:not([type="range"]):not([type="checkbox"]):not([type="radio"]), textarea, .meridian-select-input):not(:where(.muk-search-field > input)) { color: var(--ink); background: var(--surface); border-color: var(--line); }
+:root .settings-app .muk-search-field { background: var(--surface-raised); border-color: var(--line); color: var(--ink); }
+:root .settings-app .connected-device-row { border-color: var(--line); }
+:root .settings-app .connected-device-row summary:hover { background: var(--surface-hover); }
+:root .settings-app .settings-page-heading { margin-bottom: 20px; }
+:root .ui-slider::-webkit-slider-runnable-track { height: 4px; }
+:root .ui-slider::-webkit-slider-thumb { width: 14px; height: 14px; margin-top: -5px; border: 1px solid var(--brand-green-ink); background: var(--brand-green); box-shadow: 0 1px 2px #0002; }
+:root .ui-slider::-moz-range-track, :root .ui-slider::-moz-range-progress { height: 4px; }
+:root .ui-slider::-moz-range-thumb { width: 12px; height: 12px; border: 1px solid var(--brand-green-ink); background: var(--brand-green); }
+@media (max-width: 360px) {
+  :root .menu.control-center { padding: 12px; }
+  :root .control-center .control-card { padding: 9px; }
+  .control-session-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #15191c;
+  --surface: #1b2024;
+  --surface-raised: #23292e;
+  --surface-subtle: #1e2428;
+  --surface-hover: var(--brand-green-soft);
+  --ink: #edf2ef;
+  --ink-muted: #b2beb7;
+  --line: #45524a;
+  --selection: var(--brand-green-soft);
+  --selection-ink: var(--brand-green);
+  --action: var(--brand-green);
+  --action-hover: var(--brand-green-hover);
+  --button-primary: var(--brand-green);
+  --button-primary-hover: var(--brand-green-hover);
+  --on-primary: var(--brand-green-ink);
+  --focus-ring: var(--brand-green);
+  --control-track: #59675f;
+  --danger: #ff9da8;
+  --success: var(--brand-green);
+  --accent: var(--brand-green);
+  --muk-green: var(--brand-green);
+  --muk-green-fill: var(--brand-green);
+  --muk-green-soft: var(--brand-green-soft);
+  --muk-blue: var(--brand-green);
+  --muk-blue-soft: var(--brand-green-soft);
+  --muk-orange: #f0c58d;
+  --muk-red: #ff9da8;
+  --glass-background-strong: var(--surface-raised);
+  --glass-border: var(--line);
+}
+:root[data-theme="dark"] .control-session-actions .armed {
+  background: #4b2830;
+}
+@media (forced-colors: active) {
+  :root, :root[data-theme] { --canvas: Canvas; --surface: Canvas; --surface-raised: Canvas; --surface-subtle: Canvas; --ink: CanvasText; --ink-muted: CanvasText; --line: ButtonText; --selection: Highlight; --selection-ink: HighlightText; --muk-green-fill: Highlight; --control-track: GrayText; --danger: LinkText; }
+}

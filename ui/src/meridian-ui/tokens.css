@@ -1,0 +1,24 @@
+/* Meridian UI Kit v1 — semantic tokens shared by every WebView. */
+:root, :root[data-theme="dark"] {
+  --muk-space-unit:4px;
+  --muk-gap:12px; --muk-gap-small:8px;
+  --muk-control-height:36px; --muk-compact-height:32px;
+  --muk-card-inset:20px; --muk-panel-inset:16px; --muk-page-inset:32px;
+  --muk-row-inset:16px; --muk-control-column:232px; --muk-sidebar-width:232px;
+  --control-height:var(--muk-control-height); --control-height-small:var(--muk-compact-height);
+  --muk-green:var(--brand-green); --muk-green-fill:var(--brand-green); --muk-green-ink:var(--brand-green-ink);
+  --muk-blue:var(--brand-green); --muk-blue-fill:var(--brand-green);
+  --muk-orange:#ffb45c; --muk-red:#ff757f; --muk-white:#e9edf4;
+  --muk-green-soft:var(--brand-green-soft); --muk-blue-soft:var(--brand-green-soft);
+  --muk-orange-soft:rgb(255 180 92 / .13); --muk-red-soft:rgb(255 117 127 / .12);
+  --canvas:#101214; --surface:#1a1d20; --surface-raised:#202428; --surface-subtle:#15181b;
+  --surface-hover:#2a3035; --ink:#f1f4f6; --ink-muted:#a5afb8;
+  --line:rgb(235 245 255 / .10); --selection:var(--muk-blue-soft); --selection-ink:var(--brand-green);
+  --action:var(--muk-blue); --action-hover:var(--brand-green-hover); --focus-ring:var(--muk-blue);
+  --button-primary:var(--muk-green-fill); --button-primary-hover:var(--brand-green-hover); --on-primary:var(--muk-green-ink);
+  --success:var(--muk-green); --danger:var(--muk-red); --warning:var(--muk-orange);
+  --accent:var(--muk-green); --control-track:#424b51;
+  --shadow-card:0 1px 2px rgb(0 0 0 / .13),inset 0 1px 0 rgb(255 255 255 / .025);
+  --shadow-lg:0 18px 48px rgb(0 0 0 / .35),0 2px 8px rgb(0 0 0 / .2);
+  --glass-background-strong:#202428; --glass-border:var(--line);
+}

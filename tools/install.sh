@@ -42,6 +42,10 @@ if [ "${1:-}" = --check-build ]; then
     exit 0
 fi
 [ "$(id -u)" = 0 ] || die "run as root: sudo $0 $*"
+command -v flock >/dev/null 2>&1 || die "util-linux (flock) is required for safe installation."
+install -d -m700 /run/meridian-installer
+exec {system_install_lock}>/run/meridian-installer/operation.lock
+flock -n "$system_install_lock" || die "Another Meridian system installation is already running."
 meridian_load_packages
 PACKAGES=("${RUNTIME_PACKAGES[@]}")
 
@@ -51,10 +55,10 @@ greeter_command() {
 
 install_files() {
     verify_install_build
-    for f in target/release/meridian-shell target/release/meridian-greeter target/release/wayland-pipewire-idle-inhibit ui/dist/surfaces/panel/index.html \
+    for f in target/release/meridian-shell target/release/meridian-greeter target/release/meridian-installer target/release/wayland-pipewire-idle-inhibit ui/dist/surfaces/panel/index.html \
         ui/dist/surfaces/locker/index.html ui/dist/surfaces/locker/locker.js \
         ui/dist/surfaces/settings/settings.js ui/dist/vendor/LICENSE; do
-        [ -e "$ROOT/$f" ] || die "$f is missing; build first with tools/compile_meridian.sh (as your user)"
+        [ -e "$ROOT/$f" ] || die "$f is missing; build first with bash install.sh --cli --compile (as your user)"
     done
 
     step "Installing runtime packages"
@@ -65,13 +69,17 @@ install_files() {
     fi
     step "Backing up the current installation"
     meridian_transaction_begin "$SHARE" "$PREFIX/share/themes/Meridian" "$PREFIX/bin/meridian-shell" \
-        "$PREFIX/bin/meridian-greeter" "$PREFIX/bin/wayland-pipewire-idle-inhibit" "$PREFIX/bin/meridian-vault" \
+        "$PREFIX/bin/meridian-greeter" "$PREFIX/bin/meridian-installer" "$PREFIX/share/applications/meridian-installer.desktop" "$PREFIX/share/applications/meridian-terminal.desktop" \
+        "$PREFIX/bin/wayland-pipewire-idle-inhibit" "$PREFIX/bin/meridian-vault" \
         "$PREFIX/bin/meridian-session" "$SESSION_FILE" /etc/pam.d/meridian-lock \
         "$PREFIX/share/applications/meridian-vault.desktop"
     rm -f "$PREFIX/bin/meridian-vault" "$PREFIX/share/applications/meridian-vault.desktop"
     step "Installing Meridian to $PREFIX"
     install -Dm755 "$ROOT/target/release/meridian-shell" "$PREFIX/bin/meridian-shell"
     install -Dm755 "$ROOT/target/release/meridian-greeter" "$PREFIX/bin/meridian-greeter"
+    install -Dm755 "$ROOT/target/release/meridian-installer" "$PREFIX/bin/meridian-installer"
+    install -Dm644 "$ROOT/session/meridian-installer.desktop" "$PREFIX/share/applications/meridian-installer.desktop"
+    install -Dm644 "$ROOT/session/meridian-terminal.desktop" "$PREFIX/share/applications/meridian-terminal.desktop"
     install -Dm755 "$ROOT/target/release/wayland-pipewire-idle-inhibit" "$PREFIX/bin/wayland-pipewire-idle-inhibit"
     sed "s|@SHARE_DIR@|$SHARE|" "$ROOT/session/meridian-session" > "$PREFIX/bin/meridian-session"
     chmod 755 "$PREFIX/bin/meridian-session"
@@ -194,6 +202,7 @@ uninstall() {
     disable_login_screen
     step "Removing Meridian files"
     rm -f "$PREFIX/bin/meridian-vault" "$PREFIX/bin/meridian-drift" "$PREFIX/share/applications/meridian-vault.desktop" "$PREFIX/share/applications/meridian-drift.desktop"
+    rm -f "$PREFIX/bin/meridian-installer" "$PREFIX/share/applications/meridian-installer.desktop" "$PREFIX/share/applications/meridian-terminal.desktop"
     rm -f "$PREFIX/bin/meridian-shell" "$PREFIX/bin/meridian-greeter" "$PREFIX/bin/wayland-pipewire-idle-inhibit" "$PREFIX/bin/meridian-session" "$SESSION_FILE" \
         /etc/pam.d/meridian-lock
     rm -rf "$SHARE" "$PREFIX/share/themes/Meridian"

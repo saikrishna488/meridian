@@ -34,6 +34,7 @@ struct Toplevel {
     window: Window,
     /// Received its first `done` (all initial properties are known).
     ready: bool,
+    minimized: bool,
 }
 
 #[derive(Default)]
@@ -41,6 +42,7 @@ struct State {
     toplevels: Vec<Toplevel>,
     stopped: bool,
     dirty: bool,
+    desktop_hidden: Option<(Vec<u32>, Option<u32>)>,
 }
 
 type Listener = Box<dyn Fn(&[Window])>;
@@ -181,6 +183,29 @@ impl WindowService {
         true
     }
 
+    pub fn toggle_desktop(&self) -> Result<bool, String> {
+        let mut inner = self.inner.borrow_mut();
+        if inner.state.stopped { return Err("Window service is unavailable".into()); }
+        let showing = if let Some((ids, focused)) = inner.state.desktop_hidden.take() {
+            for t in &inner.state.toplevels {
+                if ids.contains(&t.window.id) { t.handle.unset_minimized(); }
+            }
+            if let (Some(id), Some(seat)) = (focused, &inner.seat) {
+                if let Some(t) = inner.state.toplevels.iter().find(|t| t.window.id == id) { t.handle.activate(seat); }
+            }
+            false
+        } else {
+            let ids = inner.state.toplevels.iter().filter(|t| t.ready && !t.minimized).map(|t| {
+                t.handle.set_minimized(); t.window.id
+            }).collect();
+            let focus = inner.state.toplevels.iter().find(|t| t.window.active).map(|t| t.window.id);
+            inner.state.desktop_hidden = Some((ids, focus));
+            true
+        };
+        inner.conn.flush().map_err(|e| e.to_string())?;
+        Ok(showing)
+    }
+
     /// Ask a window to close gracefully. The client may prompt before closing.
     pub fn close(&self, id: u32) -> bool {
         let inner = self.inner.borrow();
@@ -247,6 +272,7 @@ impl Dispatch<ZwlrForeignToplevelManagerV1, ()> for State {
                         fullscreen: false,
                     },
                     ready: false,
+                    minimized: false,
                 });
             }
             manager_v1::Event::Finished => {
@@ -284,6 +310,7 @@ impl Dispatch<ZwlrForeignToplevelHandleV1, ()> for State {
             handle_v1::Event::Title { title } => t.window.title = title,
             handle_v1::Event::AppId { app_id } => t.window.app_id = app_id,
             handle_v1::Event::State { state: raw } => {
+                t.minimized = has_state(&raw, handle_v1::State::Minimized);
                 t.window.active = is_activated(&raw);
                 t.window.fullscreen = has_state(&raw, handle_v1::State::Fullscreen);
             }

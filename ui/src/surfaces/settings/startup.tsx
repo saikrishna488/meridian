@@ -1,10 +1,11 @@
-import { Button } from "../../components/ui/button";
+import { SearchField } from "../../meridian-ui";
+import { Button } from "../../meridian-ui";
 import { useEffect, useRef, useState } from "react";
 import { request } from "../../lib/bridge";
 import { errorMessage, useDialogFocus } from "../../lib/react";
 import { Icon } from "../../components/Icon";
 import { AppIcon } from "../../components/AppIcon";
-import { Toggle } from "../../components/Toggle";
+import { Toggle } from "../../meridian-ui";
 import type { StartupEntry } from "../../lib/generated/StartupEntry";
 import type { SearchItem } from "../../lib/generated/SearchItem";
 
@@ -51,6 +52,6 @@ export function Startup() {
     <p className="section-caption">Changes apply at your next sign-in. Turning an app off here keeps it installed and does not close it now. System defaults are overridden only for your account.</p>
     {message && <p className="startup-message" role="status">{message}</p>}
     {error && !adding && <p className="settings-error" role="alert">{error}</p>}
-    {adding && <div className="startup-dialog-scrim"><div ref={dialog} role="dialog" aria-modal="true" aria-labelledby="startup-dialog-title" className="startup-dialog"><header><div><h2 id="startup-dialog-title">Add a login application</h2><p>It will open automatically the next time you sign in.</p></div><Button aria-label="Close application picker" disabled={busy} onClick={() => setAdding(false)}><Icon name="close" width="18" height="18" /></Button></header><label className="startup-picker-search"><Icon name="search" width="17" height="17" /><input data-autofocus aria-label="Search installed applications" placeholder="Find an application" value={query} disabled={busy} onChange={e => setQuery(e.target.value)} /></label><div className="startup-app-picker">{matching.map(app => <Button key={app.id} disabled={busy} onClick={() => void add(app)}><AppIcon id={app.id} name={app.title} icon={app.icon} /><span><strong>{app.title}</strong><small>{app.subtitle || app.id}</small></span><Icon name="plus" width="17" height="17" /></Button>)}{!matching.length && <p className="device-empty">{query ? "No matching applications." : "All installed applications are already listed."}</p>}</div>{error && <p className="settings-error" role="alert">{error}</p>}<footer><Button disabled={busy} onClick={() => setAdding(false)}>Cancel</Button></footer></div></div>}
+    {adding && <div className="startup-dialog-scrim"><div ref={dialog} role="dialog" aria-modal="true" aria-labelledby="startup-dialog-title" className="startup-dialog"><header><div><h2 id="startup-dialog-title">Add a login application</h2><p>It will open automatically the next time you sign in.</p></div><Button aria-label="Close application picker" disabled={busy} onClick={() => setAdding(false)}><Icon name="close" width="18" height="18" /></Button></header><SearchField className="startup-picker-search" data-autofocus aria-label="Search installed applications" placeholder="Find an application" value={query} disabled={busy} onValueChange={setQuery} /><div className="startup-app-picker">{matching.map(app => <Button key={app.id} disabled={busy} onClick={() => void add(app)}><AppIcon id={app.id} name={app.title} icon={app.icon} /><span><strong>{app.title}</strong><small>{app.subtitle || app.id}</small></span><Icon name="plus" width="17" height="17" /></Button>)}{!matching.length && <p className="device-empty">{query ? "No matching applications." : "All installed applications are already listed."}</p>}</div>{error && <p className="settings-error" role="alert">{error}</p>}<footer><Button disabled={busy} onClick={() => setAdding(false)}>Cancel</Button></footer></div></div>}
   </>;
 }

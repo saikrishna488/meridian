@@ -3,6 +3,7 @@
 //! locked-down WebViews, the typed UI bridge, and the `meridian://` scheme.
 //! See docs/ARCHITECTURE.md.
 
+pub mod workflows;
 mod audio_devices;
 mod bluetooth_agent;
 pub mod bridge;
@@ -24,7 +25,9 @@ pub mod power;
 pub mod power_settings;
 mod pulse;
 mod recovery;
+pub mod rendering;
 pub mod scheme;
+mod screenshot;
 mod search;
 mod settings_devices;
 pub mod shell;
@@ -32,6 +35,7 @@ pub mod startup;
 pub mod surface;
 mod system_integrations;
 mod terminal;
+pub mod terminal_supervisor;
 mod transfer;
 mod trash;
 mod uninstall;
@@ -61,17 +65,22 @@ pub fn install_css() {
     let css = gtk::CssProvider::new();
     css.load_from_string(
         "window.meridian-surface { background: transparent; }
-        .meridian-recovery { background: #000000; color: #ffffff; padding: 40px; border: 2px solid #ffffff; }
-        window.meridian-preferences { background: #000000; color: #ffffff; border: 2px solid #ffffff; }
-        window.meridian-preferences headerbar { min-height: 40px; padding: 0 8px 0 12px; background: #000000; color: #ffffff; border-bottom: 1px solid #ffffff; box-shadow: none; }
-        window.meridian-preferences.meridian-dark { background: #000000; color: #ffffff; }
-        window.meridian-preferences.meridian-dark headerbar { background: #000000; color: #ffffff; border-bottom: 1px solid #ffffff; box-shadow: none; }
-        .meridian-window-controls { display: flex; align-items: center; gap: 4px; margin-left: 12px; }
-        .meridian-window-button { min-width: 34px; min-height: 28px; padding: 0; border-radius: 8px; border: 1px solid transparent; background: transparent; color: inherit; box-shadow: none; transition: background 120ms ease, border-color 120ms ease, color 120ms ease; }
-        .meridian-window-button:hover { background: #0066CC; border-color: #0066CC; color: #ffffff; }
-        .meridian-window-button.close:hover { background: #b42332; border-color: #e85b6b; color: #ffffff; }
-        .meridian-window-button:active { background: #0066CC; }
-        .meridian-window-button:focus-visible { outline: 2px solid #ffffff; outline-offset: 2px; }
+        window.meridian-preferences *:focus-visible, window.meridian-surface *:focus-visible { outline: 2px solid #00CC00; outline-offset: 2px; }
+        .meridian-recovery { background: #f3f4f6; color: #20272b; padding: 40px; border: 1px solid #d6dcdf; }
+        window.meridian-preferences { background: #f3f4f6; color: #20272b; border: 1px solid #d6dcdf; }
+        window.meridian-preferences headerbar { min-height: 44px; padding: 4px 12px; background: #f3f4f6; color: #20272b; border-bottom: 1px solid #d6dcdf; box-shadow: none; }
+        window.meridian-preferences.meridian-dark { background: #15191c; color: #edf2ef; }
+        window.meridian-preferences.meridian-dark headerbar { background: #1b2024; color: #edf2ef; border-bottom: 1px solid #45524a; box-shadow: none; }
+        .meridian-dark .meridian-window-button { color: #b2beb7; }
+        .meridian-dark .meridian-window-button:hover { background-color: #00CC00; color: #061006; }
+        .meridian-dark .meridian-recovery { background: #15191c; color: #edf2ef; border-color: #45524a; }
+        .meridian-window-controls { margin: 0 12px 0 0; padding: 0; }
+        .meridian-window-button { min-width: 32px; min-height: 32px; padding: 0; margin: 0; border-radius: 6px; border: 1px solid transparent; box-shadow: none; background-image: none; transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease; }
+        .meridian-window-button { background-color: transparent; color: #606b70; }
+        .meridian-window-button:hover { background-color: #00CC00; border-color: #00CC00; color: #061006; }
+        .meridian-window-button:active { background-color: #00b300; border-color: #00CC00; color: #061006; }
+        .meridian-window-button:disabled { opacity: 0.45; }
+        .meridian-window-button:focus-visible { outline: 2px solid #00CC00; outline-offset: 2px; }
         .meridian-window-button:focus:not(:focus-visible) { outline: none; box-shadow: none; }",
     );
     if let Some(display) = gdk::Display::default() {
@@ -92,6 +101,10 @@ mod updates;
 
 /// Shared chrome for the standalone Meridian applications.
 pub fn install_app_css() {
+    if let Some(settings) = gtk::Settings::default() {
+        settings.set_gtk_application_prefer_dark_theme(false);
+        settings.set_gtk_decoration_layout(Some(if crate::desktop::get().layout.window_buttons == "right" { ":close,minimize,maximize" } else { "close,minimize,maximize:" }));
+    }
     let css = gtk::CssProvider::new();
     css.load_from_string(include_str!("app.css"));
     if let Some(display) = gdk::Display::default() {

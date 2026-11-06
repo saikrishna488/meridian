@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Meridian Installer
+Comment=Install, update, repair, or remove Meridian
+Exec=/usr/local/bin/meridian-installer
+Icon=system-software-install
+Terminal=false
+Categories=System;Settings;
+StartupNotify=true

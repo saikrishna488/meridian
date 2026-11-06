@@ -15,3 +15,5 @@ https://github.com/protoLabsAI/terminal-plugin/tree/main/vendor:
 To update, use the official @xterm/xterm and @xterm/addon-fit npm packages,
 copy their lib/*.js and css/xterm.css, then update this manifest and license.
 No CDN, websocket listener, or externally loaded scripts are used.
+
+UI controls and styling are owned by Meridian UI Kit; no UI kit CSS is vendored.

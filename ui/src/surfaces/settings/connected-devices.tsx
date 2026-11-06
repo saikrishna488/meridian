@@ -1,7 +1,8 @@
+import { Badge, Container, EmptyState } from "../../meridian-ui";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Button } from "../../components/ui/button";
-import { Select } from "../../components/Select";
-import { SearchField } from "glisse";
+import { Button } from "../../meridian-ui";
+import { Select } from "../../meridian-ui";
+import { SearchField } from "../../meridian-ui";
 import { request } from "../../lib/bridge";
 import { errorMessage } from "../../lib/react";
 import type { ManagedDevice } from "../../lib/generated/ManagedDevice";
@@ -27,6 +28,8 @@ function bluetoothCategory(icon: string): string {
 }
 export function ConnectedDevices() {
   const [hardware, setHardware] = useState<ManagedDevice[]>([]);
+  const [printers, setPrinters] = useState<Peripheral[]>([]);
+  const [inventoryNotice, setInventoryNotice] = useState("");
   const [bluetooth, setBluetooth] = useState<BluetoothDevice[]>([]);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("All devices");
@@ -38,15 +41,23 @@ export function ConnectedDevices() {
     if (pending.current) return;
     pending.current = true; setLoading(true); setError("");
     try {
-      const [devices, paired] = await Promise.allSettled([
-        request({ method: "settings.devices" }), request({ method: "settings.bluetooth_devices" }),
+      const [devices, paired, inventory] = await Promise.allSettled([
+        request({ method: "settings.devices" }), request({ method: "settings.bluetooth_devices" }), request({ method: "settings.printers" }),
       ]);
       if (!mounted.current) return;
       if (devices.status === "fulfilled") setHardware(devices.value);
       if (paired.status === "fulfilled") setBluetooth(paired.value);
-      if (devices.status === "rejected" && paired.status === "rejected") throw devices.reason;
-      if (devices.status === "rejected") setError(`Wired device discovery: ${errorMessage(devices.reason)}`);
-      else if (paired.status === "rejected") setError(`Bluetooth discovery: ${errorMessage(paired.reason)}`);
+      const warnings: string[] = [];
+      if (devices.status === "rejected") warnings.push(`Wired devices: ${errorMessage(devices.reason)}`);
+      if (paired.status === "rejected") warnings.push(`Bluetooth: ${errorMessage(paired.reason)}`);
+      if (inventory.status === "fulfilled") {
+        setPrinters([
+          ...inventory.value.printers.map((name, index): Peripheral => ({ id: `printer:${index}:${name}`, category: "Printers", name, status: "Configured", detail: "Print service", properties: [] })),
+          ...inventory.value.scanners.map((name, index): Peripheral => ({ id: `scanner:${index}:${name}`, category: "Scanners", name, status: "Detected", detail: "Scanner service", properties: [] })),
+        ]);
+        setInventoryNotice([!inventory.value.cups_available && "Print service is unavailable.", !inventory.value.sane_available && "Scanner discovery is unavailable."].filter(Boolean).join(" "));
+      } else { warnings.push(`Printers and scanners: ${errorMessage(inventory.reason)}`); }
+      setError(warnings.join(" "));
     } catch (cause) {
       if (mounted.current) setError(errorMessage(cause));
     } finally {
@@ -74,6 +85,9 @@ export function ConnectedDevices() {
         detail: `Bluetooth · Wireless${device.battery == null ? "" : ` · Battery ${device.battery}%`}`,
         properties: [["Address", device.address], ["Trusted", device.trusted ? "Yes" : "No"]] });
     }
+    for (const device of printers) {
+      if (!devices.some(existing => existing.category === device.category && existing.name.toLowerCase() === device.name.toLowerCase())) devices.push(device);
+    }
     // Bluetooth USB adapters appear as USB hardware as well; leave the
     // adapter visible but don't duplicate the same physical input device.
     return devices.filter(device => {
@@ -82,7 +96,7 @@ export function ConnectedDevices() {
         && (filter === "All devices" || device.category === filter);
     }).sort((a, b) => categories.indexOf(a.category as typeof categories[number]) - categories.indexOf(b.category as typeof categories[number])
       || a.name.localeCompare(b.name));
-  }, [hardware, bluetooth, query, filter]);
+  }, [hardware, bluetooth, printers, query, filter]);
 
   const grouped = categories.map(category => ({ category, items: items.filter(item => item.category === category) }))
     .filter(group => group.items.length);
@@ -96,18 +110,19 @@ export function ConnectedDevices() {
       <Button disabled={loading} onClick={() => void refresh()}>{loading ? "Refreshing…" : "Refresh"}</Button>
     </div>
     <p role="status" className="section-caption">{loading ? "Detecting peripherals…" : `${items.length} devices shown`}</p>
-    {error && <p role="alert" className="settings-error">{error}</p>}
-    {grouped.map(group => <section key={group.category} className="settings-card connected-device-group" aria-label={group.category}>
+    {error && <div role="alert" className="settings-error"><p>{error}</p><Button disabled={loading} onClick={() => void refresh()}>Retry discovery</Button></div>}
+    {inventoryNotice && <p role="status" className="settings-notice">{inventoryNotice}</p>}
+    {grouped.map(group => <Container key={group.category} role="group" className="settings-card connected-device-group" aria-label={group.category}>
       <h3>{group.category}</h3>
       {group.items.map(device => <details className="connected-device-row" key={device.id}>
         <summary><span className="connected-device-name"><strong>{device.name}</strong><small>{device.detail}</small></span>
-          <span className="connected-device-status">{device.status}</span></summary>
+          <span className="connected-device-status"><Badge tone={device.status === "Connected" ? "green" : device.status === "Paired" ? "blue" : "white"}>{device.status}</Badge></span></summary>
         <div className="connected-device-meta">
           {device.properties.filter(([key, value]) => !!key && !!value).map(([key, value]) =>
             <div key={key}><span>{key}</span><span>{value}</span></div>)}
         </div>
       </details>)}
-    </section>)}
-    {!loading && !items.length && <p className="device-empty">No matching peripherals found. Connect a device or change the filter.</p>}
+    </Container>)}
+    {!loading && !items.length && <EmptyState title={error ? "Device discovery is incomplete" : "No matching devices"} description={error ? "Some device services are unavailable. Use Retry discovery to refresh this list." : "Connect a device or change the filter."} />}
   </div>;
 }

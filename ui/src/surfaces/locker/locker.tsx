@@ -1,3 +1,4 @@
+import { Button } from "../../meridian-ui";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { hello, request } from "../../lib/bridge";
 import { errorMessage, mount } from "../../lib/react";
@@ -39,7 +40,7 @@ function Locker() {
       <form className={`card${shake ? " shake" : ""}`} id="form" autoComplete="off" noValidate onSubmit={event => void unlock(event)}>
         <div className="lock-identity"><span><Icon name="lock" width="20" height="20" /></span><h1>Session locked</h1><p>Enter your password to return to your workspace.</p></div>
         <PasswordField inputRef={password} disabled={busy} autoFocus />
-        <button className="submit" id="submit" type="submit" disabled={busy}>{busy ? "Unlocking…" : "Unlock"}</button>
+        <Button variant="primary" className="submit" id="submit" type="submit" disabled={busy}>{busy ? "Unlocking…" : "Unlock"}</Button>
         <p className="message" id="message" role="alert" aria-live="assertive">{message}</p>
       </form>
     </main>

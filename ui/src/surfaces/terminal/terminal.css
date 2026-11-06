@@ -57,3 +57,34 @@ html, body, #root { height:100%; min-height:0; margin:0; overflow:hidden; }
 .terminal-context button { min-height:32px; padding:6px 9px; border:0; border-radius:5px; background:transparent; color:inherit; text-align:left; cursor:pointer; font:inherit; font-size:12px; }
 .terminal-context button:hover:not(:disabled), .terminal-context button:focus-visible { background:var(--terminal-chrome-strong); outline:0; }
 .terminal-context button:disabled { opacity:.45; cursor:default; }
+
+/* Terminal owns a bounded pane layout; inactive panes stay mounted without painting. */
+.terminal-app[data-terminal-theme="light"] { --terminal-bg:#fafafa; --terminal-fg:#202530; }
+.terminal-app[data-terminal-theme="dark"] { --terminal-bg:#171a20; --terminal-fg:#e7edf7; }
+.terminal-workspace { display:flex; flex:1; min-height:0; min-width:0; overflow:hidden; }
+.terminal-workspace[hidden], .terminal-pane[hidden] { display:none; }
+.terminal-pane { display:flex; flex-direction:column; flex-grow:1; flex-shrink:1; min-width:0; min-height:0; overflow:hidden; }
+.terminal-pane-heading { display:flex; gap:4px; align-items:center; min-height:30px; background:var(--terminal-chrome); border-bottom:1px solid var(--terminal-border); font-family:var(--font-ui); }
+.terminal-pane-heading button { color:var(--terminal-muted); background:transparent; border:0; font-size:11px; padding:5px 8px; flex:none; }
+.terminal-pane-heading button:first-child { flex:1; text-align:left; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.terminal-pane[data-focused="true"] > .terminal-pane-heading { box-shadow:inset 0 -2px var(--action); }
+.terminal-pane .terminal-session { padding:8px; }
+.terminal-divider { flex:0 0 6px; cursor:col-resize; background:var(--terminal-border); touch-action:none; }
+.terminal-workspace[style*="column"] > .terminal-divider { cursor:row-resize; }
+.terminal-divider:hover,.terminal-divider:focus-visible { background:var(--action); }
+.terminal-actions { display:flex; flex-wrap:wrap; gap:5px; padding:6px 10px; border-bottom:1px solid var(--terminal-border); background:var(--terminal-chrome); font-family:var(--font-ui); }
+.terminal-actions .ui-button { min-height:28px; font-size:11px; padding:4px 7px; }
+.terminal-actions .meridian-select { max-width:160px; }
+.terminal-tab [role="tab"] { max-width:200px; overflow:hidden; text-overflow:ellipsis; }
+.terminal-hints { padding:4px 10px; font:10px var(--font-ui); color:var(--terminal-muted); background:var(--terminal-chrome); }
+.terminal-find { display:flex; align-items:center; flex-wrap:wrap; gap:5px; padding:5px; flex:none; background:var(--terminal-chrome); color:var(--terminal-ui-text); font:11px var(--font-ui); }
+.terminal-find .muk-search-field { flex:1; min-width:120px; }
+.terminal-find .ui-button { padding:4px 6px; min-height:28px; }
+.terminal-find > span { flex-basis:100%; }
+.terminal-command-status { padding:4px; color:var(--terminal-muted); font:11px var(--font-ui); }
+.terminal-link-target { overflow-wrap:anywhere; user-select:text; }
+.terminal-preference-actions { display:flex; gap:8px; flex-wrap:wrap; }
+.terminal-app [role="dialog"],.terminal-app [role="alertdialog"] { font-family:var(--font-ui); color:var(--ink); }
+.terminal-app [role="dialog"] p { line-height:1.5; }
+.terminal-app .settings-row { gap:16px; padding:8px 0; }
+@media(max-width:600px) { .terminal-hints { display:none; }.terminal-actions { max-height:100px; overflow:auto; }.terminal-tabs { padding-inline:5px; }.terminal-pane-heading button { padding:4px; } }

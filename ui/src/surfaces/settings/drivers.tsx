@@ -1,7 +1,7 @@
-import { SearchField } from "glisse";
-import { Select } from "../../components/Select";
-import { Dialog } from "../../components/ui/dialog";
-import { Button } from "../../components/ui/button";
+import { SearchField } from "../../meridian-ui";
+import { Select } from "../../meridian-ui";
+import { Dialog } from "../../meridian-ui";
+import { Button } from "../../meridian-ui";
 import { useEffect, useRef, useState } from "react";
 import { request } from "../../lib/bridge";
 import { errorMessage } from "../../lib/react";

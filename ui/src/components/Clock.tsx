@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 
-const timeFormat = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
 const dateFormat = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "long", day: "numeric" });
 const compactDateFormat = new Intl.DateTimeFormat(undefined, { weekday: "short", month: "short", day: "numeric" });
 
-export function Clock({ compact = false }: { compact?: boolean }) {
+export function Clock({ compact = false, format = "system" }: { compact?: boolean; format?: string }) {
+  const timeFormat = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit", ...(format === "12" ? {hour12:true} : format === "24" ? {hour12:false} : {}) });
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;

@@ -7,13 +7,10 @@ fi
 
 # Supply graphical PolicyKit authentication for Settings and package operations.
 agent_started=0
-for agent in /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1 /usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1 /usr/libexec/polkit-gnome-authentication-agent-1 /usr/libexec/polkit-mate-authentication-agent-1; do
-    if [ -x "$agent" ]; then
-        "$agent" &
-        agent_started=1
-        break
-    fi
-done
+if [ -f "$(dirname -- "$0")/polkit-agent" ]; then
+    sh "$(dirname -- "$0")/polkit-agent" &
+    agent_started=1
+fi
 
 # The idle client is scoped to this compositor and exits when it disconnects.
 # Keep the session awake while PipeWire is carrying active media playback.

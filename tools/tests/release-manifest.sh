@@ -4,9 +4,9 @@ set -euo pipefail
 source "$(dirname "$0")/../release-manifest.sh"
 ROOT="$(mktemp -d)"
 trap 'rm -rf "$ROOT"' EXIT
-mkdir -p "$ROOT"/{protocol,services,shell,ui/{src,scripts,dist},assets,session,tools,target/release}
-for file in Cargo.toml Cargo.lock rustfmt.toml ui/package.json ui/package-lock.json ui/tsconfig.json \
-    shell/main.rs ui/src/main.ts ui/dist/main.js target/release/meridian-shell target/release/meridian-greeter \
+mkdir -p "$ROOT"/{protocol,services,shell,installer,ui/{src,scripts,dist},assets,session,tools,target/release}
+for file in install.sh Cargo.toml Cargo.lock rustfmt.toml ui/package.json ui/package-lock.json ui/tsconfig.json \
+    shell/main.rs ui/src/main.ts ui/dist/main.js target/release/meridian-shell target/release/meridian-greeter target/release/meridian-installer \
     target/release/wayland-pipewire-idle-inhibit; do
     printf 'original\n' > "$ROOT/$file"
 done

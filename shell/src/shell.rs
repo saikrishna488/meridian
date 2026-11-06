@@ -58,6 +58,10 @@ pub struct Shell {
 #[derive(Default)]
 struct State {
     primary: Option<gdk::Monitor>,
+    display_restore_timer: Option<glib::SourceId>,
+    resume_subscription: Option<gio::SignalSubscription>,
+    layout_undo: Vec<proto::DesktopLayout>,
+    dock_undo: Vec<Vec<String>>,
     desktop_monitor: Option<gio::FileMonitor>,
     desktop_refresh_timer: Option<glib::SourceId>,
     catalog_refresh_timer: Option<glib::SourceId>,
@@ -71,8 +75,11 @@ struct State {
     finder_refresh_timer: Option<glib::SourceId>,
     terminal: Option<Rc<WebSurface>>,
     pulse: Option<Rc<WebSurface>>,
+    pulse_view: proto::PulseView,
     calendar: Option<Rc<WebSurface>>,
     clock: Option<Rc<WebSurface>>,
+    photos: Option<Rc<WebSurface>>,
+    media: Option<Rc<WebSurface>>,
     wallpapers: Vec<(gdk::Monitor, Rc<WebSurface>)>,
     popovers: HashMap<Popover, Rc<WebSurface>>,
     dismiss_timers: HashMap<Popover, glib::SourceId>,
@@ -84,7 +91,7 @@ impl Shell {
     pub fn start(app: &gtk::Application, roots: Roots, dev: bool) -> Rc<Shell> {
         let desktop = crate::desktop::get();
         if let Some(settings) = gtk::Settings::default() {
-            settings.set_gtk_application_prefer_dark_theme(true);
+            settings.set_gtk_application_prefer_dark_theme(desktop.appearance == "dark");
             settings.set_gtk_font_name(Some(&format!("{} 11", desktop.font)));
         }
         glib::spawn_future_local(async {
@@ -157,6 +164,7 @@ impl Shell {
         let weak = Rc::downgrade(&shell);
         shell.locker.connect_unlocked(move |_| {
             if let Some(shell) = weak.upgrade() {
+                if let Some(notifications) = shell.notifications.borrow().as_ref() { notifications.set_locked(false); }
                 let surfaces = std::mem::take(&mut shell.state.borrow_mut().lock_surfaces);
                 drop(surfaces); // gtk4-session-lock destroys its assigned windows.
             }
@@ -165,6 +173,7 @@ impl Shell {
         shell.locker.connect_failed(move |_| {
             log::error!("could not lock the session (unsupported compositor, or already locked elsewhere)");
             if let Some(shell) = weak.upgrade() {
+                if let Some(notifications) = shell.notifications.borrow().as_ref() { notifications.set_locked(false); }
                 let surfaces = std::mem::take(&mut shell.state.borrow_mut().lock_surfaces);
                 drop(surfaces); // gtk4-session-lock owns failed-lock teardown too.
             }
@@ -201,6 +210,16 @@ impl Shell {
             }
         });
 
+        let weak_idle = shell.weak_self.clone();
+        glib::timeout_add_local(Duration::from_secs(30), move || {
+            let Some(shell) = weak_idle.upgrade() else { return glib::ControlFlow::Break };
+            if !crate::bridge::has_pending() && !shell.transfers.borrow().has_active() && !shell.locker.is_locked() {
+                let mut state = shell.state.borrow_mut();
+                if state.pulse.as_ref().is_some_and(|s| s.reclaimable()) { state.pulse.take(); }
+                state.popovers.retain(|kind, surface| *kind == Popover::Options || !surface.reclaimable());
+            }
+            glib::ControlFlow::Continue
+        });
         shell.watch_windows();
         let weak = shell.weak_self.clone();
         glib::timeout_add_local(Duration::from_secs(5), move || {
@@ -229,6 +248,7 @@ impl Shell {
                     }
                 }
                 shell.reconcile_monitors();
+                shell.schedule_display_restore();
             }
         });
         let desktop_folder = crate::desktop::folder();
@@ -257,6 +277,19 @@ impl Shell {
             shell.state.borrow_mut().desktop_monitor = Some(monitor);
         }
         shell.reconcile_monitors();
+        let weak_resume = shell.weak_self.clone();
+        glib::spawn_future_local(async move {
+            if let Ok(bus) = gio::bus_get_future(gio::BusType::System).await {
+                let weak = weak_resume.clone();
+                let subscription = bus.subscribe_to_signal(Some("org.freedesktop.login1"), Some("org.freedesktop.login1.Manager"), Some("PrepareForSleep"), Some("/org/freedesktop/login1"), None, gio::DBusSignalFlags::NONE, move |signal| {
+                    if signal.parameters.get::<(bool,)>() == Some((false,)) {
+                        crate::settings_devices::forget_display_inventory();
+                        if let Some(shell) = weak.upgrade() { shell.schedule_display_restore(); shell.reconcile_monitors(); }
+                    }
+                });
+                if let Some(shell) = weak_resume.upgrade() { shell.state.borrow_mut().resume_subscription = Some(subscription); }
+            }
+        });
         shell.install_actions();
         // Critical desktop surfaces get the first rendering budget. Warm the two
         // frequent menus afterward; applications and occasional menus stay lazy.
@@ -265,6 +298,7 @@ impl Shell {
             if let Some(shell) = weak.upgrade() {
                 shell.ensure_popover(Popover::Applications);
                 shell.ensure_popover(Popover::Options);
+                if !shell.dev && crate::workflows::take_first_run() { shell.open_preferences(); }
             }
         });
         log::info!("meridian shell started{}", if dev { " (dev mode)" } else { "" });
@@ -292,7 +326,7 @@ impl Shell {
     /// Execute an authorized request (capabilities are checked by the bridge).
     fn dispatch(&self, surface: &Rc<WebSurface>, request: Request) -> Result<Reply, ErrorBody> {
         if self.locker.is_locked()
-            && !matches!(request, Request::Hello | Request::DesktopGet | Request::LockerUnlock(_))
+            && !matches!(request, Request::Hello | Request::DesktopGet | Request::EnginesGet | Request::LockerUnlock(_))
         {
             return Err(ErrorBody::new(ErrorCode::PermissionDenied, "The session is locked."));
         }
@@ -306,7 +340,55 @@ impl Shell {
                 "A file transfer is running. Wait for it or cancel it before ending or suspending the session.",
             ));
         }
+        if matches!(request, Request::TerminalStart | Request::TerminalStartAt(_) | Request::TerminalLaunch(_))
+            && !surface.window.is_visible() {
+            return Err(ErrorBody::new(ErrorCode::Unavailable, "Terminal is closed."));
+        }
         match request {
+            Request::PulseViewGet => serialize(proto::reply_ok(&self.state.borrow().pulse_view)),
+            Request::PulseViewSet(view) => {
+                if !["overview","processes","cpu","memory","gpu","storage","network"].contains(&view.section.as_str())
+                    || !["cpu","memory","name","pid"].contains(&view.sort.as_str()) || view.query.len() > 1024 {
+                    return Err(ErrorBody::new(ErrorCode::InvalidRequest,"Invalid Pulse view state"));
+                }
+                self.state.borrow_mut().pulse_view = view;
+                serialize(ok())
+            }
+            Request::WorkflowGet => serialize(proto::reply_ok(&self.workflow_state())),
+            Request::WorkflowSet(change) => {
+                if change.action == "recover" {
+                    if crate::bridge::has_pending() || self.transfers.borrow().has_active() {
+                        return Err(ErrorBody::new(ErrorCode::Unavailable, "Wait for the current operation or file transfer to finish before reloading components."));
+                    }
+                    let targets: Vec<_> = self.workflow_surfaces().into_iter().filter(|s| format!("{:?}", s.kind) == change.id).collect();
+                    if targets.is_empty() { return Err(ErrorBody::new(ErrorCode::NotFound, "Component is not open")); }
+                    for target in targets { target.recover(); }
+                } else {
+                    crate::workflows::change(change)?;
+                    for target in self.workflow_surfaces() { target.apply_comfort(); }
+                    { let state = self.state.borrow();
+                      for target in [&state.finder, &state.terminal, &state.calendar, &state.clock, &state.photos, &state.media].into_iter().flatten() { target.apply_comfort(); }
+                      for (_,target) in &state.lock_surfaces { target.apply_comfort(); }
+                    }
+                    surface.apply_comfort();
+                }
+                serialize(proto::reply_ok(&self.workflow_state()))
+            }
+            Request::DesktopLayoutUndo => {
+                let previous = self.state.borrow().layout_undo.last().cloned().ok_or_else(|| ErrorBody::new(ErrorCode::NotFound, "No desktop layout change to undo"))?;
+                let value = crate::desktop::set_layout(previous)?;
+                self.state.borrow_mut().layout_undo.pop();
+                self.desktop_changed(&value);
+                serialize(proto::reply_ok(&value))
+            }
+            Request::DockUndo => {
+                let previous = self.state.borrow().dock_undo.last().cloned().ok_or_else(|| ErrorBody::new(ErrorCode::NotFound, "No dock pin change to undo"))?;
+                crate::config::save(&dock_path(), &previous)?;
+                self.state.borrow_mut().dock_undo.pop();
+                self.send_panel(&Event::DockChanged(previous.clone()));
+                self.send_to_popover(Popover::Applications, &Event::DockChanged(previous));
+                serialize(ok())
+            }
             Request::Hello => {
                 let first = !surface.is_ready();
                 if first && surface.kind == SurfaceKind::Terminal {
@@ -324,6 +406,7 @@ impl Shell {
                     surface.send(&Event::PulseVisibility(surface.window.is_visible()));
                 }
                 surface.send(&Event::DesktopChanged(crate::desktop::get()));
+                surface.send(&Event::EnginesChanged(crate::rendering::state()));
                 if surface.kind == SurfaceKind::Terminal && surface.window.is_visible() {
                     surface.send(&Event::TerminalOpened);
                 }
@@ -352,9 +435,20 @@ impl Shell {
                     let state = crate::files::blocking(move || crate::desktop::set_appearance(&choice.id)).await?;
                     if let Some(shell) = weak.upgrade() {
                         if let Some(settings) = gtk::Settings::default() {
-                            settings.set_gtk_application_prefer_dark_theme(true);
+                            settings.set_gtk_application_prefer_dark_theme(state.appearance == "dark");
                         }
                         shell.desktop_changed(&state);
+                    }
+                    proto::reply_ok(&state).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
+                })))
+            }
+            Request::EnginesGet => serialize(proto::reply_ok(&crate::rendering::state())),
+            Request::EnginesSet(config) => {
+                let weak = self.weak_self.clone();
+                Ok(Reply::Later(Box::pin(async move {
+                    let state = crate::files::blocking(move || crate::rendering::set(config)).await?;
+                    if let Some(shell) = weak.upgrade() {
+                        shell.engines_changed(&state);
                     }
                     proto::reply_ok(&state).map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))
                 })))
@@ -362,6 +456,18 @@ impl Shell {
             Request::DesktopGet => serialize(proto::reply_ok(&crate::desktop::get())),
             Request::DesktopHoverBackgroundSet(choice) => {
                 let state = crate::desktop::set_hover_background(choice.value)?;
+                self.desktop_changed(&state);
+                serialize(proto::reply_ok(&state))
+            }
+            Request::DesktopLayoutSet(layout) => {
+                let before = crate::desktop::get().layout;
+                let state = crate::desktop::set_layout(layout)?;
+                { let mut s = self.state.borrow_mut(); if s.layout_undo.len() >= 20 { s.layout_undo.remove(0); } s.layout_undo.push(before); }
+                self.desktop_changed(&state);
+                serialize(proto::reply_ok(&state))
+            }
+            Request::DesktopTaskbarSet(preferences) => {
+                let state = crate::desktop::set_taskbar(preferences)?;
                 self.desktop_changed(&state);
                 serialize(proto::reply_ok(&state))
             }
@@ -421,8 +527,14 @@ impl Shell {
                 } else {
                     let name = match app.id.as_str() {
                         "meridian-settings.desktop" => "Settings",
+                        "meridian-engines.desktop" => "Engines",
                         "meridian-finder.desktop" => "Files",
+                        "meridian-terminal.desktop" => "Terminal",
                         "meridian-pulse.desktop" => "Pulse",
+                        "meridian-photos.desktop" => "Photos",
+                        "meridian-media.desktop" => "Music & Video",
+                        "meridian-calendar.desktop" => "Calendar",
+                        "meridian-clock.desktop" => "Clock",
                         _ => return Err(ErrorBody::new(ErrorCode::NotFound, "Unknown application")),
                     };
                     (name.into(), None)
@@ -489,18 +601,13 @@ impl Shell {
                 } else {
                     match item.target.as_str() {
                         "meridian-settings.desktop" => self.open_preferences(),
+                        "meridian-engines.desktop" => self.open_engines(),
                         "meridian-finder.desktop" => self.open_finder(),
                         "meridian-terminal.desktop" => self.open_terminal(),
-                        "meridian-calendar.desktop" => self
-                            .catalog
-                            .borrow()
-                            .launch("org.gnome.Calendar.desktop", None)
-                            .map_err(|e| ErrorBody::new(ErrorCode::Failed, format!("{e:?}")))?,
-                        "meridian-clock.desktop" => self
-                            .catalog
-                            .borrow()
-                            .launch("org.gnome.clocks.desktop", None)
-                            .map_err(|e| ErrorBody::new(ErrorCode::Failed, format!("{e:?}")))?,
+                        "meridian-calendar.desktop" => self.open_utility(SurfaceKind::Calendar),
+                        "meridian-clock.desktop" => self.open_utility(SurfaceKind::Clock),
+                        "meridian-photos.desktop" => self.open_utility(SurfaceKind::Photos),
+                        "meridian-media.desktop" => self.open_utility(SurfaceKind::Media),
                         "meridian-pulse.desktop" => self.open_pulse(),
                         id => self
                             .catalog
@@ -512,7 +619,7 @@ impl Shell {
                 serialize(ok())
             }
             Request::MenuOpen(menu) => {
-                if !["Meridian", "File", "Edit", "View", "Window", "Help", "Application", "DockItem"]
+                if !["File", "Edit", "View", "Window", "Help", "Application", "DockItem"]
                     .contains(&menu.menu.as_str())
                 {
                     return Err(ErrorBody::new(ErrorCode::InvalidRequest, "unknown desktop menu"));
@@ -521,7 +628,8 @@ impl Shell {
                 self.send_to_popover(Popover::DesktopMenu, &Event::MenuOpened(menu));
                 serialize(ok())
             }
-            Request::NotificationsGet
+            Request::NotificationsConfigure(_)
+            | Request::NotificationsGet
             | Request::NotificationsRead
             | Request::NotificationsDoNotDisturb(_)
             | Request::NotificationsClear
@@ -533,6 +641,7 @@ impl Shell {
                     .clone()
                     .ok_or_else(|| ErrorBody::new(ErrorCode::Unavailable, "Notifications unavailable"))?;
                 match request {
+                    Request::NotificationsConfigure(change) => service.configure(change)?,
                     Request::NotificationsRead => service.mark_read(),
                     Request::NotificationsDoNotDisturb(choice) => service.set_do_not_disturb(choice.enabled)?,
                     Request::NotificationsClear => service.clear(),
@@ -566,6 +675,7 @@ impl Shell {
             }
             Request::TerminalOpen
             | Request::TerminalOpenAt(_)
+            | Request::TerminalLaunch(_) | Request::TerminalInfo(_) | Request::TerminalLink(_) | Request::TerminalQuit | Request::TerminalNotify(_)
             | Request::TerminalStart
             | Request::TerminalStartAt(_)
             | Request::TerminalCopy(_)
@@ -774,13 +884,24 @@ impl Shell {
             Request::DockList => serialize(proto::reply_ok(&read_dock(&self.catalog.borrow()))),
             Request::DockPin(pin) => {
                 if pin.pinned
-                    && !["meridian-settings.desktop", "meridian-pulse.desktop", "meridian-finder.desktop"]
-                        .contains(&pin.id.as_str())
+                    && ![
+                        "meridian-settings.desktop",
+                        "meridian-engines.desktop",
+                        "meridian-pulse.desktop",
+                        "meridian-finder.desktop",
+                        "meridian-terminal.desktop",
+                        "meridian-photos.desktop",
+                        "meridian-media.desktop",
+                        "meridian-calendar.desktop",
+                        "meridian-clock.desktop",
+                    ]
+                    .contains(&pin.id.as_str())
                     && !self.catalog.borrow().apps().iter().any(|app| app.id == pin.id)
                 {
                     return Err(ErrorBody::new(ErrorCode::NotFound, "no such application"));
                 }
                 let mut pins = read_dock(&self.catalog.borrow());
+                let before = pins.clone();
                 pins.retain(|id| id != &pin.id);
                 if pin.pinned {
                     pins.push(pin.id);
@@ -789,6 +910,7 @@ impl Shell {
                 std::fs::create_dir_all(path.parent().unwrap())
                     .and_then(|_| std::fs::write(&path, serde_json::to_vec(&pins).unwrap()))
                     .map_err(|e| ErrorBody::new(ErrorCode::Failed, e.to_string()))?;
+                { let mut s = self.state.borrow_mut(); if s.dock_undo.len() >= 20 { s.dock_undo.remove(0); } s.dock_undo.push(before); }
                 self.send_panel(&Event::DockChanged(pins.clone()));
                 self.send_to_popover(Popover::Applications, &Event::DockChanged(pins));
                 serialize(ok())
@@ -798,6 +920,11 @@ impl Shell {
                 results.sections.extend(crate::search::sections(&q.query, &self.search_preferences.borrow()));
                 let query = q.query.trim().to_lowercase();
                 let builtins = [
+                    ("meridian-photos.desktop", "Photos", "Meridian images pictures gallery viewer", "image-x-generic"),
+                    ("meridian-media.desktop", "Music & Video", "Meridian media player audio songs movies playlist", "multimedia-player"),
+                    ("meridian-calendar.desktop", "Calendar", "Meridian dates events appointments agenda", "x-office-calendar"),
+                    ("meridian-clock.desktop", "Clock", "Meridian time stopwatch timer laps", "preferences-system-time"),
+                    ("meridian-terminal.desktop", "Terminal", "Meridian terminal shell command prompt ssh", "utilities-terminal"),
                     (
                         "meridian-pulse.desktop",
                         "Pulse",
@@ -805,6 +932,12 @@ impl Shell {
                         "utilities-system-monitor",
                     ),
                     ("meridian-settings.desktop", "Settings", "Meridian settings preferences", "preferences-system"),
+                    (
+                        "meridian-engines.desktop",
+                        "Engines",
+                        "Meridian font graphics rendering quality performance",
+                        "preferences-desktop-font",
+                    ),
                     (
                         "meridian-finder.desktop",
                         "Files",
@@ -868,26 +1001,21 @@ impl Shell {
                         .set_text(&result);
                     return serialize(ok());
                 }
-                if a.item_id == "meridian-calendar.desktop" {
-                    self.catalog
-                        .borrow()
-                        .launch("org.gnome.Calendar.desktop", None)
-                        .map_err(|e| ErrorBody::new(ErrorCode::Failed, format!("{e:?}")))?;
-                    return serialize(ok());
-                }
-                if a.item_id == "meridian-clock.desktop" {
-                    self.catalog
-                        .borrow()
-                        .launch("org.gnome.clocks.desktop", None)
-                        .map_err(|e| ErrorBody::new(ErrorCode::Failed, format!("{e:?}")))?;
-                    return serialize(ok());
-                }
+                if a.item_id == "meridian-calendar.desktop" { self.open_utility(SurfaceKind::Calendar); return serialize(ok()); }
+                if a.item_id == "meridian-clock.desktop" { self.open_utility(SurfaceKind::Clock); return serialize(ok()); }
+                if a.item_id == "meridian-photos.desktop" { self.open_utility(SurfaceKind::Photos); return serialize(ok()); }
+                if a.item_id == "meridian-media.desktop" { self.open_utility(SurfaceKind::Media); return serialize(ok()); }
+                if a.item_id == "meridian-terminal.desktop" { self.open_terminal(); return serialize(ok()); }
                 if a.item_id == "meridian-pulse.desktop" {
                     self.open_pulse();
                     return serialize(ok());
                 }
                 if a.item_id == "meridian-finder.desktop" {
                     self.open_finder();
+                    return serialize(ok());
+                }
+                if a.item_id == "meridian-engines.desktop" {
+                    self.open_engines();
                     return serialize(ok());
                 }
                 if a.item_id == "meridian-settings.desktop" {
@@ -910,6 +1038,12 @@ impl Shell {
                     .ok_or_else(|| ErrorBody::new(ErrorCode::InvalidRequest, "not a menu"))?;
                 self.hide_popover(popover);
                 serialize(ok())
+            }
+            Request::WindowsShowDesktop => {
+                let windows = self.windows.borrow().clone().ok_or_else(||
+                    ErrorBody::new(ErrorCode::Unavailable, "The compositor does not support window management"))?;
+                let showing = windows.toggle_desktop().map_err(|e| ErrorBody::new(ErrorCode::Failed, e))?;
+                serialize(proto::reply_ok(&showing))
             }
             Request::WindowsList => {
                 let list = self.windows.borrow().as_ref().map(WindowService::windows).unwrap_or_default();
@@ -1049,7 +1183,9 @@ impl Shell {
         for popover in POPOVERS {
             self.dismiss_popover(popover);
         }
+        if let Some(notifications) = self.notifications.borrow().as_ref() { notifications.set_locked(true); }
         if !self.locker.lock() {
+            if let Some(notifications) = self.notifications.borrow().as_ref() { notifications.set_locked(false); }
             return Err(ErrorBody::new(ErrorCode::Unavailable, "Meridian could not lock the session."));
         }
         Ok(())
@@ -1080,7 +1216,68 @@ impl Shell {
         self.state.borrow_mut().lock_surfaces.push((monitor.clone(), surface));
     }
 
+    fn engines_changed(&self, state: &proto::EngineState) {
+        self.env.invalidate_icons();
+        let event = Event::EnginesChanged(state.clone());
+        let surfaces = self.state.borrow();
+        for (_, surface) in surfaces.wallpapers.iter().chain(surfaces.lock_surfaces.iter()) {
+            surface.send(&event);
+        }
+        for surface in [
+            &surfaces.preferences,
+            &surfaces.finder,
+            &surfaces.terminal,
+            &surfaces.pulse,
+            &surfaces.calendar,
+            &surfaces.clock,
+            &surfaces.photos,
+            &surfaces.media,
+            &surfaces.panel,
+            &surfaces.topbar,
+        ]
+        .into_iter()
+        .flatten()
+        .chain(surfaces.popovers.values())
+        {
+            surface.send(&event);
+        }
+    }
+
+    fn schedule_display_restore(&self) {
+        if let Some(timer) = self.state.borrow_mut().display_restore_timer.take() { timer.remove(); }
+        let weak = self.weak_self.clone();
+        self.state.borrow_mut().display_restore_timer = Some(glib::timeout_add_local_once(Duration::from_secs(2),move || {
+            if let Some(shell) = weak.upgrade() {
+                shell.state.borrow_mut().display_restore_timer.take();
+                glib::spawn_future_local(async {
+                    if let Err(error) = crate::files::blocking(crate::settings_devices::apply_saved_displays).await {
+                        crate::workflows::record_error(format!("Display restoration: {}", error.message));
+                    }
+                });
+            }
+        }));
+    }
+
+    fn workflow_surfaces(&self) -> Vec<Rc<WebSurface>> {
+        let s = self.state.borrow();
+        [&s.panel, &s.topbar, &s.pulse].into_iter().flatten().cloned()
+            .chain(s.popovers.values().cloned()).chain(s.wallpapers.iter().map(|(_,surface)| surface.clone())).collect()
+    }
+    fn workflow_state(&self) -> proto::WorkflowState {
+        let mut state = crate::workflows::state();
+        state.surfaces = self.workflow_surfaces().iter().map(|s| format!("{:?}",s.kind)).collect();
+        state.surfaces.sort(); state.surfaces.dedup(); state
+    }
+
     fn desktop_changed(&self, state: &proto::DesktopState) {
+        if let Some(settings) = gtk::Settings::default() {
+            settings.set_gtk_decoration_layout(Some(if state.layout.window_buttons == "right" {
+                ":close,minimize,maximize"
+            } else { "close,minimize,maximize:" }));
+        }
+        if let Some(panel) = &self.state.borrow().panel {
+            panel.set_panel_auto_hide(state.taskbar.auto_hide);
+        }
         let event = Event::DesktopChanged(state.clone());
         let surfaces = self.state.borrow();
         for (_, surface) in &surfaces.wallpapers {
@@ -1096,6 +1293,8 @@ impl Shell {
             &surfaces.pulse,
             &surfaces.calendar,
             &surfaces.clock,
+            &surfaces.photos,
+            &surfaces.media,
             &surfaces.panel,
             &surfaces.topbar,
         ]
@@ -1190,21 +1389,46 @@ impl Shell {
         let catalog = self.catalog.borrow();
         windows
             .iter()
-            .map(|w| WindowInfo {
-                id: w.id,
-                name: if matches!(w.title.as_str(), "Orbit" | "File Manager" | "Meridian Finder") {
-                    "File Manager".into()
-                } else if matches!(w.title.as_str(), "Settings" | "Meridian Settings") {
-                    "Settings".into()
+            .map(|w| {
+                // Built-in windows share the GTK application's compositor ID.
+                // Resolve their fixed native titles before consulting desktop
+                // entries, whose shared StartupWMClass would merge these apps.
+                let builtin = if w.app_id == "org.meridian.Shell" {
+                    match w.title.as_str() {
+                        "Files" | "Orbit" | "File Manager" | "Meridian Finder" => {
+                            Some(("meridian-finder.desktop", "Files", "system-file-manager"))
+                        }
+                        "Settings" | "Meridian Settings" => {
+                            Some(("meridian-settings.desktop", "Settings", "preferences-system"))
+                        }
+                        "Terminal" => Some(("meridian-terminal.desktop", "Terminal", "utilities-terminal")),
+                        "Pulse" => Some(("meridian-pulse.desktop", "Pulse", "utilities-system-monitor")),
+                        "Calendar" => Some(("meridian-calendar.desktop", "Calendar", "x-office-calendar")),
+                        "Photos" => Some(("meridian-photos.desktop", "Photos", "image-x-generic")),
+                        "Music & Video" => Some(("meridian-media.desktop", "Music & Video", "multimedia-player")),
+                        "Clock" => Some(("meridian-clock.desktop", "Clock", "preferences-system-time")),
+                        _ => None,
+                    }
                 } else {
-                    catalog
-                        .name_for_window(&w.app_id)
-                        .map(str::to_owned)
-                        .or_else(|| (!w.app_id.is_empty()).then(|| w.app_id.clone()))
-                        .unwrap_or_else(|| w.title.clone())
-                },
-                title: w.title.clone(),
-                active: w.active,
+                    None
+                };
+                let installed = catalog.app_for_window(&w.app_id);
+                WindowInfo {
+                    id: w.id,
+                    name: if let Some((_, name, _)) = builtin {
+                        name.into()
+                    } else {
+                        catalog
+                            .name_for_window(&w.app_id)
+                            .map(str::to_owned)
+                            .or_else(|| (!w.app_id.is_empty()).then(|| w.app_id.clone()))
+                            .unwrap_or_else(|| w.title.clone())
+                    },
+                    app_id: builtin.map(|(id, _, _)| id.into()).or_else(|| installed.map(|app| app.id.clone())),
+                    icon: builtin.map(|(_, _, icon)| icon.into()).or_else(|| installed.and_then(|app| app.icon.clone())),
+                    title: w.title.clone(),
+                    active: w.active,
+                }
             })
             .collect()
     }
@@ -1389,10 +1613,6 @@ impl Shell {
             }
             if let Some(monitor) = &primary {
                 let panel = WebSurface::new(&self.app, &self.env, SurfaceKind::Panel, Some(monitor), self.dispatcher());
-                let topbar =
-                    WebSurface::new(&self.app, &self.env, SurfaceKind::Topbar, Some(monitor), self.dispatcher());
-                topbar.window.present();
-                self.state.borrow_mut().topbar = Some(topbar);
                 panel.window.present();
                 self.state.borrow_mut().panel = Some(panel);
                 if let Some(windows) = &*self.windows.borrow() {
@@ -1463,23 +1683,22 @@ impl Shell {
         if self.locker.is_locked() {
             return;
         }
-        std::thread::spawn(move || {
-            let result = std::process::Command::new("sh")
-                .args(["-c", include_str!("../../session/screenshot.sh"), "meridian-screenshot", mode])
-                .status();
-            if let Err(error) = result {
-                log::warn!("Could not start screenshot: {error}");
-            }
-        });
+        crate::screenshot::capture(&self.app, mode);
     }
 
     fn install_actions(&self) {
-        let actions: [(&str, ShellAction); 8] = [
+        let actions: [(&str, ShellAction); 10] = [
+            ("show-desktop", |shell| {
+                if let Some(windows) = shell.windows.borrow().as_ref() {
+                    if let Err(error) = windows.toggle_desktop() { log::warn!("show-desktop: {error}"); }
+                }
+            }),
             ("toggle-applications", |shell| shell.toggle_popover(Popover::Applications)),
             ("toggle-options", |shell| shell.toggle_popover(Popover::Options)),
             ("open-finder", Shell::open_finder),
             ("open-terminal", Shell::open_terminal),
             ("open-settings", Shell::open_preferences),
+            ("open-engines", Shell::open_engines),
             ("screenshot", |shell| shell.take_screenshot("full")),
             ("screenshot-region", |shell| shell.take_screenshot("region")),
             ("lock-session", |shell| {
@@ -1539,17 +1758,20 @@ fn dock_path() -> std::path::PathBuf {
 }
 
 fn default_dock(catalog: &AppCatalog) -> Vec<String> {
-    let mut pins = vec!["meridian-settings.desktop".to_string()];
+    let mut pins = Vec::new();
     // Resolve installed desktop IDs instead of assuming distro-specific names.
     // Defaults are only used if no valid saved dock config exists.
     for candidates in [
         &["org.mozilla.firefox.desktop", "firefox.desktop", "firefox_firefox.desktop"][..],
-        &["kitty.desktop", "net.kovidgoyal.kitty.desktop"][..],
+        &["org.gnome.Nautilus.desktop", "nautilus.desktop"][..],
     ] {
         if let Some(app) = candidates.iter().find_map(|id| catalog.get(id)) {
             pins.push(app.id.clone());
         }
     }
+    pins.push("meridian-terminal.desktop".to_string());
+    pins.push("meridian-pulse.desktop".to_string());
+    pins.push("meridian-settings.desktop".to_string());
     pins
 }
 
@@ -1559,7 +1781,6 @@ fn read_dock(catalog: &AppCatalog) -> Vec<String> {
         .and_then(|data| serde_json::from_slice(&data).ok())
         .unwrap_or_else(|| default_dock(catalog))
         .into_iter()
-        .filter(|id: &String| id != "meridian-terminal.desktop")
         .collect()
 }
 

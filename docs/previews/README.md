@@ -1,13 +1,13 @@
 # Historical UI captures
 
 **These screenshots are from earlier Meridian revisions and are not current
-product screenshots.** The current UI is dark-only, the production launcher
-opens GNOME Files and Kitty instead of the old embedded Orbit and terminal
-surfaces, and the current desktop chrome has changed since these captures.
+product screenshots.** The current UI supports light and dark themes, the production launcher
+provides Meridian Files and Meridian Terminal, and the current
+desktop chrome has changed since these captures.
 Do not use the images below to judge the appearance or application list in the
 current package.
 
-Current-build screenshots have not yet been captured. The latest design pass
+Current-build screenshots have not yet been captured. The 2026-11-04 source changes were not built or launched; no historical image is relabeled as current. See the [capture matrix](../DESKTOP-WORKFLOWS.md#manual-review-after-installation). The latest design pass
 records why visual captures could not be produced in its execution environment
 in [UI design validation](../UI-DESIGN-VALIDATION.md). Once a desktop capture
 environment is available, use the read-only preview bridge for app surfaces and

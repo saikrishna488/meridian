@@ -32,3 +32,7 @@ integration-tests = []
 name = "meridian-smoke"
 path = "src/bin/meridian-smoke.rs"
 required-features = ["integration-tests"]
+
+[build-dependencies]
+cc = "1"
+pkg-config = "0.3"

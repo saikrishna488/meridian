@@ -1,11 +1,17 @@
 # Alpha 0.3 performance work
 
+> **Historical milestone record.** The current source includes Meridian Files,
+> Meridian Terminal, light/dark themes and the
+> [desktop workflow additions](DESKTOP-WORKFLOWS.md). Old implementation names,
+> measurements and completed checks below are preserved as historical evidence;
+> they do not validate the current build or supersede README/features.md.
+
+
 > Nova and Vault have since been removed from the project. References below describe the earlier implementation.
 
 > This is a performance record for an earlier build. The current package
-> delegates file browsing and terminal sessions to GNOME Files and Kitty; Orbit
-> and embedded Terminal measurements below refer to legacy source and prior
-> integration coverage. Current feature claims are in the [README](../README.md).
+> ships Meridian Files and Meridian Terminal; Orbit and Terminal measurements
+> below refer to older implementations and prior integration coverage. Current feature claims are in the [README](../README.md).
 
 Status: implementation and nested desktop evidence; **not a qualified Alpha 0.3 release**. Phase 1 hardware/security qualification remains required. The workspace version remains unchanged until release qualification.
 

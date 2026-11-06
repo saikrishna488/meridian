@@ -122,6 +122,15 @@ impl SchemeHandler {
             "desktop" if path == "/wallpaper" => {
                 read_file(&crate::desktop::custom_wallpaper().ok_or_else(|| not_found("no custom wallpaper"))?)
             }
+            "engine-preview" => {
+                let scale = path
+                    .trim_start_matches('/')
+                    .trim_end_matches(".png")
+                    .parse::<i32>()
+                    .map_err(|_| not_found("invalid preview scale"))?;
+                let bytes = crate::rendering::preview(scale).map_err(|_| not_found("native preview unavailable"))?;
+                Ok((glib::Bytes::from_owned(bytes), "image/png"))
+            }
             "app-icons" => {
                 let id = glib::uri_unescape_string(path.trim_start_matches('/'), None::<&str>)
                     .ok_or_else(|| not_found("invalid application"))?;
@@ -168,8 +177,13 @@ impl SchemeHandler {
                 let paths: Vec<_> = paths.iter().map(PathBuf::as_path).collect();
                 theme.set_search_path(&paths);
                 theme.set_theme_name(Some(gtk::IconTheme::for_display(&display).theme_name().as_str()));
-                let paintable =
-                    theme.lookup_by_gicon(&icon, 128, 2, gtk::TextDirection::None, gtk::IconLookupFlags::empty());
+                let paintable = theme.lookup_by_gicon(
+                    &icon,
+                    crate::rendering::plan(&crate::rendering::config()).icon_size,
+                    1,
+                    gtk::TextDirection::None,
+                    gtk::IconLookupFlags::empty(),
+                );
                 let file = paintable.file().and_then(|f| f.path()).ok_or_else(|| not_found("no app icon"))?;
                 self.icon_paths.borrow_mut().insert(key, file.clone(), 1);
                 self.cached_icon(&file)
@@ -186,7 +200,7 @@ impl SchemeHandler {
                 let display = gtk::gdk::Display::default().ok_or_else(|| not_found("no display"))?;
                 let paintable = gtk::IconTheme::for_display(&display).lookup_by_gicon(
                     &themed,
-                    96,
+                    crate::rendering::plan(&crate::rendering::config()).icon_size,
                     1,
                     gtk::TextDirection::None,
                     gtk::IconLookupFlags::empty(),

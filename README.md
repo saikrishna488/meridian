@@ -20,8 +20,12 @@ extended-use qualification remain open. The project tracks those gaps in
   choose **New connection** or **Pair new device**; current and saved
   connections load when Settings opens. The Bluetooth page describes PipeWire
   codec quality, latency and range tradeoffs, choose Auto or Highest quality,
-  and view the active codec when reported by PipeWire. Meridian's own interface
-  is dark-only; Appearance lets you choose a system font.
+  and view the active codec when reported by PipeWire. Meridian's interface
+  uses the light Precision style with rounded cards and green active controls.
+  Settings includes recovery controls, accessibility preferences and an optional
+  first-run checklist. Settings has eight main categories; Accessibility groups display and input
+  preferences, while System contains maintenance and advanced options. Search
+  still reaches individual settings pages.
 - Control Center for connectivity, volume, brightness, Do Not Disturb, lock,
   sleep, restart, shutdown, and sign out. Meridian provides its own compositor-
   enforced lock screen on every display.
@@ -30,16 +34,29 @@ extended-use qualification remain open. The project tracks those gaps in
   `tools/compile_meridian.sh` and installed by `tools/install.sh`.
 - Applications management with reviewed uninstall plans for supported Debian,
   Flatpak, and Snap packages. Privileged removals can request authentication.
-- Notification history and Pulse system monitoring. Meridian's Calendar and
+- Actionable notification toasts, history, per-app alert controls and timed Do Not Disturb. Pulse system monitoring. Meridian's Calendar and
   Clock entries launch the installed GNOME Calendar and GNOME Clocks apps.
-- Meridian Files for file browsing, with Kitty as the default terminal. Kitty
-  remains a separate installed application.
+- Meridian Files for file browsing and Meridian Terminal for interactive shells.
+  Other installed applications remain independently available.
 
 System sharing is not implemented. Hardware controls depend on services such
 as NetworkManager, BlueZ, PipeWire/WirePlumber, and systemd-logind, plus the
 drivers available on the computer. See the
 [architecture and implementation limits](docs/ARCHITECTURE.md) and
 [Settings management notes](docs/SETTINGS-MANAGEMENT.md).
+
+## Everyday desktop workflows
+
+- **Settings → System → Recovery** reloads individual desktop components and shows recent session errors.
+- **Settings → Accessibility** provides text scaling, high-contrast controls and reduced motion. Keyboard contains editable Meridian shortcuts with individual reset.
+- **Control Center → Sound** selects a playback output and exposes application stream volume/mute controls. Refresh after audio hotplug or starting playback.
+- Confirmed monitor layouts are remembered per monitor combination. The **Alt+Space** window menu includes relocation and recovery actions.
+- Screenshots open a native crop/annotation preview. The original is saved to Pictures/Screenshots; copy or save a PNG copy to keep edits.
+- Desktop layout and dock pin changes have undo buttons and Ctrl/Super+Z when focused. Closed read-only surfaces are reclaimed after five idle minutes; active work is retained.
+
+These source additions require a rebuilt installation and a new session. Their
+live hardware, accessibility and performance qualification is still pending.
+See [workflow scope and manual review](docs/DESKTOP-WORKFLOWS.md).
 
 ## Screenshots
 
@@ -80,32 +97,53 @@ Install from one source checkout command (run as your regular user, **without** 
 bash install.sh
 ```
 
-The source installer detects APT, DNF, or pacman from `/etc/os-release`, shows a
+The default command opens the native graphical installer. `--gui` remains an
+explicit alias; use `--cli` for terminal operation.
+
+After installation, open **Meridian Installer** from Applications or
+**Settings → General → Open Installer**. Choose a source checkout and install,
+update, repair, compile only, check requirements, or remove Meridian. **Use prepared release**
+skips compilation when the release matches the checkout; source rebuilds take
+longer. First GUI launch may compile the GTK-only installer and requires the
+Rust/GTK development prerequisites. The GUI itself uses no Node or WebKit.
+
+The shared installer backend detects APT, DNF, or pacman from `/etc/os-release`, shows a
 confirmation before system changes, installs build/runtime dependencies, compiles
 a verified release, and invokes the transactional privileged installer. It
-keeps the current login manager unchanged. Other commands:
+keeps the current login manager unchanged. Terminal commands through the same entry point:
 
 ```sh
-bash install.sh --check       # read-only dependency and version report
-bash install.sh --update      # rebuild and reinstall current checkout
-bash install.sh --repair      # rebuild and reinstall current checkout
-bash install.sh --uninstall   # remove Meridian-managed system files
+bash install.sh --cli               # compile and install through the terminal
+bash install.sh --cli --compile     # compile a verified release without installing Meridian
+bash install.sh --cli --check       # read-only dependency and version report
+bash install.sh --cli --update      # rebuild and reinstall current checkout
+bash install.sh --cli --repair      # rebuild and reinstall current checkout
+bash install.sh --cli --uninstall   # remove Meridian-managed system files
 ```
 
-`--update` intentionally does not pull Git changes; run `git pull` on your
+`--cli --update` intentionally does not pull Git changes; run `git pull` on your
 desired branch first. `--yes` skips the package-installation confirmation for
-reviewed automation. If you prefer separate steps, the original
-`tools/dev-env.sh`, `tools/compile_meridian.sh`, and
-`sudo tools/install.sh` workflow is still supported.
+reviewed automation. Compilation and installation use this same entry point;
+`--compile` builds only, and `--prepared` installs an already-verified build.
+The lower-level helper scripts remain available for compatibility.
 
 Setup selects APT, DNF, or pacman from `/etc/os-release`. Arch setup performs
 a full system upgrade. Fedora codecs come from its configured repositories and
 may support fewer formats. New profiles have script tests; desktop and hardware
 qualification on Fedora and Arch remains pending. Systemd/logind is required.
 
-Select **Meridian** at the login screen. To update, pull the source you want and run `bash install.sh --update`, then
-sign out and back in. Remove it with `bash install.sh --uninstall`. See [installation details](tools/INSTALLER.md)
+Select **Meridian** at the login screen. To update, pull the source you want and run `bash install.sh --cli --update`, then
+sign out and back in. Remove it with `bash install.sh --cli --uninstall`. See [installation details](tools/INSTALLER.md)
 for optional greetd configuration.
+
+## Rendering engines
+
+Open **Engines** in Applications or **Settings → Engines** for four automatically
+saved switches: Font, GPU, CPU and Audio. Font/GPU/native CPU changes need a new
+session. Audio configures high-quality PipeWire resampling for new streams;
+playback apps and the PulseAudio service need restarting to pick up changes.
+The four precompiled C++ libraries total about 21 KB, excluding existing system
+libraries. See [engines](docs/RENDERING-ENGINES.md) for scope and limitations.
 
 ## Keyboard shortcuts
 
@@ -115,7 +153,7 @@ for optional greetd configuration.
 | Super+C | Open Control Center |
 | Super+E | Open Meridian Files |
 | Super+I | Open Settings |
-| Super+Enter | Open Kitty |
+| Super+Enter | Open Meridian Terminal |
 | Super+L | Lock the session |
 | Print Screen | Capture the desktop |
 | Super+Shift+S or Shift+Print Screen | Select a screenshot area |

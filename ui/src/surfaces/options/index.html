@@ -3,13 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <meta http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src meridian:; img-src meridian: data:; style-src meridian:; font-src meridian:; connect-src meridian:; base-uri 'none'; form-action 'none'" />
+      content="default-src 'none'; script-src meridian:; img-src meridian: data:; style-src meridian: 'unsafe-inline'; font-src meridian:; connect-src meridian:; base-uri 'none'; form-action 'none'" />
     <title>Meridian options</title>
     <link rel="stylesheet" href="../../lib/base.css" />
     <link rel="stylesheet" href="../../lib/menu.css" />
     <link rel="stylesheet" href="options.css" />
     <script type="module" src="options.js"></script>
-  </head>
+  <link rel="stylesheet" href="../../meridian-ui/meridian-ui.css" /><link rel="stylesheet" href="../../lib/precision.css" /><link rel="stylesheet" href="../../lib/precision-desktop.css" /></head>
   <body>
     <div id="root"></div>
   </body>

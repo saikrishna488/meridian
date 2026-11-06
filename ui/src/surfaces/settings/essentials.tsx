@@ -1,9 +1,10 @@
+import { Input } from "../../meridian-ui";
 import { useEffect, useRef, useState } from "react";
-import { Button } from "../../components/ui/button";
-import { Slider } from "../../components/ui/slider";
-import { Select } from "../../components/Select";
+import { Button } from "../../meridian-ui";
+import { Slider } from "../../meridian-ui";
+import { Select } from "../../meridian-ui";
 import { on, request } from "../../lib/bridge";
-import { Switch } from "../../components/ui/switch";
+import { Switch } from "../../meridian-ui";
 import { errorMessage } from "../../lib/react";
 import type { InputPreferences } from "../../lib/generated/InputPreferences";
 import type { NotificationState } from "../../lib/generated/NotificationState";
@@ -48,7 +49,7 @@ export function InputSettings({ kind }: { kind: "keyboard" | "mouse" }) {
     } catch(e) { setError(errorMessage(e)); }
     finally { setBusy(false); }
   }
-  if (!draft) return <p className="section-caption">{error || "Loading input settings…"}</p>;
+  if (!draft) return <div className="settings-card settings-fallback" role={error ? "alert" : "status"}><p>{error || "Loading input settings…"}</p>{error && <p>Use Reload page to try again.</p>}</div>;
   return <div className="essentials-panel">
     <p className="section-caption">Input controls are unsupported in this session: labwc does not expose the readback needed to verify changes. Values below may not reflect connected devices.</p>
     <fieldset disabled className="essentials-disabled">
@@ -97,11 +98,8 @@ export function InputSettings({ kind }: { kind: "keyboard" | "mouse" }) {
   </div>;
 }
 
-export function ShortcutSettings() {
-  return <section className="settings-card"><h3>Keyboard shortcuts</h3>
-    <p className="section-caption">Reading and editing the active compositor shortcuts is unsupported. Review your labwc rc.xml for the current bindings.</p>
-  </section>;
-}
+export { EditableShortcuts as ShortcutSettings } from "./workflows";
+import { NotificationRules } from "../../components/NotificationRules";
 export function NotificationSettings() {
   const [data, setData] = useState<NotificationState | null>(null);
   const [error, setError] = useState("");
@@ -121,10 +119,10 @@ export function NotificationSettings() {
   return <><section className="settings-card"><h3>Notifications</h3>
     <ToggleRow title="Do Not Disturb" detail="Silence notification pop-ups" value={data?.do_not_disturb ?? false}
       disabled={!data?.available || busy} onChange={value => void setDnd(value)} />
-    <div className="settings-row"><span>Notification service</span><strong>{!data ? "Loading…" : data.available ? "Available" : "Unavailable"}</strong></div>
+    <div className="settings-row"><span>Notification service</span><strong>{!data ? error ? "Unavailable" : "Loading…" : data.available ? "Available" : "Unavailable"}</strong></div>
     <div className="settings-row"><span>Recent notifications</span><strong>{data?.items.length ?? "—"}</strong></div>
     </section>{error && <p role="alert" className="settings-error">{error}</p>}
-    <p className="section-caption">Per-app notification rules are not supported by the current notification server.</p></>;
+    <NotificationRules /></>;
 }
 export function DateTimeSettings() {
   const [current, setCurrent] = useState<import("../../lib/generated/TimeState").TimeState | null>(null);
@@ -158,9 +156,7 @@ export function DateTimeSettings() {
     <div className="settings-row"><span>Current time</span><strong>{now.toLocaleString()}</strong></div>
     <div className="settings-row"><span>Synchronization</span><strong>{current ? current.synchronized ? "Synchronized" : "Not synchronized" : "Unavailable"}</strong></div>
     <label className="settings-row essentials-setting"><strong>Time zone</strong>
-      <input aria-label="Time zone" className="essentials-timezone" list="meridian-time-zones"
-        value={zone} onChange={event => setZone(event.target.value)} disabled={!current || busy} />
-      <datalist id="meridian-time-zones">{["UTC", "America/Chicago", "America/New_York", "America/Los_Angeles", "Asia/Kolkata", "Europe/London", "Europe/Berlin", "Asia/Tokyo"].map(value => <option key={value} value={value} />)}</datalist>
+      <Input aria-label="Time zone" className="essentials-timezone" value={zone} onChange={event => setZone(event.target.value)} disabled={!current || busy} placeholder="America/Chicago" />
     </label>
     <ToggleRow title="Automatic time synchronization" value={sync} disabled={!current || busy} onChange={setSync} />
     </section>
@@ -168,27 +164,4 @@ export function DateTimeSettings() {
     <div className="settings-actions"><Button disabled={!dirty || busy} onClick={() => void save()}>{busy ? "Applying…" : "Apply changes"}</Button></div>
     <p className="section-caption">Changes are applied by systemd-timedated and may require administrator authorization. Type any installed IANA time zone, such as America/Chicago.</p>
   </>;
-}
-export function PrinterSettings() {
-  const [data, setData] = useState<import("../../lib/generated/PrinterInventory").PrinterInventory | null>(null);
-  const [error, setError] = useState("");
-  useEffect(() => {
-    let alive = true;
-    void request({ method: "settings.printers" }).then(value => { if (alive) setData(value); })
-      .catch(e => { if (alive) setError(errorMessage(e)); });
-    return () => { alive = false; };
-  }, []);
-  return <><section className="settings-card"><h3>Printers</h3>
-    {data?.printers.length ? data.printers.map(name => <div className="settings-row" key={name}><strong>{name}</strong><small>Installed printer</small></div>)
-      : <p className="section-caption">{data ? data.cups_available ? "No installed printers found." : "CUPS printer discovery is unavailable." : "Finding printers…"}</p>}
-  </section><section className="settings-card"><h3>Scanners</h3>
-    {data?.scanners.length ? data.scanners.map(name => <div className="settings-row" key={name}><span>{name}</span></div>)
-      : <p className="section-caption">{data ? data.sane_available ? "No scanners found." : "SANE scanner discovery is unavailable." : "Finding scanners…"}</p>}
-  </section>{error && <p className="settings-error" role="alert">{error}</p>}
-    <p className="section-caption">Device discovery is read-only. Adding printers or changing drivers still requires distribution printer-management tools.</p></>;
-}
-export function PrivacySettings() {
-  return <><section className="settings-card"><h3>Privacy &amp; security</h3>
-    <p className="section-caption">Screen locking and idle behavior are available in Power &amp; Lock. Camera, microphone, and location permissions require application sandbox or portal support; Meridian does not currently enforce per-app access controls.</p>
-  </section></>;
 }

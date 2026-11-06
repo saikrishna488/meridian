@@ -25,7 +25,7 @@ EOF
 chmod +x "$fixture/bin/sudo"
 printf 'ID=fedora\n' > "$fixture/os-release"
 set +e
-MERIDIAN_OS_RELEASE="$fixture/os-release" PATH="$fixture/bin:$PATH" bash "$ROOT/install.sh" --check > "$fixture/check" 2>&1
+MERIDIAN_OS_RELEASE="$fixture/os-release" PATH="$fixture/bin:$PATH" bash "$ROOT/install.sh" --cli --check > "$fixture/check" 2>&1
 status=$?
 set -e
 if [ "$status" = 94 ]; then

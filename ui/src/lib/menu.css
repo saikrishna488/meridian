@@ -34,7 +34,7 @@
   margin: 0;
   padding: 0 16px;
   font-size: var(--text-xs);
-  color: rgb(255 170 160);
+  color: var(--danger);
 }
 .status:empty {
   display: none;

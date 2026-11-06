@@ -1,13 +1,49 @@
 # Meridian Design System
 
-> This design-system audit is dated 2026-10-18. The current package is dark-only;
-> the older Orbit and embedded Terminal surfaces described in this audit are
-> not in the production UI bundle. See the [current README](../README.md).
+## Chosen direction — 2026-11-03
 
-The source of truth for shared tokens is `ui/src/lib/tokens.css`. The current
-appearance hook fixes Meridian's own surfaces to dark mode; users can choose a
-system font in Settings. Older light-theme token definitions and audit notes
-remain in the source history, but light mode is not exposed by the current UI.
+The user selected **B — Precision** from the generated component comparison.
+Use this direction for upcoming Meridian UI work: opaque cool off-white panels,
+forest-green active controls and primary actions, fine neutral borders, compact
+aligned layouts, restrained shadows, approximately 6px button corners, thin slider
+tracks with small round thumbs, and compact pill switches. Avoid frosted glass
+and the warm, raised treatment from the other concepts.
+
+Reference image: `~/.codex/generated_images/01a19ff9-a8ab-7af2-8034-126c58bca790/exec-1582b482-cc78-4a36-8f03-00d1cccca46b.png`
+(middle column). On 2026-11-03 the user selected the first follow-up layout
+(Classic, referred to as A), with rounded cards, and then confirmed that the
+chosen look should cover the whole Meridian desktop. Precision is now the
+light foundation for every web surface and native Meridian chrome, rather than
+an optional appearance mode. Wallpapers and third-party apps keep their styling.
+
+Control Center owns session/power actions; the desktop wordmark is static.
+Settings has eight main categories. Accessibility groups display, sound, keyboard,
+pointer and notification preferences; System groups advanced/maintenance pages.
+Search and existing deep links continue to reach individual pages.
+
+## Open-source references — 2026-11-03
+
+- [Radix Primitives Slider](https://github.com/radix-ui/primitives/blob/main/packages/react/slider/src/slider.tsx)
+  (MIT): reference for pointer-driven movement, clamping/stepping and separate
+  continuous-change versus commit callbacks. Meridian retains its native range
+  element for keyboard and assistive technology, with its own single-thumb
+  implementation and serialized system writes. No Radix dependency was added.
+- [GNOME Accessibility panel](https://github.com/GNOME/gnome-control-center/blob/main/panels/universal-access/cc-ua-panel.blp):
+  reference for a compact accessibility landing page with separate seeing,
+  hearing, typing and pointing pages. Meridian links to its existing functional
+  pages; this does not add a screen reader, magnifier or new OS accessibility APIs.
+
+Verification: source review and whitespace checks only. Builds, automated tests,
+Node verification and live visual/device checks were not run under the project's
+memory constraints. Legacy dark appearance configurations are normalized on read;
+no new appearance selector is exposed.
+
+## Historical audit — 2026-10-18
+
+The notes below describe earlier UI decisions and may differ from the current
+Precision foundation. Shared tokens originate in `ui/src/lib/tokens.css` and the
+UI kit, with final Precision tokens and surface treatment in
+`ui/src/lib/precision.css` and `ui/src/lib/precision-desktop.css`.
 
 ## Visual language
 

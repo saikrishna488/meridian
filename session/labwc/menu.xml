@@ -1,6 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Meridian has no desktop menu: right-click on the desktop does nothing.
-     Root menu intentionally empty. -->
+<!-- Meridian supplies the desktop menu; labwc owns window layout actions. -->
 <openbox_menu>
   <menu id="root-menu" label="" />
+  <menu id="client-menu" label="Window layout">
+    <item label="Left half"><action name="SnapToEdge" direction="left" /></item>
+    <item label="Right half"><action name="SnapToEdge" direction="right" /></item>
+    <item label="Maximize"><action name="Maximize" /></item>
+    <item label="Restore"><action name="UnSnap" /></item>
+    <item label="Move to left display"><action name="MoveToOutput" direction="left" /></item>
+    <item label="Move to right display"><action name="MoveToOutput" direction="right" /></item>
+    <item label="Recover window at pointer"><action name="AutoPlace" policy="cursor" /></item>
+    <separator />
+    <item label="Minimize"><action name="Iconify" /></item>
+    <item label="Close"><action name="Close" /></item>
+  </menu>
 </openbox_menu>

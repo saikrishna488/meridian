@@ -20,7 +20,7 @@
     <dropShadows>yes</dropShadows>
     <maximizedDecoration>titlebar</maximizedDecoration>
     <titlebar>
-      <layout>:iconify,max,close</layout>
+      <layout>close,iconify,max:</layout>
       <showTitle>yes</showTitle>
     </titlebar>
     <font>
@@ -93,6 +93,8 @@
     <keybind key="W-q">
       <action name="Close" />
     </keybind>
+
+    <keybind key="W-d"><action name="Execute" command="gapplication action org.meridian.Shell show-desktop" /></keybind>
 
     <!-- Window management remains available even for custom app titlebars. -->
     <keybind key="W-Down"><action name="Iconify" /></keybind>

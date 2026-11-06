@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Terminal
+Comment=Terminal tabs, panes and shell sessions
+Exec=gapplication action org.meridian.Shell open-terminal
+Icon=utilities-terminal
+Terminal=false
+Categories=System;TerminalEmulator;
+StartupWMClass=org.meridian.Shell

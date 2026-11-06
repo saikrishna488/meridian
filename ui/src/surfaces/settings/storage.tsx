@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Button } from "../../components/ui/button";
-import { Dialog } from "../../components/ui/dialog";
-import { Progress } from "../../components/ui/progress";
+import { Button } from "../../meridian-ui";
+import { Dialog } from "../../meridian-ui";
+import { Progress } from "../../meridian-ui";
 import { request } from "../../lib/bridge";
 import { errorMessage } from "../../lib/react";
 import type { StorageState } from "../../lib/generated/StorageState";
@@ -43,7 +43,7 @@ export function Storage() {
     {error && <p role="alert" className="settings-error">{error} <Button disabled={busy} onClick={() => void load()}>Retry</Button></p>}
     {capability && capability.state !== "ready" && <p role="status">{capability.message} Storage information remains available.</p>}
     {state && <><section className="settings-card storage-overview" aria-label="System filesystem">
-      <h3>System filesystem · /</h3>{state.total > 0 ? <><p>{bytes(used)} used of {bytes(state.total)} · {Math.round(used / state.total * 100)}%</p><Progress aria-label="System filesystem usage" max={state.total} value={used} /><p>{bytes(state.available)} available</p></> : <p>Capacity unavailable</p>}
+      <h3>System filesystem · /</h3>{state.total > 0 ? <><p>{bytes(used)} used of {bytes(state.total)} · <strong className="muk-meter-value" data-level={used / state.total >= .95 ? "critical" : used / state.total >= .85 ? "warning" : "normal"}>{Math.round(used / state.total * 100)}%</strong></p><Progress aria-label="System filesystem usage" max={state.total} value={used} level={used / state.total >= .95 ? "critical" : used / state.total >= .85 ? "warning" : "normal"} /><p>{bytes(state.available)} available</p></> : <p>Capacity unavailable</p>}
       <p className="section-caption">{state.source} · {state.filesystem || "Unknown filesystem"}</p>{state.warning && <p role="status">{state.warning}</p>}
     </section><h3>Disks and volumes</h3>{!state.volumes.length && <p role="status">No block devices found. Network and virtual filesystems may only appear in the system overview.</p>}
     {state.volumes.map(volume => <section className="settings-card storage-volume" key={volume.path} aria-label={volume.name}>

@@ -1,0 +1,10 @@
+.engine-settings { display:grid; gap:16px; }
+.engine-settings > .section-caption { margin:0; }
+.settings-page-body .engine-settings .engine-switches { padding:0; }
+.settings-page-body .engine-settings .engine-switch-row { padding:20px; align-items:center; flex-wrap:nowrap; }
+.engine-switch-copy { flex:1; min-width:0; }
+.engine-switch-copy strong { font-size:14px; }
+.engine-switch-copy p { margin:6px 0 0; color:var(--ink-muted); font-size:12px; line-height:1.6; }
+.engine-switch-copy small { display:block; margin-top:8px; color:var(--ink-muted); line-height:1.6; }
+.engine-switch-row .meridian-toggle { flex:none; }
+@media(max-width:560px) { .settings-page-body .engine-settings .engine-switch-row { padding:16px; gap:16px; } }

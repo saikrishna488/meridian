@@ -1,5 +1,5 @@
-import { Dialog } from "../../components/ui/dialog";
-import { Button } from "../../components/ui/button";
+import { Dialog } from "../../meridian-ui";
+import { Button } from "../../meridian-ui";
 import { useEffect, useState } from "react";
 import { request } from "../../lib/bridge";
 import { errorMessage } from "../../lib/react";

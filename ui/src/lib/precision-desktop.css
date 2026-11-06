@@ -1,0 +1,347 @@
+/* Desktop-wide Precision finish. Preserve surface geometry and wallpaper layers. */
+:root, :root[data-theme] {
+  --glass-bg: var(--surface-raised);
+  --glass-background: var(--surface-raised);
+  --glass-blur: 0px;
+  --shadow-card: 0 1px 2px rgb(20 35 26 / .04);
+  --shadow-lg: 0 8px 24px rgb(20 35 26 / .16);
+  --desktop-gloss-tint: var(--surface-raised);
+  --desktop-gloss-line: var(--line);
+  --desktop-gloss-edge: transparent;
+  --desktop-gloss-shade: transparent;
+  --terminal-bg: var(--canvas);
+  --terminal-fg: var(--ink);
+}
+:root :is(.taskbar, .topbar, .menu, .desktop-menu, .desktop-context, .app-context, .finder-context, .terminal-context, .meridian-select-dropdown, .select-menu) {
+  color: var(--ink); background: var(--surface-raised); border-color: var(--line);
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+:root :is(.taskbar, .topbar) { box-shadow: 0 -1px 0 var(--line); }
+:root :is(.taskbar, .topbar) button { color: var(--ink); }
+:root :is(.taskbar, .topbar) button:hover:enabled { color: var(--selection-ink); background: var(--selection); }
+:root :is(.taskbar, .topbar) .menu-brand { color: var(--ink); }
+:root :is(.bar, .windows) { background: transparent; border-color: transparent; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+:root :is(.menu, .desktop-menu, .desktop-context, .app-context, .finder-context, .terminal-context) { border-radius: 14px; box-shadow: var(--shadow-lg); }
+:root :is(.desktop-menu, .desktop-context, .app-context, .finder-context, .terminal-context) button { color: var(--ink); border-radius: 6px; }
+:root :is(.desktop-menu, .desktop-context, .app-context, .finder-context, .terminal-context) button:hover:enabled { color: var(--selection-ink); background: var(--selection); }
+:root :is(.desktop-menu, .desktop-context) hr { border-color: var(--line); background: var(--line); }
+:root .ui-button { border-radius: 6px; }
+:root .ui-button-primary { color: var(--on-primary); background: var(--button-primary); }
+:root .ui-button-primary:hover:enabled { background: var(--button-primary-hover); }
+:root :is(.ui-card, .ui-dialog, .uninstall-dialog, .device-dialog, .startup-dialog) { border-color: var(--line); border-radius: 12px; background: var(--surface-raised); color: var(--ink); }
+:root :is(.ui-dialog, .uninstall-dialog, .device-dialog, .startup-dialog) { box-shadow: var(--shadow-lg); }
+:root .muk-tooltip { background: #24382c; color: #fff; }
+:root .meridian-select-dropdown { border-color: var(--line); }
+:root .meridian-select-option[data-highlighted="true"] { background: var(--selection); color: var(--selection-ink); }
+/* Wallpaper remains visible behind desktop icons, login and lock. */
+:root .desktop-item { border-radius: 10px; }
+:root .desktop-item:hover, :root .desktop-item.selected { background: var(--brand-green-soft); border-color: var(--brand-green); }
+:root :is(.login, .lock) .card { background: var(--surface-raised); color: var(--ink); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-lg); -webkit-backdrop-filter: none; backdrop-filter: none; }
+:root :is(.login, .lock) :is(.field-label, .lock-identity p) { color: var(--ink-muted); }
+:root :is(.login, .lock) :is(input, select) { color: var(--ink); background: var(--surface); border-color: var(--line); border-radius: 6px; }
+:root :is(.login, .lock) .submit { color: var(--on-primary); background: var(--button-primary); border-color: var(--button-primary); border-radius: 6px; }
+:root :is(.login, .lock) .message { color: var(--danger); }
+:root :is(.login, .lock) .message.info { color: var(--ink-muted); }
+:root .power-button { color: var(--ink); background: var(--surface-raised); border: 1px solid var(--line); border-radius: 6px; }
+/* Launcher and notifications use the same card hierarchy as Control Center. */
+:root .notification-center { color: var(--ink); background: var(--surface); }
+:root .notification-center button { color: var(--ink-muted); }
+:root .notification-center button:hover:enabled { color: var(--ink); background: var(--surface-hover); }
+:root .notification { color: var(--ink); background: var(--surface-raised); border: 1px solid var(--line); border-radius: 12px; }
+:root .notification[data-unread="true"] { border-left: 3px solid var(--action); }
+:root .notification-center :is(.notification-group-title, .notification-meta, .notification-body, .notification-empty) { color: var(--ink-muted); }
+:root :is(.apps-search, .launcher-filters, .launcher-footer) { background: var(--surface); border-color: var(--line); }
+:root .launcher-filters button[aria-pressed="true"] { color: var(--selection-ink); background: var(--selection); }
+/* Settings: short sidebar, full-page preference groups, searchable child pages. */
+.settings-hub-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 14px; }
+:root .settings-app .settings-content .settings-hub-card {
+  display: flex; align-items: center; gap: 14px; min-height: 100px; width: 100%;
+  padding: 20px; text-align: left; white-space: normal;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--surface-raised); color: var(--ink);
+}
+.settings-hub-card > span:not(.muk-icon-tile) { flex: 1; min-width: 0; }
+.settings-hub-card strong, .settings-hub-card small { display: block; }
+.settings-hub-card small { color: var(--ink-muted); font-size: 12px; line-height: 1.5; margin-top: 6px; font-weight: 400; }
+:root .settings-app .settings-content .settings-hub-card:hover { background: var(--surface-hover); border-color: var(--brand-green); }
+:root .settings-quick-links > button { background: var(--surface-raised); border: 1px solid var(--line); border-radius: 12px; }
+:root .settings-app .settings-sidebar .muk-icon-tile { background: transparent; color: inherit; box-shadow: none; }
+/* Files and Pulse keep their layouts, with opaque chrome and neutral lists. */
+:root :is(.finder-app, .pulse-app) { background: var(--canvas); color: var(--ink); }
+:root body:has(.finder-app), :root body:has(.pulse-app) { background: var(--canvas); color: var(--ink); }
+:root .finder-app { --files-border: var(--line); --files-glass: var(--surface-raised); --files-hover: var(--surface-hover); --files-shadow: none; }
+:root :is(.finder-sidebar, .pulse-sidebar) { background: var(--surface-subtle); color: var(--ink); -webkit-backdrop-filter: none; backdrop-filter: none; }
+:root :is(.finder-body, .finder-workspace, .finder-tab-panel, .pulse-main) { background: var(--canvas); color: var(--ink); }
+:root .finder-app :is(.finder-tabs, .finder-toolbar, .finder-locationbar, .finder-breadcrumbs, .finder-footer, .finder-list-heading, .trash-list-heading) { background: var(--surface-raised); color: var(--ink); border-color: var(--line); }
+:root .finder-app :is(button:not(.ui-button):not([type="submit"]), input, .orbit-brand strong, .file-item) { color: var(--ink); }
+:root .finder-app .finder-sidebar nav button[aria-current="page"] { color: var(--selection-ink); background: var(--selection); }
+:root .finder-app .finder-sidebar nav button:hover:enabled { color: var(--selection-ink); background: var(--surface-hover); }
+:root .finder-app :is(.finder-dialog, .properties-dialog) { background: var(--surface-raised); color: var(--ink); border-color: var(--line); border-radius: 12px; }
+:root .finder-app .finder-dialog-scrim input { background: var(--surface); color: var(--ink); border-color: var(--line); }
+:root .pulse-app { --pulse-line: var(--line); --pulse-muted: var(--ink-muted); --pulse-hover: var(--surface-hover); }
+:root .pulse-app :is(.pulse-sidebar nav button, .pulse-sidebar nav button small, .pulse-processes td, .pulse-processes th button) { color: var(--ink); }
+:root .pulse-app .pulse-sidebar nav button[aria-current="page"] { background: var(--selection); color: var(--selection-ink); }
+:root .pulse-app :is(.pulse-overview-metrics, .process-table-wrap) { background: var(--surface-raised); border-color: var(--line); border-radius: 12px; }
+:root .pulse-app .pulse-processes thead { background: var(--surface-subtle); }
+:root .pulse-app :is(.process-toolbar input, .pulse-error) { background: var(--surface-raised); color: var(--ink); border-color: var(--line); }
+:root .pulse-app .pulse-processes td { border-bottom-color: var(--line); }
+@media (forced-colors: active) {
+  :root, :root[data-theme] { --selection: Highlight; --selection-ink: HighlightText; --button-primary: Highlight; --on-primary: HighlightText; --button-primary-hover: Highlight; --focus-ring: Highlight; }
+}
+/* Legacy surfaces with explicit white text need semantic text colors too. */
+:root :is(.topbar, .taskbar) :is(.meridian-logo, .when .clock) { color: var(--ink); }
+:root :is(.topbar, .taskbar) .when .date { color: var(--ink-muted); }
+:root :is(.topbar, .taskbar) button[aria-expanded="true"] { color: var(--selection-ink); background: var(--selection); }
+:root .notification-dot { background: var(--action); border-color: var(--surface-raised); }
+:root .notification-center :is(.notification p, .notification-status) { color: var(--ink-muted); }
+:root .notification-empty h2 { color: var(--ink); }
+:root .notification-center .notification-actions button { background: var(--surface-subtle); color: var(--action); }
+:root .finder-app .finder-toolbar h1 { color: var(--ink); }
+:root .finder-app .finder-tab [role="tab"][aria-selected="true"] { background: var(--selection); color: var(--selection-ink); }
+:root :is(.login, .lock) .password-visibility { color: var(--ink-muted); }
+:root :is(.login, .lock) .caps-lock-hint { color: #815012; }
+:root .lock-identity > span { background: var(--selection); color: var(--action); border-color: var(--line); }
+@media (forced-colors: active) {
+  :root :is(.login, .lock) :is(.card, input, select) { background: Canvas; color: CanvasText; border-color: ButtonText; }
+}
+:root .finder-app :is(.file-name, .trash-item, .finder-notice, .trash-restored, .finder-breadcrumbs [aria-current="location"]) { color: var(--ink); }
+:root .finder-app .file-item.selected { background: var(--selection); border-color: var(--brand-green); }
+:root .finder-app .file-item.selected .file-name { color: var(--selection-ink); }
+:root :is(.dock-preview, .dock-preview-popover) { background: var(--surface-raised); color: var(--ink); border-color: var(--line); -webkit-backdrop-filter: none; backdrop-filter: none; }
+:root .dock-preview-window { color: var(--ink); }
+:root .window.pending::after { background: var(--action); }
+
+/* Shared tile geometry and neutral icon treatment across Meridian surfaces. */
+:root, :root[data-theme] {
+  --tile-radius: 12px;
+  --icon-tile-radius: 8px;
+}
+:root .muk-icon-tile {
+  border-radius: var(--icon-tile-radius);
+  background: var(--brand-green);
+  color: var(--brand-green-ink);
+  box-shadow: none;
+}
+:root .settings-app :is(.settings-page-heading, .settings-quick-links) .muk-icon-tile {
+  border-radius: var(--icon-tile-radius);
+}
+:root .control-center .control-symbol .muk-icon-tile {
+  border-radius: var(--icon-tile-radius);
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+}
+:root .control-center .control-connection[data-enabled="false"] .control-symbol,
+:root .control-center .control-connection[data-enabled="false"] .muk-icon-tile {
+  color: var(--ink-muted);
+}
+:root :is(.ui-card, .notification, .settings-quick-links > button),
+:root .control-center .control-card,
+:root .settings-app .settings-card,
+:root .settings-app .settings-content .settings-hub-card {
+  border-radius: var(--tile-radius);
+  box-shadow: none;
+}
+:root :is(.taskbar, .topbar) .system-tray .ui-icon {
+  width: 14px;
+  height: 14px;
+}
+:root :is(.taskbar, .topbar) .system-tray .battery-icon {
+  width: 18px;
+  height: 16px;
+}
+:root :is(.taskbar, .topbar) .taskbar-battery.low {
+  color: var(--danger);
+}
+:root .finder-app .finder-dialog-scrim button[type="submit"] {
+  color: var(--on-primary);
+  background: var(--button-primary);
+}
+:root .finder-app .ui-button-primary {
+  color: var(--on-primary);
+}
+:root .finder-app .ui-button-danger {
+  color: var(--on-primary);
+}
+
+/* Shared theme and responsive behavior for long labels and large text. */
+:root .settings-app { --settings-sidebar-bg:var(--surface-subtle); }
+:root .control-center .control-connection[data-enabled="true"],
+:root .finder-app .file-item.selected { border-color:var(--action); }
+:root .settings-app .settings-content .settings-hub-card:hover { border-color:var(--action); }
+:root :is(.login, .lock) .caps-lock-hint { color:var(--muk-orange); }
+:root .system-control-status { display:block; min-height:1.4em; color:var(--ink-muted); font-size:11px; margin-top:6px; }
+:root .control-card strong, :root .control-card small { overflow-wrap:anywhere; }
+:root .settings-app .settings-row { flex-wrap:wrap; }
+:root .settings-app .settings-row > :first-child { min-width:0; overflow-wrap:anywhere; }
+:root .settings-app .settings-row :is(input, select, .meridian-select) { max-width:100%; }
+:root .ui-dialog { box-sizing:border-box; max-width:calc(100vw - 32px); max-height:calc(100dvh - 32px); overflow:auto; }
+:root .ui-dialog-scrim { overflow:auto; }
+@media(max-width:640px) {
+  :root .settings-app .settings-sidebar { position:static; max-height:none; padding:12px; }
+  :root .settings-app .settings-search { position:static; width:100%; max-width:none; margin:10px 0; }
+  :root .settings-app .settings-content { min-width:0; padding:18px 12px; }
+  :root .settings-app .settings-page-heading { flex-wrap:wrap; gap:10px; }
+  :root .settings-app .settings-row { gap:12px; padding:14px; }
+  :root .settings-app .settings-hub-grid { grid-template-columns:minmax(0,1fr); }
+}
+@media(max-width:380px) {
+  :root .control-center .control-grid { grid-template-columns:minmax(0,1fr); }
+  :root .control-center .control-card { min-width:0; }
+  :root .taskbar { --panel-side-width: min(120px, 35vw); }
+  :root .taskbar .when .date { display:none; }
+  :root .taskbar .meridian-logo { max-width:100%; }
+}
+@media(forced-colors:active) {
+  :root :is(button, input, select, textarea, summary, a[href], [tabindex]):focus-visible { outline-color:Highlight !important; }
+}
+
+/* Compact system controls share one activation target. */
+:root :is(.taskbar, .topbar) .system-tray .control-center-trigger {
+  display:flex; align-items:center; gap:7px; width:auto; min-width:0;
+  padding-inline:8px; border:1px solid var(--line); border-radius:8px;
+  background:var(--surface-subtle);
+}
+.control-center-trigger > span { display:inline-flex; align-items:center; gap:4px; }
+:root .control-center-trigger .low { color:var(--danger); }
+.tray-battery-percent { font-size:10px; font-variant-numeric:tabular-nums; }
+:root .taskbar { --taskbar-app-icon:32px; --panel-side-width:244px; }
+:root .taskbar[data-icon-size="24"] { --taskbar-app-icon:24px; }
+:root .taskbar[data-icon-size="40"] { --taskbar-app-icon:40px; }
+:root .taskbar .windows :is(.bar-button, .window) {
+  width:calc(var(--taskbar-app-icon) + 12px); min-width:calc(var(--taskbar-app-icon) + 12px);
+  height:48px; border-radius:8px; flex:none;
+}
+:root .taskbar .windows :is(.bar-button, .window) .dock-icon {
+  width:var(--taskbar-app-icon); height:var(--taskbar-app-icon);
+}
+:root .taskbar .window.running::after {
+  width:4px; height:4px; bottom:2px; background:var(--brand-green);
+}
+:root .taskbar .window[aria-pressed="true"] {
+  background:var(--selection); color:var(--selection-ink);
+  box-shadow:inset 0 -2px var(--action);
+}
+:root .taskbar .window.running[aria-pressed="true"]::after { background:var(--action); width:4px; }
+:root .taskbar .bar { min-width:0; max-width:100%; }
+:root .taskbar .dock-items { flex:1 1 auto; min-width:0; }
+:root .taskbar .dock-scroll {
+  width:24px; min-width:24px; height:34px; flex:none; padding:3px;
+}
+:root .taskbar .dock-scroll .ui-icon { width:14px; height:14px; }
+:root .taskbar .dock-scroll:disabled { opacity:.35; }
+:root .dock-preview-row { display:flex; align-items:center; gap:4px; }
+:root .dock-preview-row .dock-preview-window { flex:1; min-width:0; width:auto; }
+:root .dock-preview-window > span:nth-child(2) {
+  white-space:normal; overflow-wrap:anywhere; overflow:visible;
+  display:block; line-height:1.45;
+}
+:root .dock-preview-row .dock-preview-close { width:28px; min-width:28px; height:28px; padding:5px; flex:none; }
+:root .dock-preview-close .ui-icon { width:14px; height:14px; }
+:root .taskbar[data-hidden="true"] { bottom:calc(4px - var(--dock-surface-height)); }
+@media(max-width:800px) {
+  :root .taskbar { --panel-side-width:190px; }
+  :root .taskbar .tray-battery-percent { display:none; }
+}
+@media(max-width:520px) {
+  :root .taskbar { --panel-side-width:140px; }
+  :root .taskbar .control-center-trigger { gap:4px; padding-inline:5px; }
+  :root .taskbar .control-center-trigger > .ui-icon:nth-child(2) { display:none; }
+  :root .taskbar .taskbar-calendar { padding-inline:3px; }
+  :root .taskbar .panel-right { gap:0; }
+}
+@media(max-width:380px) {
+  :root .taskbar { --panel-side-width:105px; }
+  :root .taskbar .control-center-trigger > span { display:none; }
+  :root .taskbar .meridian-logo { width:80px; }
+  :root .taskbar .when .clock { font-size:10px; }
+}
+
+/* Shared application chrome: quiet surfaces, consistent controls, explicit focus. */
+:root :is(.settings-app, .finder-app, .terminal-app) {
+  --app-control-radius:8px;
+  --app-control-height:32px;
+}
+:root :is(.settings-app, .finder-app, .terminal-app) .ui-button {
+  border-radius:var(--app-control-radius);
+  min-height:var(--app-control-height);
+}
+:root .settings-app .settings-content button.muk-hover-option,
+:root .finder-app :is(.finder-tabs, .finder-toolbar, .finder-breadcrumbs) button,
+:root .terminal-app :is(.terminal-tabs, .terminal-pane-heading, .terminal-actions) button {
+  border-radius:var(--app-control-radius); min-height:var(--app-control-height);
+}
+:root :is(.settings-app .settings-sidebar nav, .finder-app .finder-sidebar nav) button {
+  border-radius:8px; padding:8px 12px; gap:8px;
+}
+:root :is(.settings-app .settings-sidebar nav, .finder-app .finder-sidebar nav) .ui-icon {
+  width:18px; height:18px; flex:none;
+}
+:root .settings-app .settings-content :is(.settings-card, .settings-hub-card),
+:root .finder-app .finder-network-row {
+  border-radius:12px; box-shadow:none; border-color:var(--line);
+}
+:root .settings-app .settings-content .settings-hub-card:hover {
+  border-color:var(--line); background:var(--surface-hover);
+}
+:root :is(.finder-context, .terminal-context, .dock-preview) {
+  border-radius:12px; box-shadow:var(--shadow-lg);
+}
+:root .taskbar .window.running[aria-pressed="true"]::after { width:12px; }
+:root .dock-preview-row { border-radius:8px; margin-block:3px; }
+:root .dock-preview-row[data-active="true"] {
+  background:var(--selection); box-shadow:inset 2px 0 var(--action);
+}
+:root .dock-preview-row[data-active="true"] .dock-preview-window { color:var(--selection-ink); }
+:root .dock-preview-row .dock-preview-window { padding:9px; }
+:root .dock-preview-active { color:var(--action); flex:none; }
+:root .dock-preview-row .dock-preview-close:hover:enabled { color:var(--danger); background:var(--surface-hover); }
+:root .finder-app .finder-tabs { gap:8px; padding:6px 12px; }
+:root .finder-app .finder-tab { min-width:0; flex:none; gap:2px; border-radius:8px; }
+:root .finder-app .finder-tab [role="tab"] {
+  max-width:175px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding:7px 12px;
+}
+:root .finder-app .finder-tab [role="tab"][aria-selected="true"] {
+  font-weight:600; box-shadow:inset 0 -2px var(--action);
+}
+:root .finder-app .finder-breadcrumbs { padding-block:6px; }
+:root .finder-app .finder-breadcrumbs [aria-current="location"] {
+  background:var(--selection); color:var(--selection-ink); font-weight:600; border-radius:8px;
+}
+:root .terminal-tabs { padding-block:6px; gap:8px; }
+:root .terminal-tab [role="tab"] { font-size:12px; padding:7px 12px; }
+:root .terminal-tabs button[aria-selected="true"] {
+  color:var(--selection-ink); background:var(--selection); font-weight:600;
+  box-shadow:inset 0 -2px var(--action);
+}
+:root .terminal-pane[data-focused="true"] > .terminal-pane-heading {
+  background:var(--selection); color:var(--selection-ink);
+}
+:root .terminal-pane[data-focused="true"] > .terminal-pane-heading button { color:var(--selection-ink); }
+:root .terminal-command-status {
+  flex:none; padding:6px 8px; border-top:1px solid var(--terminal-border);
+  background:var(--terminal-chrome); color:var(--terminal-ui-text); line-height:1.4;
+  overflow-wrap:anywhere; font-variant-numeric:tabular-nums;
+}
+:root .terminal-error { color:var(--danger); }
+@media(max-width:570px) {
+  :root .finder-app .finder-sidebar nav button { padding:7px; }
+  :root .finder-app .finder-tab [role="tab"] { max-width:150px; }
+}
+@media(forced-colors:active) {
+  :root .dock-preview-row[data-active="true"],
+  :root .finder-app .finder-tab [role="tab"][aria-selected="true"],
+  :root .terminal-tabs button[aria-selected="true"],
+  :root .terminal-pane[data-focused="true"] > .terminal-pane-heading {
+    outline:1px solid Highlight; outline-offset:-1px;
+  }
+  :root, :root[data-theme] {
+    --brand-green: Highlight;
+    --brand-green-hover: Highlight;
+    --brand-green-ink: HighlightText;
+    --brand-green-soft: Canvas;
+    --muk-green: LinkText;
+    --muk-blue: LinkText;
+    --action: LinkText;
+    --action-hover: LinkText;
+  }
+}

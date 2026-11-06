@@ -1,0 +1,14 @@
+[package]
+name = "meridian-installer"
+description = "Lightweight native install and update interface for Meridian"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+gtk.workspace = true
+gio.workspace = true
+glib.workspace = true
+serde_json.workspace = true
+libc = "0.2"

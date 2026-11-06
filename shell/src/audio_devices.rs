@@ -65,8 +65,24 @@ fn volume(text: &str) -> Option<(u8, bool)> {
     }
     Some(((level * 100.).round().clamp(0., 100.) as u8, parts.any(|part| part == "[MUTED]")))
 }
+fn streams(data: &str) -> Result<Vec<meridian_protocol::AudioStream>, ErrorBody> {
+    let objects: Vec<Value> = serde_json::from_str(data).map_err(error)?;
+    Ok(objects.iter().filter(|o| o["type"] == "PipeWire:Interface:Node" && o["info"]["props"]["media.class"] == "Stream/Output/Audio").take(64).filter_map(|o| {
+        let props = &o["info"]["props"];
+        let params = o["info"]["params"]["Props"].as_array().and_then(|v| v.first());
+        let level = params.and_then(|p| p["channelVolumes"].as_array()).and_then(|v| v.iter().filter_map(Value::as_f64).reduce(f64::max));
+        Some(meridian_protocol::AudioStream {
+            id: u32::try_from(o["id"].as_u64()?).ok()?, name: props["node.name"].as_str()?.into(),
+            description: props["application.name"].as_str().or_else(|| props["node.description"].as_str()).unwrap_or("Playback stream").into(),
+            volume: level.filter(|v| v.is_finite() && *v >= 0.0).map(|v| (v.cbrt() * 100.0).round().clamp(0.0,100.0) as u8),
+            muted: params.and_then(|p| p["mute"].as_bool()),
+        })
+    }).collect())
+}
 pub fn list() -> Result<AudioState, ErrorBody> {
-    let devices = devices(&run(&["pw-dump", "-N"])?)?;
+    let data = run(&["pw-dump", "-N"])?;
+    let devices = devices(&data)?;
+    let streams = streams(&data)?;
     let read = |kind: &str| {
         devices
             .iter()
@@ -77,6 +93,7 @@ pub fn list() -> Result<AudioState, ErrorBody> {
     let output = read("output");
     let input = read("input");
     Ok(AudioState {
+        streams,
         devices,
         output_volume: output.map(|v| v.0),
         input_volume: input.map(|v| v.0),
@@ -117,8 +134,10 @@ pub fn action(choice: AudioAction) -> Result<AudioState, ErrorBody> {
         return Err(error("Invalid audio control"));
     }
     // Resolve again before using a transient PipeWire id, and verify its name.
-    let current = devices(&run(&["pw-dump", "-N"])?)?;
-    if !current.iter().any(|d| d.id == choice.id && d.name == choice.name) {
+    let data = run(&["pw-dump", "-N"])?;
+    let current = devices(&data)?;
+    let stream = streams(&data)?.iter().any(|d| d.id == choice.id && d.name == choice.name);
+    if !current.iter().any(|d| d.id == choice.id && d.name == choice.name) && !(stream && choice.action != "default") {
         return Err(error("This audio device disconnected. Refresh and choose another device."));
     }
     let id = choice.id.to_string();

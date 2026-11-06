@@ -10,11 +10,17 @@ implemented today.
 ## 1. Overview
 
 Meridian is a Linux desktop shell built with Rust and React/TypeScript.
+Meridian UI Kit owns the React controls, semantic colors, keyboard/focus behavior
+and dark theme. It uses HTML inputs/buttons and ARIA patterns with no external UI
+kit dependency. Its CSS is copied as a separate static file, avoiding collisions
+with surface stylesheet names. Desktop layouts and WebView dialog focus handling
+remain in Meridian.
 WebKitGTK renders the web interface, GTK4 hosts its windows, and labwc manages
 application windows and composites the desktop. Linux and existing system
 services continue to provide hardware support, networking, audio, and sessions.
 
-The workspace contains three Rust crates: `shell`, `services`, and `protocol`.
+The workspace contains four Rust crates: `shell`, `services`, `protocol`, and
+`installer`. The installer is an independent GTK application without a WebView.
 The services crate is linked into the shell; there is no separate
 `meridian-servicesd` executable today. Normal applications run independently
 and communicate with labwc directly, or through XWayland for X11 applications.
@@ -35,19 +41,18 @@ daily-use qualification; see [Phase 1](PHASE1.md) and [Phase 3](PHASE3.md).
   package managers.
 - **Desktop:** bundled or custom wallpaper, application shortcuts, live files
   from the XDG Desktop folder, context actions, and no-overwrite file drops.
-- **Settings:** dark-only appearance and font selection; wallpaper, startup
+- **Settings:** light/dark appearance, accessibility and recovery; wallpaper, startup
   apps, applications, search, Wi-Fi, Bluetooth, displays, sound, power and
   lock, general system information, device management, and local users.
 - **Control Center and notifications:** connectivity, display brightness,
   volume, Do Not Disturb, session power actions, and in-memory notification
-  history. Meridian consumes the standard notification D-Bus service; it does
-  not provide a toast daemon.
+  history. Meridian implements the standard notification D-Bus service and
+  displays native actionable toasts with per-app and timed quiet controls.
 - **Utilities:** Pulse reads system and process metrics. Meridian's Calendar
   and Clock entries launch the installed GNOME Calendar and GNOME Clocks apps.
-- **External desktop apps:** GNOME Files handles file browsing and Kitty
-  provides the interactive terminal. They are launched as independent host
-  applications; the older embedded Finder and terminal interfaces are not in
-  the production UI bundle.
+- **Files and terminal:** Meridian Files and Meridian Terminal are bundled WebView
+  surfaces. Other installed desktop applications can launch independently;
+  default-handler preferences retain supported external application choices.
 - **Session actions:** lock, sleep, restart, shutdown, and sign out. Automatic
   locking uses Meridian's native session-lock surface; `swayidle` and `wlopm`
   handle the inactivity and display-standby timers. PipeWire media playback
@@ -94,11 +99,22 @@ potentially blocking work is also dispatched to worker threads.
 
 Panel uses `surfaces/panel`; its 88-pixel surface includes space for the floating dock shadow. Topbar uses `surfaces/topbar`. The launcher opens above the dock; Meridian and application menus, Control Center, and notifications open below the top bar. Quit requests graceful closure through the compositor, allowing applications to prompt for unsaved work.
 
-The host watches monitor changes. Each output gets a wallpaper; the first
-monitor reported by GDK receives the dock and top bar and is used for menus.
-This is an implementation choice, not a user-configurable primary-output policy.
+The host watches monitor changes. Each output gets a wallpaper; the saved
+primary-output preference controls panel/menu placement, with an available
+output used when that connector is absent. Confirmed layouts are saved by
+monitor combination and restored after hotplug/resume. Ordinary window
+relocation remains compositor-owned; the window menu provides explicit moves.
 
 ## 5. UI and rendering
+
+Meridian links four size-optimized C++ libraries (Font, GPU, CPU and Audio)
+into the Rust shell, reusing precompiled native-host archives when source and
+artifact checksums match. Settings → Engines exposes only four automatically
+saved on/off switches. CPU tuning is process-scoped timer coalescing plus reduced
+visual workload; Audio configures reversible PipeWire resampling profiles.
+See [engines](RENDERING-ENGINES.md) for active/pending status, restart requirements
+and ownership boundaries. PipeWire, WebKit and labwc retain DSP, rendering and
+compositing ownership respectively.
 
 Each surface loads locally bundled HTML, CSS, and React/TypeScript through
 `meridian://ui/surfaces/<name>/index.html`. Esbuild produces the JavaScript
@@ -114,7 +130,7 @@ frame pacing, and memory usage depend on WebKit, drivers, hardware, and workload
 the repository does not establish a fixed memory budget or zero-idle-CPU result.
 Pulse and Clock pause periodic updates when their windows are hidden.
 
-Meridian's UI is dark-only. The selected system font is saved by the host and
+Meridian's UI supports persisted light and dark themes. The selected system font is saved by the host and
 applied to Meridian, GTK, and supported desktop font settings. External apps
 can use their own appearance and font preferences.
 
@@ -194,21 +210,16 @@ Some operations live in `shell/src/settings_devices.rs` and
 
 ## 9. Files, applications, and persistence
 
-The production launcher opens GNOME Files for directory browsing and Kitty for
-terminal sessions. Meridian's own desktop file operations use GIO: desktop
-items are watched for external changes, drops and transfers avoid overwriting
-existing names, and deleting real files uses the system Trash. File operations
-run with the signed-in user's permissions.
-
-The older Finder and PTY terminal implementations remain in the source tree for
-integration coverage and compatibility, but their React surfaces are excluded
-from the production UI build. The current session delegates interactive shell
-behavior to Kitty.
+The production bundle includes Meridian Files and Meridian Terminal. The shell
+routes their built-in launcher entries to native-owned WebViews. Desktop and
+file-manager operations use GIO, with no-overwrite transfers and system Trash.
+The PTY backend owns terminal processes independently from rendered text; active
+terminal/file surfaces are excluded from idle memory reclamation.
 
 Preferences use the user's configuration directory, normally
 `~/.config/meridian/`: `desktop.json` stores appearance, wallpaper, and
-shortcuts; `dock-layout.json` stores dock ordering; `displays.json` stores
-accepted monitor layouts. Custom wallpapers are copied into the configuration
+shortcuts; `dock-layout.json` stores dock ordering; `display-profiles.json` stores
+confirmed layouts by monitor combination (`displays.json` is the legacy format). Custom wallpapers are copied into the configuration
 directory so moving the original does not break the selection.
 
 ## 10. Trust boundaries
@@ -218,8 +229,8 @@ by the owning services or authentication helpers.
 
 - Requests must deserialize into the closed protocol and pass capability checks.
   Settings, app management, notifications, Calendar, desktop files, Greeter, and
-  Locker have scoped capabilities. Legacy Finder and PTY terminal capabilities
-  do not put those UI surfaces in the current production bundle.
+  Locker, Files and Terminal have scoped capabilities. Workflow configuration
+  is restricted to Settings and Pulse view persistence to Pulse.
 - Web content uses local `meridian://` resources. Navigation and permission
   requests are restricted, and the WebKit network session is ephemeral.
   The exact repository link is opened externally by the host.
@@ -228,7 +239,7 @@ by the owning services or authentication helpers.
 - Direct browser file access is disabled. Authorized native bridge requests
   deliberately allow the desktop's scoped file operations.
 - App launches resolve installed catalog IDs. The terminal shortcut launches
-  the installed Kitty terminal application.
+  the Meridian terminal surface; configured external handlers use their own processes.
 - Lock screens are owned by Meridian through `ext-session-lock-v1`; lock
   authentication is handled by the shell's PAM worker, not a separate locker.
 
@@ -249,13 +260,15 @@ System sharing is not implemented. Some planned Settings controls remain
 unfinished or depend on host services and hardware. Meridian's top-bar
 menus are shell menus; they do not import or control arbitrary applications'
 menu bars. Meridian does not provide its own package repository, automatic
-distribution upgrades, notification toast daemon, or desktop ISO.
+distribution upgrades or a desktop ISO. Native notification toasts are owned by the shell.
 
-A separate services daemon, direct PipeWire APIs, notification toasts,
-external-monitor DDC/CI brightness, additional search providers, a custom
-compositor, and an ISO/SDK remain future directions from the older roadmap.
+A separate services daemon, direct PipeWire APIs, additional search providers,
+a custom compositor, and an ISO/SDK remain future directions. External-monitor
+DDC/CI brightness is already exposed when the host supports it.
 The current session already uses `swayidle` for idle locking and the standard
-notification D-Bus API for history.
+notification D-Bus API for history, actions and toasts. See
+[desktop workflows](DESKTOP-WORKFLOWS.md) for memory reclamation, recovery,
+shortcut configuration, notification rules and screenshot editing limits.
 
 ## 13. Repository layout
 
@@ -310,3 +323,8 @@ preference is stored in desktop configuration and only controls Meridian's
 surfaces. Notification Do Not Disturb stores a boolean preference; notification
 bodies remain session-only. See [Phase 3](PHASE3.md) for completed workflow
 work and remaining beta qualification.
+
+### Lock screen
+
+The Locker surface exposes password unlock only. Wi-Fi and Bluetooth controls
+are available after unlocking through Settings and Control Center.

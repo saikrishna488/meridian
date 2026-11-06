@@ -1,45 +1,10 @@
-/* Dense tint keeps panels readable over native windows, which WebView
- * backdrop filters cannot sample. Blur also softens browser previews. */
+/* Floating panels inherit the active theme instead of replacing its text tokens. */
 :root .menu.control-center, :root .menu.notification-center {
-  --ink: #fff;
-  --ink-muted: #e0e7f1;
-  --action: #b9d6ff;
-  --line: rgb(255 255 255 / .22);
-  --selection: rgb(255 255 255 / .18);
-  --selection-ink: #fff;
-  --focus-ring: #c8e0ff;
-  --danger: #ffb8c2;
-  background: rgb(20 28 42 / .94);
+  background: var(--surface);
   color: var(--ink);
-  border: 1px solid rgb(255 255 255 / .18);
-  box-shadow: 0 14px 36px rgb(0 0 0 / .5), 0 3px 10px rgb(0 0 0 / .3), inset 0 0 80px rgb(0 0 0 / .38);
-  -webkit-backdrop-filter: blur(40px) saturate(120%);
-  backdrop-filter: blur(40px) saturate(120%);
-  text-shadow: 0 1px 2px rgb(0 0 0 / .35);
-}
-:root .control-center .control-card,
-:root .notification-center .notification {
-  background: rgb(255 255 255 / .055);
-  border-color: var(--line);
-  box-shadow: 0 3px 14px rgb(0 0 0 / .18);
-}
-:root .control-center button, :root .notification-center button,
-:root .control-center h1, :root .notification-center h1 { color:var(--ink); }
-:root .control-center .control-heading button,
-:root .control-center .control-symbol:not(.enabled),
-:root .notification-center .notification-clear,
-:root .notification-center .notification-actions button,
-:root .notification-center .notification-empty > span { background:transparent; }
-:root .control-center .appearance-tile:hover,
-:root .control-center .control-heading button:hover,
-:root .notification-center button:hover { background:var(--surface-hover); }
-@media (prefers-reduced-transparency:reduce), (prefers-contrast:more), (forced-colors:active) {
-  :root .menu.control-center, :root .menu.notification-center {
-    --ink: CanvasText; --ink-muted: CanvasText; --action: LinkText;
-    --line: ButtonText; --focus-ring: Highlight; --danger: CanvasText;
-    --surface-hover: ButtonFace; --selection: Highlight; --selection-ink: HighlightText;
-    background:Canvas; color:CanvasText; border-color:ButtonText;
-    box-shadow:none; text-shadow:none;
-    -webkit-backdrop-filter:none; backdrop-filter:none;
-  }
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-lg);
+  text-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }

@@ -1,18 +1,18 @@
 import { useEffect, useState } from "react";
 
-export type Appearance = "dark";
+export type Appearance = "light" | "dark";
 const eventName = "meridian-theme";
 
 export function currentAppearance(): Appearance {
-  return "dark";
+  return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
 }
 
 /** Apply Meridian's appearance to the whole WebView and notify mounted apps. */
 export function applyAppearance(value: string | undefined): Appearance {
-  const mode: Appearance = "dark";
+  const mode: Appearance = value === "dark" ? "dark" : "light";
   const root = document.documentElement;
-  root.dataset.theme = "dark";
-  root.style.colorScheme = "dark";
+  root.dataset.theme = mode;
+  root.style.colorScheme = mode;
   window.dispatchEvent(new CustomEvent<Appearance>(eventName, { detail: mode }));
   return mode;
 }

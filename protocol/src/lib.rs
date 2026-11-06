@@ -118,6 +118,28 @@ pub struct TerminalSize {
     pub rows: u16,
 }
 
+#[derive(Debug, Clone, PartialEq, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct TerminalLaunch {
+    pub cwd: Option<String>,
+    pub shell: Option<String>,
+    pub ssh_host: Option<String>,
+    pub ssh_port: Option<u16>,
+    pub integration: bool,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct TerminalInfo {
+    pub cwd: String,
+    pub command: String,
+    pub busy: bool,
+    pub exit_code: Option<i32>,
+}
+#[derive(Debug, Clone, PartialEq, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct TerminalLink { pub id: u32, pub target: String, pub folder: bool }
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[ts(export)]
 pub struct TerminalSession {
@@ -263,6 +285,7 @@ pub struct AudioDevice {
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[ts(export)]
 pub struct AudioState {
+    pub streams: Vec<AudioStream>,
     pub devices: Vec<AudioDevice>,
     pub output_volume: Option<u8>,
     pub input_volume: Option<u8>,
@@ -279,6 +302,9 @@ pub struct AudioAction {
     pub percent: Option<u8>,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct AudioStream { pub id: u32, pub name: String, pub description: String, pub volume: Option<u8>, pub muted: Option<bool> }
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[ts(export)]
 pub struct BatteryInfo {
@@ -304,7 +330,12 @@ pub struct IdleSettings {
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 #[ts(export)]
 pub enum PreferencesPage {
+    Accessibility,
+    Recovery,
+    Keyboard,
+    Notifications,
     Home,
+    Engines,
     Sound,
     Power,
     StartupApps,
@@ -347,6 +378,8 @@ pub struct WallpaperChoice {
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[ts(export)]
 pub struct DesktopState {
+    pub layout: DesktopLayout,
+    pub taskbar: TaskbarPreferences,
     pub appearance: String,
     pub dock_style: String,
     pub hover_background: HoverBackground,
@@ -355,6 +388,40 @@ pub struct DesktopState {
     pub wallpaper_uri: String,
     pub wallpapers: Vec<WallpaperChoice>,
     pub items: Vec<DesktopItem>,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(default)]
+#[ts(export)]
+pub struct DesktopLayout {
+    pub icon_size: u32,
+    pub spacing: u32,
+    pub snap_to_grid: bool,
+    pub show_icons: bool,
+    pub window_buttons: String,
+    pub positions: std::collections::HashMap<String, DesktopPosition>,
+}
+impl Default for DesktopLayout {
+    fn default() -> Self {
+        Self { icon_size: 64, spacing: 16, snap_to_grid: true, show_icons: true,
+            window_buttons: "left".into(), positions: Default::default() }
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct DesktopPosition { pub x: u32, pub y: u32 }
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(default)]
+#[ts(export)]
+pub struct TaskbarPreferences {
+    pub icon_size: u32,
+    pub auto_hide: bool,
+    pub clock_format: String,
+    pub battery_percentage: bool,
+}
+impl Default for TaskbarPreferences {
+    fn default() -> Self {
+        Self { icon_size: 32, auto_hide: false, clock_format: "system".into(), battery_percentage: true }
+    }
 }
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
@@ -576,6 +643,8 @@ pub enum SurfaceKind {
     Pulse,
     Calendar,
     Clock,
+    Photos,
+    Media,
     /// Notification center.
     Notifications,
     /// Login screen (`meridian-greeter`, a separate program run by greetd).
@@ -604,6 +673,8 @@ pub enum Capability {
     Settings,
     /// Manage applications that start at login, only from Settings.
     Startup,
+    /// Configure native rendering engines, only from Settings.
+    Rendering,
     /// Read laptop battery and external power status.
     PowerStatus,
     /// Privileged driver and local account management, only in Settings.
@@ -632,8 +703,9 @@ impl SurfaceKind {
     /// The fixed capability set of each surface kind.
     pub fn capabilities(self) -> &'static [Capability] {
         match self {
-            SurfaceKind::Wallpaper => &[Capability::Dock, Capability::DesktopFiles, Capability::Popovers],
+            SurfaceKind::Wallpaper => &[Capability::Appearance, Capability::Windows, Capability::Dock, Capability::DesktopFiles, Capability::Popovers],
             SurfaceKind::Preferences => &[
+                Capability::Rendering,
                 Capability::Appearance,
                 Capability::Settings,
                 Capability::Startup,
@@ -655,13 +727,15 @@ impl SurfaceKind {
             SurfaceKind::Notifications => &[Capability::Notifications, Capability::Popovers],
             SurfaceKind::Pulse => &[Capability::Monitor],
             SurfaceKind::Calendar => &[Capability::Calendar],
-            SurfaceKind::Clock => &[],
+            SurfaceKind::Clock | SurfaceKind::Photos | SurfaceKind::Media => &[],
             SurfaceKind::Panel => &[
                 Capability::Popovers,
                 Capability::Windows,
                 Capability::Search,
                 Capability::Dock,
                 Capability::AppManagement,
+                Capability::PowerStatus,
+                Capability::Notifications,
             ],
             SurfaceKind::Topbar => &[
                 Capability::Popovers,
@@ -674,6 +748,7 @@ impl SurfaceKind {
                 &[Capability::Popovers, Capability::Windows, Capability::Session, Capability::Search, Capability::Dock]
             }
             SurfaceKind::Applications => &[
+                Capability::DesktopFiles,
                 Capability::Search,
                 Capability::Popovers,
                 Capability::Windows,
@@ -752,10 +827,43 @@ pub enum ProviderId {
 }
 
 /// A request sent by a UI surface to the host.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct WorkflowChange { pub action: String, pub id: String, pub value: String }
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct ShortcutEntry { pub id: String, pub label: String, pub key: String, pub default_key: String }
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct WorkflowState {
+    pub shortcuts: Vec<ShortcutEntry>, pub completed: Vec<String>, pub text_scale: f64,
+    pub high_contrast: bool, pub reduced_motion: bool, pub surfaces: Vec<String>, pub errors: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct PulseView { pub section: String, pub sort: String, pub ascending: bool, pub query: String }
+
 #[derive(Debug, Clone, PartialEq, Deserialize, TS)]
 #[serde(tag = "method", content = "params", deny_unknown_fields)]
 #[ts(export)]
 pub enum Request {
+    #[serde(rename = "pulse.view_get")]
+    PulseViewGet,
+    #[serde(rename = "pulse.view_set")]
+    PulseViewSet(PulseView),
+    #[serde(rename = "workflow.get")]
+    WorkflowGet,
+    #[serde(rename = "workflow.set")]
+    WorkflowSet(WorkflowChange),
+    #[serde(rename = "notifications.configure")]
+    NotificationsConfigure(WorkflowChange),
+    #[serde(rename = "desktop.layout_undo")]
+    DesktopLayoutUndo,
+    #[serde(rename = "dock.undo")]
+    DockUndo,
     /// Handshake. Marks the surface ready to receive events.
     #[serde(rename = "shell.hello")]
     Hello,
@@ -765,6 +873,10 @@ pub enum Request {
     DesktopAppearanceSet(WallpaperSet),
     #[serde(rename = "desktop.dock_style_set")]
     DesktopDockStyleSet(WallpaperSet),
+    #[serde(rename = "desktop.taskbar_set")]
+    DesktopTaskbarSet(TaskbarPreferences),
+    #[serde(rename = "desktop.layout_set")]
+    DesktopLayoutSet(DesktopLayout),
     #[serde(rename = "desktop.hover_background_set")]
     DesktopHoverBackgroundSet(HoverBackgroundSet),
     #[serde(rename = "desktop.font_set")]
@@ -858,6 +970,16 @@ pub enum Request {
     TerminalOpenAt(FilePath),
     #[serde(rename = "terminal.start")]
     TerminalStart,
+    #[serde(rename = "terminal.launch")]
+    TerminalLaunch(TerminalLaunch),
+    #[serde(rename = "terminal.info")]
+    TerminalInfo(TerminalId),
+    #[serde(rename = "terminal.link")]
+    TerminalLink(TerminalLink),
+    #[serde(rename = "terminal.quit")]
+    TerminalQuit,
+    #[serde(rename = "terminal.notify")]
+    TerminalNotify(ClipboardText),
     #[serde(rename = "terminal.start_at")]
     TerminalStartAt(FilePath),
     #[serde(rename = "terminal.copy")]
@@ -917,6 +1039,8 @@ pub enum Request {
     /// Currently open windows.
     #[serde(rename = "windows.list")]
     WindowsList,
+    #[serde(rename = "windows.show_desktop")]
+    WindowsShowDesktop,
 
     /// Focus (raise and unminimize) a window.
     #[serde(rename = "windows.activate")]
@@ -982,6 +1106,11 @@ pub enum Request {
     SettingsBluetoothAudio,
     #[serde(rename = "settings.bluetooth_audio_set")]
     SettingsBluetoothAudioSet(BluetoothAudioQuality),
+    /// Read-only engine status is shared by Meridian UI surfaces.
+    #[serde(rename = "engines.get")]
+    EnginesGet,
+    #[serde(rename = "engines.set")]
+    EnginesSet(EngineConfig),
     /// Current settings state.
     #[serde(rename = "settings.get")]
     SettingsGet,
@@ -1227,20 +1356,24 @@ impl Request {
     /// The capability a surface must hold to make this request.
     pub fn required_capability(&self) -> Option<Capability> {
         match self {
-            Request::Hello => None,
-            Request::NotificationsGet
+            Request::Hello | Request::EnginesGet => None,
+            Request::WorkflowGet | Request::WorkflowSet(_) | Request::EnginesSet(_) => Some(Capability::Rendering),
+            Request::NotificationsConfigure(_)
+            | Request::NotificationsGet
             | Request::NotificationsRead
             | Request::NotificationsDoNotDisturb(_)
             | Request::NotificationsDismiss(_)
             | Request::NotificationsClear
             | Request::NotificationsAction(_) => Some(Capability::Notifications),
             Request::CalendarList | Request::CalendarSave(_) => Some(Capability::Calendar),
-            Request::PulseSnapshot => Some(Capability::Monitor),
+            Request::PulseViewGet | Request::PulseViewSet(_) | Request::PulseSnapshot => Some(Capability::Monitor),
             Request::DesktopGet => None,
+            Request::DesktopLayoutSet(_) | Request::DesktopLayoutUndo => Some(Capability::Appearance),
             Request::PowerStatus => Some(Capability::PowerStatus),
             Request::DesktopFontSet(_)
             | Request::DesktopHoverBackgroundSet(_)
             | Request::DesktopDockStyleSet(_)
+            | Request::DesktopTaskbarSet(_)
             | Request::DesktopAppearanceSet(_)
             | Request::DesktopWallpaperSet(_)
             | Request::DesktopWallpaperChoose => Some(Capability::Appearance),
@@ -1269,7 +1402,7 @@ impl Request {
             | Request::FileWallpaper(_)
             | Request::FileRename(_)
             | Request::FileTrash(_) => Some(Capability::Files),
-            Request::TerminalStart
+            Request::TerminalLaunch(_) | Request::TerminalInfo(_) | Request::TerminalLink(_) | Request::TerminalQuit | Request::TerminalNotify(_) | Request::TerminalStart
             | Request::TerminalStartAt(_)
             | Request::TerminalCopy(_)
             | Request::TerminalPaste
@@ -1293,10 +1426,10 @@ impl Request {
             | Request::DockLayoutGet
             | Request::DockLayoutSet(_)
             | Request::DockList
-            | Request::DockPin(_) => Some(Capability::Dock),
+            | Request::DockUndo | Request::DockPin(_) => Some(Capability::Dock),
             Request::SearchQuery(_) | Request::SearchActivate(_) => Some(Capability::Search),
             Request::PopoverToggle(_) | Request::PopoverClose => Some(Capability::Popovers),
-            Request::WindowsList | Request::WindowsActivate(_) | Request::WindowsClose(_) => Some(Capability::Windows),
+            Request::WindowsShowDesktop | Request::WindowsList | Request::WindowsActivate(_) | Request::WindowsClose(_) => Some(Capability::Windows),
             Request::SettingsUsers
             | Request::SettingsUserCreate(_)
             | Request::SettingsUserAction(_)
@@ -1398,6 +1531,89 @@ pub struct SearchItem {
     pub icon: Option<String>,
 }
 
+/// Native rendering settings, persisted per user. Rasterization remains in
+/// FreeType/Pango/Cairo and WebKit; labwc owns external window composition.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
+#[serde(rename_all = "kebab-case")]
+#[ts(export)]
+pub enum FontRenderProfile {
+    #[default]
+    Balanced,
+    Crisp,
+    Soft,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
+#[serde(rename_all = "kebab-case")]
+#[ts(export)]
+pub enum GraphicsAcceleration {
+    #[default]
+    Automatic,
+    Accelerated,
+    Software,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
+#[serde(rename_all = "kebab-case")]
+#[ts(export)]
+pub enum RenderPerformance {
+    Quality,
+    #[default]
+    Balanced,
+    Efficient,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct EngineConfig {
+    #[serde(default = "font_engine_default")]
+    pub font_enabled: bool,
+    #[serde(default)]
+    pub gpu_enabled: bool,
+    #[serde(default)]
+    pub cpu_enabled: bool,
+    #[serde(default)]
+    pub audio_enabled: bool,
+    pub font_profile: FontRenderProfile,
+    pub acceleration: GraphicsAcceleration,
+    pub performance: RenderPerformance,
+    pub animations: bool,
+    pub transparency: bool,
+}
+fn font_engine_default() -> bool { true }
+impl Default for EngineConfig {
+    fn default() -> Self {
+        Self {
+            font_enabled: true,
+            gpu_enabled: false,
+            cpu_enabled: false,
+            audio_enabled: false,
+            font_profile: FontRenderProfile::Crisp,
+            acceleration: Default::default(),
+            performance: Default::default(),
+            animations: true,
+            transparency: true,
+        }
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct EngineState {
+    pub cpu_status: String,
+    pub audio_status: String,
+    pub config: EngineConfig,
+    pub active: EngineConfig,
+    pub restart_required: bool,
+    pub font_config_loaded: bool,
+    pub font_status: String,
+    pub backends: String,
+    pub animations_enabled: bool,
+    pub transparency_enabled: bool,
+    pub icon_raster_size: u32,
+    pub memory_total_mib: Option<f64>,
+    pub memory_available_mib: Option<f64>,
+    pub memory_pressure_avg10: Option<f64>,
+    pub cpu_threads: u32,
+}
+
 /// An open window, as reported by the compositor.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[ts(export)]
@@ -1406,6 +1622,14 @@ pub struct WindowInfo {
     pub id: u32,
     /// Application name (from its desktop entry when known, else its app id).
     pub name: String,
+    /// Resolved installed desktop entry; independent of the display name.
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub app_id: Option<String>,
+    /// Installed icon, including file icons used by web apps and wrappers.
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
     pub title: String,
     /// Whether the window has focus.
     pub active: bool,
@@ -1456,6 +1680,8 @@ pub enum Event {
     PreferencesWallpaper,
     #[serde(rename = "preferences.page")]
     PreferencesPage(PreferencesPageRequest),
+    #[serde(rename = "engines.changed")]
+    EnginesChanged(EngineState),
     #[serde(rename = "desktop.changed")]
     DesktopChanged(DesktopState),
     #[serde(rename = "dock.layout_changed")]
@@ -1592,6 +1818,7 @@ mod tests {
         );
         assert!(SurfaceKind::Preferences.has(Capability::Notifications));
         assert!(SurfaceKind::Topbar.has(Capability::Notifications));
+        assert!(SurfaceKind::Panel.has(Capability::Notifications));
         assert!(SurfaceKind::Options.has(Capability::Notifications));
     }
 
@@ -1722,7 +1949,7 @@ mod tests {
             assert!(!kind.has(cap), "{kind:?} must not be able to answer the lock screen");
         }
         assert!(!format!("{r:?}").contains("hunter2"));
-        // The locker can do nothing else.
+        // This capability is exclusive to password unlock on the locker.
         assert_eq!(SurfaceKind::Locker.capabilities(), &[Capability::Unlock]);
     }
 
@@ -2132,6 +2359,8 @@ pub struct NotificationItem {
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[ts(export)]
 pub struct NotificationState {
+    pub muted_apps: Vec<String>,
+    pub quiet_until: Option<f64>,
     pub available: bool,
     pub do_not_disturb: bool,
     pub items: Vec<NotificationItem>,
@@ -2258,5 +2487,29 @@ mod settings_overhaul_tests {
             serde_json::from_str::<Request>(r#"{"method":"desktop.hover_background_set","params":{"value":"orange"}}"#)
                 .is_err()
         );
+    }
+}
+
+#[cfg(test)]
+mod rendering_engine_tests {
+    use super::*;
+    #[test]
+    fn engine_mutations_are_scoped_and_profiles_are_closed() {
+        let get: Request = serde_json::from_str(r#"{"method":"engines.get"}"#).unwrap();
+        assert_eq!(get.required_capability(), None);
+        let set: Request = serde_json::from_str(r#"{"method":"engines.set","params":{"font_profile":"crisp","acceleration":"software","performance":"efficient","animations":true,"transparency":false}}"#).unwrap();
+        assert_eq!(set.required_capability(), Some(Capability::Rendering));
+        assert!(SurfaceKind::Preferences.has(Capability::Rendering));
+        for kind in [
+            SurfaceKind::Options,
+            SurfaceKind::Panel,
+            SurfaceKind::Greeter,
+            SurfaceKind::Locker,
+            SurfaceKind::Applications,
+        ] {
+            assert!(!kind.has(Capability::Rendering));
+        }
+        assert!(serde_json::from_str::<EngineConfig>(r#"{"font_profile":"unknown","acceleration":"software","performance":"efficient","animations":true,"transparency":false}"#).is_err());
+        assert!(serde_json::from_str::<EngineConfig>(r#"{"font_profile":"balanced","acceleration":"automatic","performance":"balanced","animations":true,"transparency":true,"command":"anything"}"#).is_err());
     }
 }

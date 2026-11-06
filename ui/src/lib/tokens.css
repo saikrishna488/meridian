@@ -1,5 +1,9 @@
 /* Meridian Design System. Existing theme attributes and token names are stable. */
 :root {
+  --brand-green: #00CC00;
+  --brand-green-hover: #00b300;
+  --brand-green-ink: #061006;
+  --brand-green-soft: rgb(0 204 0 / .14);
   color-scheme: dark;
   --font-ui: "Inter Variable", "Inter", "Cantarell", "Noto Sans", system-ui, sans-serif;
   --font-mono: "DejaVu Sans Mono", "Cascadia Code", monospace;
@@ -122,7 +126,7 @@
   :root { --dur-fast: 0ms; --dur-med: 0ms; --dur-slow: 0ms; }
 }
 
-/* Glisse's dark material palette is the shared basis for Meridian surfaces. */
+/* Meridian's dark material palette is the shared basis for Meridian surfaces. */
 :root, :root[data-theme="dark"] {
   color-scheme: dark;
   --canvas: #000;

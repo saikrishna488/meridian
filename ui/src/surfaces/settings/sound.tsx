@@ -1,9 +1,9 @@
-import { Button } from "../../components/ui/button";
+import { Button } from "../../meridian-ui";
 import { useEffect, useRef, useState } from "react";
 import { request } from "../../lib/bridge";
 import { errorMessage } from "../../lib/react";
 import { Icon } from "../../components/Icon";
-import { Slider } from "../../components/ui/slider";
+import { Slider } from "../../meridian-ui";
 import { SystemSlider } from "../../components/SystemSlider";
 import { useSystemSettings } from "../../lib/settings";
 import type { AudioState } from "../../lib/generated/AudioState";
@@ -15,8 +15,9 @@ function AudioLevel({ label, value, disabled, save }: { label: string; value: nu
   const [local, setLocal] = useState(value ?? 0), editing = useRef(false);
   useEffect(() => { if (!editing.current) setLocal(value ?? 0); }, [value]);
   function commit(percent: number) { editing.current = false; if (!disabled && percent !== value) save(percent); }
-  return <div className="audio-level"><Slider min={0} max={100} aria-label={label} disabled={disabled || value === null} value={local} onValueChange={value => { editing.current = true; setLocal(value); }} onPointerUp={e => commit(Number(e.currentTarget.value))} onKeyUp={e => { if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"].includes(e.key)) commit(Number(e.currentTarget.value)); }} onBlur={e => commit(Number(e.currentTarget.value))} /><output>{value === null ? "Unavailable" : `${local}%`}</output></div>;
+  return <div className="audio-level"><Slider min={0} max={100} aria-label={label} disabled={disabled || value === null} value={local} onValueChange={value => { editing.current = true; setLocal(value); }} onChangeEnd={commit} /><output>{value === null ? "Unavailable" : `${local}%`}</output></div>;
 }
+import { AudioMixer } from "../../components/AudioMixer";
 export function Sound() {
   const [audio, setAudio] = useState<AudioState | null>(null), [busy, setBusy] = useState(false), [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(""), [message, setMessage] = useState("");
@@ -53,7 +54,7 @@ export function Sound() {
   }
   return <>
     <div className="sound-intro"><p className="section-caption">Choose where sound plays and which microphone apps use.</p><Button aria-label="Refresh audio devices" disabled={busy} onClick={() => void load()}><Icon name="refresh" width="15" height="15" />Refresh devices</Button></div>
-    {!loaded && <p className="device-empty" role="status">Finding audio devices…</p>}
+    {!loaded && !error && <p className="device-empty" role="status">Finding audio devices…</p>}
     {audio ? (["output", "input"] as const).map(kind => {
       const devices = audio.devices.filter(d => d.kind === kind), selected = devices.find(d => d.default);
       const volume = kind === "output" ? audio.output_volume : audio.input_volume, muted = kind === "output" ? audio.output_muted : audio.input_muted;
@@ -69,6 +70,7 @@ export function Sound() {
       </section>;
     }) : loaded ? <div className="settings-card"><div className="settings-row"><Icon name="sound" /><strong>Output volume</strong></div><SystemSlider name="volume" label="Volume" value={settings.volume} report={e => setError(errorMessage(e))} /><p className="section-caption card-caption">Device selection needs PipeWire and WirePlumber. Your existing volume control remains available when supported.</p></div> : null}
     {message && <p className="startup-message" role="status">{message}</p>}{error && <p className="settings-error" role="alert">{error}</p>}
+    <section className="settings-card"><h3>Quick mixer</h3><AudioMixer /></section>
     <BluetoothAudioSettings />
     <p className="section-caption">Changes apply to the default devices. Applications with their own audio device selection may keep that choice.</p>
   </>;

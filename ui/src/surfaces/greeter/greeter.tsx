@@ -1,4 +1,6 @@
-import { Select } from "../../components/Select";
+import { Input } from "../../meridian-ui";
+import { SurfaceButton } from "../../meridian-ui";
+import { Select } from "../../meridian-ui";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { hello, request } from "../../lib/bridge";
 import { errorMessage, mount } from "../../lib/react";
@@ -76,7 +78,7 @@ function Greeter() {
       <Clock />
       <form ref={form} className={`card${shake ? " shake" : ""}`} id="form" autoComplete="off" noValidate onSubmit={event => void login(event)}>
         <label className="field"><span className="field-label">Username</span>
-          <input ref={userInput} id="username" name="username" type="text" autoCapitalize="off" spellCheck={false} required
+          <Input ref={userInput} id="username" name="username" type="text" autoCapitalize="off" spellCheck={false} required
             disabled={busy} value={username} onChange={event => setUsername(event.target.value)} />
         </label>
         <PasswordField inputRef={password} disabled={busy} />
@@ -85,7 +87,7 @@ function Greeter() {
             {info?.sessions.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
           </Select>
         </label>
-        <button className="submit" id="submit" type="submit" disabled={busy}>{label}</button>
+        <SurfaceButton className="submit" id="submit" type="submit" disabled={busy}>{label}</SurfaceButton>
         <p className={`message${messageKind === "info" ? " info" : ""}`} id="message" role="alert" aria-live="assertive">{message}</p>
       </form>
     </main>

@@ -1,6 +1,7 @@
+import { SearchField } from "../../meridian-ui";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Button } from "../../components/ui/button";
-import { Select } from "../../components/Select";
+import { Button } from "../../meridian-ui";
+import { Select } from "../../meridian-ui";
 import type { DefaultAppSetting } from "../../lib/generated/DefaultAppSetting";
 import { AppIcon } from "../../components/AppIcon";
 import { Icon } from "../../components/Icon";
@@ -33,7 +34,7 @@ export function ApplicationsSettings() {
       const applicationItems = response.sections
         .filter(section => section.provider === "apps" || section.title.toLowerCase() === "applications")
         .flatMap(section => section.items);
-      setApps(Array.from(new Map(applicationItems.filter(app => app.id !== "meridian-terminal.desktop").map(app => [app.id, app])).values()));
+      setApps(Array.from(new Map(applicationItems.map(app => [app.id, app])).values()));
     } catch (e) {
       if (mine === serial.current) setError(errorMessage(e, "Couldn’t load applications"));
     } finally {
@@ -128,7 +129,7 @@ export function ApplicationsSettings() {
       <Button variant="primary" disabled={loading || !software} title={!loading && !software ? "GNOME Software is not installed" : undefined} onClick={openSoftware}>{loading ? "Finding Software…" : software ? "Open Software" : "Software is not installed"}<Icon name="forward" width="15" height="15" /></Button>
     </section>
     <div className="app-manager-toolbar">
-      <label className="app-manager-search"><Icon name="search" width="16" height="16" /><input aria-label="Search installed applications" placeholder="Find an application" value={query} onChange={event => setQuery(event.target.value)} />{query && <Button aria-label="Clear application search" onClick={() => setQuery("")}><Icon name="close" width="14" height="14" /></Button>}</label>
+      <SearchField className="app-manager-search" aria-label="Search installed applications" placeholder="Find an application" value={query} onValueChange={setQuery} />
       <Button aria-label="Refresh applications" disabled={loading} onClick={() => void load()}><Icon name="refresh" width="15" height="15" />Refresh</Button>
     </div>
     <div className="app-manager-list-heading"><div><h3>Installed applications</h3><p>{loading ? "Updating your library…" : `${matching.length} ${matching.length === 1 ? "application" : "applications"}${query ? " found" : " available"}`}</p></div><span className="app-manager-list-icon"><Icon name="list" width="17" height="17" /></span></div>

@@ -18,6 +18,8 @@ struct Config {
     primary_display: Option<String>,
     appearance: String,
     dock_style: String,
+    taskbar: meridian_protocol::TaskbarPreferences,
+    layout: meridian_protocol::DesktopLayout,
     hover_background: meridian_protocol::HoverBackground,
     font: String,
     wallpaper: String,
@@ -29,8 +31,10 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             primary_display: None,
-            appearance: "dark".into(),
+            appearance: "light".into(),
             dock_style: "floating".into(),
+            taskbar: Default::default(),
+            layout: Default::default(),
             hover_background: Default::default(),
             font: "Inter".into(),
             wallpaper: "meridian-dusk".into(),
@@ -47,7 +51,11 @@ fn load() -> Config {
     load_at(&dir())
 }
 fn load_at(directory: &Path) -> Config {
-    crate::config::read_versioned(&directory.join("desktop.json")).unwrap_or_default()
+    let mut config: Config = crate::config::read_versioned(&directory.join("desktop.json")).unwrap_or_default();
+    if config.appearance != "light" && config.appearance != "dark" {
+        config.appearance = "light".into();
+    }
+    config
 }
 fn save(config: &Config) -> Result<(), ErrorBody> {
     save_at(&dir(), config)
@@ -74,6 +82,8 @@ fn state(config: &Config) -> DesktopState {
     DesktopState {
         appearance: config.appearance.clone(),
         dock_style: config.dock_style.clone(),
+        taskbar: config.taskbar.clone(),
+        layout: config.layout.clone(),
         hover_background: config.hover_background.clone(),
         font: config.font.clone(),
         wallpaper: config.wallpaper.clone(),
@@ -89,6 +99,16 @@ pub fn set_hover_background(value: meridian_protocol::HoverBackground) -> Result
     let _guard = CONFIG_LOCK.lock().map_err(error)?;
     let mut config = load();
     config.hover_background = value;
+    save(&config)?;
+    Ok(state(&config))
+}
+pub fn set_taskbar(preferences: meridian_protocol::TaskbarPreferences) -> Result<DesktopState, ErrorBody> {
+    if ![24, 32, 40].contains(&preferences.icon_size) || !["system", "12", "24"].contains(&preferences.clock_format.as_str()) {
+        return Err(error("Unknown taskbar preference"));
+    }
+    let _guard = CONFIG_LOCK.lock().map_err(error)?;
+    let mut config = load();
+    config.taskbar = preferences;
     save(&config)?;
     Ok(state(&config))
 }
@@ -270,12 +290,12 @@ fn error(e: impl std::fmt::Display) -> ErrorBody {
 
 /// Save the preference and update GTK and portal-aware applications via GSettings.
 pub fn set_appearance(mode: &str) -> Result<DesktopState, ErrorBody> {
-    if mode != "dark" {
+    if mode != "light" && mode != "dark" {
         return Err(error("Unknown appearance"));
     }
     let _guard = CONFIG_LOCK.lock().map_err(error)?;
     let mut config = load();
-    config.appearance = "dark".into();
+    config.appearance = mode.into();
     // GTK applications that do not read the portal also inherit the saved preference.
     for version in ["gtk-3.0", "gtk-4.0"] {
         let directory = glib::user_config_dir().join(version);
@@ -473,4 +493,18 @@ mod hover_tests {
         let restored: Config = serde_json::from_slice(&serde_json::to_vec(&config).unwrap()).unwrap();
         assert_eq!(state(&restored).hover_background, meridian_protocol::HoverBackground::Blue);
     }
+}
+
+pub fn set_layout(layout: meridian_protocol::DesktopLayout) -> Result<DesktopState, ErrorBody> {
+    if ![48, 64, 80].contains(&layout.icon_size) || ![8, 16, 24].contains(&layout.spacing)
+        || !["left", "right"].contains(&layout.window_buttons.as_str())
+        || layout.positions.len() > 4096
+        || layout.positions.iter().any(|(id, p)| id.len() > 4096 || p.x > 32768 || p.y > 32768) {
+        return Err(error("Invalid desktop layout"));
+    }
+    let _guard = CONFIG_LOCK.lock().map_err(error)?;
+    let mut config = load();
+    config.layout = layout;
+    save(&config)?;
+    Ok(state(&config))
 }

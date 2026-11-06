@@ -3,9 +3,10 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/tools/distro.sh"
+source "$ROOT/tools/privilege.sh"
 meridian_load_packages
 runner=()
-[ "$(id -u)" = 0 ] || runner=(sudo)
+if [ "$(id -u)" != 0 ]; then meridian_privilege_runner; runner=("${MERIDIAN_PRIVILEGE[@]}"); fi
 meridian_install_packages "${runner[@]}" -- "${BUILD_PACKAGES[@]}" "${RUNTIME_PACKAGES[@]}" "${MEDIA_PACKAGES[@]}" foot
 pkg-config --atleast-version=4.18 gtk4 && pkg-config --atleast-version=2.52 webkitgtk-6.0 && pkg-config --atleast-version=1.2 gtk4-layer-shell-0 || {
     echo 'This checkout needs GTK >= 4.18, WebKitGTK >= 2.52 and gtk4-layer-shell >= 1.2. Use a distribution release or backports providing these versions.' >&2

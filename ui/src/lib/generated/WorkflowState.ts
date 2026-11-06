@@ -1,0 +1,1 @@
+export type WorkflowState = { shortcuts: import("./ShortcutEntry").ShortcutEntry[]; completed: string[]; text_scale: number; high_contrast: boolean; reduced_motion: boolean; surfaces: string[]; errors: string[] };

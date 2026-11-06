@@ -1,4 +1,6 @@
+import { UIProvider } from "./ui-provider";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { initializeEngineRendering } from "./engines";
 import { createRoot } from "react-dom/client";
 import { afterTransition, BridgeError, cssDuration, hello, nextFrame, on, request } from "./bridge";
 import { applyAppearance, applyFont, applyHoverBackground } from "./appearance";
@@ -9,11 +11,8 @@ export function mount(element: ReactNode): void {
   // Meridian provides its own context actions. Suppress WebKit's native HTML
   // context menu globally while allowing React contextmenu handlers to run.
   document.addEventListener("contextmenu", event => event.preventDefault(), true);
-  document.addEventListener("pointerup", event => {
-    const button = event.target instanceof Element ? event.target.closest<HTMLButtonElement>("button") : null;
-    if (button) requestAnimationFrame(() => { if (document.activeElement === button) button.blur(); });
-  }, true);
-  applyAppearance("dark");
+  applyAppearance("light");
+  initializeEngineRendering();
   let appearanceRevision = 0;
   on("desktop.changed", event => { appearanceRevision++; applyAppearance(event.data.appearance); applyFont(event.data.font); applyHoverBackground(event.data.hover_background); });
   // Each app window is its own WebView. Read the persisted value so newly
@@ -21,7 +20,7 @@ export function mount(element: ReactNode): void {
   void request({ method: "desktop.get" }).then(state => {
     if (appearanceRevision === 0 && state) { applyAppearance(state.appearance); applyFont(state.font); applyHoverBackground(state.hover_background); }
   }).catch(error => console.warn("Could not read Meridian appearance:", error));
-  createRoot(root).render(element);
+  createRoot(root).render(<UIProvider>{element}</UIProvider>);
 }
 
 export function errorMessage(error: unknown, fallback = "Something went wrong"): string {
@@ -90,7 +89,7 @@ export function usePopover(
 
 // Each WebView has its own focus stack. Only its top dialog handles keys.
 const dialogScopes: HTMLElement[] = [];
-const focusSelector = 'button, input, select, textarea, a[href], [tabindex], [contenteditable="true"]';
+const focusSelector = 'button, input, select, textarea, summary, a[href], [tabindex], [contenteditable="true"]';
 
 /** Keep dialog focus contained, allow its owned listboxes, and restore its trigger. */
 export function useDialogFocus(ref: RefObject<HTMLElement | null>, open: boolean, close: () => void, initialFocus = true) {
@@ -106,7 +105,7 @@ export function useDialogFocus(ref: RefObject<HTMLElement | null>, open: boolean
     const top = () => dialogScopes.at(-1) === element;
     const controls = () => Array.from(element.querySelectorAll<HTMLElement>(focusSelector)).filter(item =>
       item.tabIndex >= 0 && !item.matches(":disabled") && !item.closest('[hidden], [inert], [aria-hidden="true"]') &&
-      getComputedStyle(item).display !== "none" && getComputedStyle(item).visibility !== "hidden");
+      item.getClientRects().length > 0 && getComputedStyle(item).visibility !== "hidden");
     const focus = () => {
       const items = controls();
       (items.find(item => item.matches('[autofocus], [data-autofocus]')) ?? items[0] ?? element).focus();

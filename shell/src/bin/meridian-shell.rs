@@ -10,7 +10,17 @@ use meridian_shell::{install_css, paths, preflight, shell};
 const APP_ID: &str = "org.meridian.Shell";
 
 fn main() -> glib::ExitCode {
-    meridian_shell::init_logging();
+    if std::env::args_os().nth(1).is_some_and(|a| a == "--prepare-session-config") {
+        let Some(base) = std::env::args_os().nth(2) else { return glib::ExitCode::FAILURE };
+        return match meridian_shell::workflows::prepare_session(std::path::Path::new(&base)) {
+            Ok(path) => { println!("{}", path.display()); glib::ExitCode::SUCCESS },
+            Err(error) => { eprintln!("{}", error.message); glib::ExitCode::FAILURE },
+        };
+    }
+
+    if std::env::args_os().nth(1).is_some_and(|arg| arg == "--terminal-supervisor") {
+        std::process::exit(meridian_shell::terminal_supervisor::run());
+    }
     if std::env::args_os().nth(1).is_some_and(|arg| arg == "--idle-timeouts") {
         let settings = meridian_shell::power_settings::idle();
         println!("{} {}", settings.lock_after, settings.blank_after);
@@ -19,6 +29,23 @@ fn main() -> glib::ExitCode {
     if std::env::args_os().nth(1).is_some_and(|arg| arg == "--autostart") {
         meridian_shell::startup::launch();
         return glib::ExitCode::SUCCESS;
+    }
+    // No GTK or worker threads exist yet; renderers inherit this font profile.
+    unsafe {
+        meridian_shell::rendering::initialize_process();
+    }
+    meridian_shell::init_logging();
+    if std::env::args_os().nth(1).is_some_and(|arg| arg == "--engine-status") {
+        match serde_json::to_string_pretty(&meridian_shell::rendering::state()) {
+            Ok(status) => {
+                println!("{status}");
+                return glib::ExitCode::SUCCESS;
+            }
+            Err(error) => {
+                eprintln!("Could not read engine status: {error}");
+                return glib::ExitCode::FAILURE;
+            }
+        }
     }
     let _instance = match meridian_shell::instance::InstanceGuard::acquire("shell") {
         Ok(guard) => guard,

@@ -3,12 +3,17 @@ use meridian_protocol::{PreferencesPage as Page, ProviderId, SearchItem, SearchP
 use meridian_services::search::fuzzy::{Prepared, fold_token, fuzzy};
 
 pub const SETTINGS: &[(&str, Page, &str, &str)] = &[
+    ("accessibility", Page::Accessibility, "Accessibility", "text size font bigger larger zoom high contrast motion reading"),
+    ("recovery", Page::Recovery, "Recovery", "repair crash failed reset restart component errors"),
+    ("keyboard", Page::Keyboard, "Keyboard", "shortcuts bindings hotkeys typing layout"),
+    ("notifications", Page::Notifications, "Notifications", "alerts quiet do not disturb pause mute app"),
+    ("engines", Page::Engines, "Engines", "font rendering gpu cpu audio sound graphics quality acceleration performance crisp"),
     ("wifi", Page::Wifi, "Wi-Fi", "wireless internet network connection"),
     ("bluetooth", Page::Bluetooth, "Bluetooth", "pair headphones keyboard mouse"),
     ("displays", Page::Displays, "Displays", "monitor screen resolution scale refresh brightness primary"),
-    ("sound", Page::Sound, "Sound", "audio speaker microphone volume input output mute"),
-    ("power", Page::Power, "Power & Lock", "battery suspend sleep security idle lock charging"),
-    ("appearance", Page::Appearance, "Appearance", "dark font typography"),
+    ("sound", Page::Sound, "Sound", "audio speaker microphone volume input output mute headphones headset playback"),
+    ("power", Page::Power, "Power & Lock", "battery suspend sleep timer timeout security idle lock charging"),
+    ("appearance", Page::Appearance, "Appearance", "dock layout floating full-width minimal appearance"),
     ("wallpaper", Page::Wallpaper, "Wallpaper", "background image desktop"),
     ("startup-apps", Page::StartupApps, "Startup Apps", "autostart login applications"),
     ("applications", Page::Applications, "Applications", "installed apps software programs launch uninstall"),

@@ -1,4 +1,4 @@
-/* Glisse supplies the button material and interaction. */
+/* Meridian UI Kit owns controls and desktop surface layout. */
 .ui-button[data-size="small"] { min-height: var(--control-height-small); padding: 4px var(--space-2); }
 .ui-button[data-size="icon"] { width: var(--control-height); padding: 0; }
 .ui-button-ghost { background-color: transparent; }
@@ -6,7 +6,6 @@
 :where(.ui-button:focus-visible, .ui-checkbox:focus-visible, .ui-tab-panel:focus-visible) { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
 :where(.ui-card) { border: 1px solid var(--line); border-radius: var(--radius-md); color: var(--ink); }
 :where(.ui-progress) { accent-color: var(--button-primary); }
-:where(.ui-checkbox) { width: 16px; height: 16px; accent-color: var(--button-primary); vertical-align: middle; }
 :where(.ui-dialog-scrim) { position: fixed; inset: 0; z-index: var(--layer-dialog); display: grid; place-items: center; padding: var(--space-5); background: var(--scrim); }
 :where(.ui-dialog) { width: min(460px, 100%); max-height: calc(100vh - 40px); overflow: auto; overscroll-behavior: contain; padding: var(--space-6); border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface-raised); color: var(--ink); box-shadow: var(--shadow-lg); }
 :where(.ui-tabs) { display: flex; gap: var(--space-1); padding: var(--space-1); width: fit-content; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-subtle); }
@@ -20,6 +19,37 @@
 /* This legacy dialog already spaces its header, details and footer. */
 .ui-dialog.properties-dialog { padding: 0; }
 
-/* Interactive Glisse buttons use the hand cursor unless disabled. */
+/* Keep pointer affordances consistent across desktop controls. */
 .ui-button:not(:disabled) { cursor: pointer; }
 .ui-button:disabled { cursor: default; }
+
+/* Legacy surface rules arrange icon/text children directly. */
+.ui-button { white-space: normal; height: auto; min-height: var(--control-height); }
+.ui-slider { min-width: 90px; }
+.meridian-select { min-width: 110px; max-width: 100%; }
+.ui-checkbox-control { display: inline-flex; vertical-align: middle; }
+.ui-progress { width: 100%; }
+.muk-input { font-family: var(--font-ui); }
+
+.ui-input-control { display: contents; }
+
+/* The same listbox material is used in Settings, Control Center and utilities. */
+.meridian-select { display: inline-block; min-width: 140px; max-width: 100%; vertical-align: middle; }
+.meridian-select > .meridian-select-control { width: 100%; }
+.meridian-select .meridian-select-input {
+  min-height: 36px; height: auto; padding: 8px 34px 8px 12px;
+  border: 1px solid var(--line); border-radius: 9px;
+  background: var(--surface); color: var(--ink); font: 13px var(--font-ui); cursor: pointer;
+}
+.meridian-select .meridian-select-input:focus { border-color: var(--action); }
+.meridian-select-dropdown {
+  padding: 6px; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--surface-raised); color: var(--ink); box-shadow: var(--shadow-lg);
+}
+.meridian-select-option { min-height: 34px; padding: 8px 10px; border-radius: 7px; font: 13px var(--font-ui); overflow-wrap: anywhere; }
+.meridian-select-option[data-highlighted="true"], .meridian-select-option[data-selected="true"] { background: var(--selection); color: var(--ink); }
+.meridian-select-option[aria-disabled="true"] { opacity: .45; }
+@media (forced-colors: active) {
+  .meridian-select-dropdown, .meridian-select .meridian-select-input { background: Canvas; color: CanvasText; border-color: ButtonText; }
+  .meridian-select-option[data-highlighted="true"] { background: Highlight; color: HighlightText; }
+}

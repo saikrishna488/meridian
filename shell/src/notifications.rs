@@ -1,5 +1,7 @@
 //! Session notification server implementing org.freedesktop.Notifications.
 use glib::variant::ToVariant;
+use gtk::prelude::*;
+use gtk4_layer_shell::{LayerShell, Layer, Edge, KeyboardMode};
 use gtk::{gio, glib};
 use meridian_protocol::{NotificationItem, NotificationState};
 use std::{
@@ -24,7 +26,13 @@ struct Entry {
     generation: u64,
     expiry: Option<glib::SourceId>,
 }
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+struct Rules { muted_apps: Vec<String>, quiet_until: Option<f64> }
 pub struct Notifications {
+    rules: RefCell<Rules>,
+    toast: RefCell<Option<(u32, gtk::Window)>>,
+    locked: Cell<bool>,
     entries: RefCell<Vec<Entry>>,
     connection: RefCell<Option<gio::DBusConnection>>,
     owner: RefCell<Option<gio::OwnerId>>,
@@ -41,7 +49,9 @@ impl Notifications {
     pub fn start(changed: impl Fn(NotificationState) + 'static) -> Rc<Self> {
         let preferences_path = glib::user_config_dir().join("meridian/notification-preferences.json");
         let do_not_disturb = crate::config::read_versioned::<bool>(&preferences_path).unwrap_or(false);
+        let rules = crate::config::read_versioned::<Rules>(&preferences_path.with_file_name("notification-rules.json")).unwrap_or_default();
         let service = Rc::new(Self {
+            rules: RefCell::new(rules), toast: RefCell::new(None), locked: Cell::new(false),
             do_not_disturb: Cell::new(do_not_disturb),
             preferences_path,
             sender_subscription: RefCell::default(),
@@ -122,18 +132,101 @@ impl Notifications {
             },
         );
         *service.owner.borrow_mut() = Some(owner);
+        let weak = Rc::downgrade(&service);
+        glib::timeout_add_local(Duration::from_secs(15), move || {
+            let Some(service) = weak.upgrade() else { return glib::ControlFlow::Break };
+            if service.rules.borrow().quiet_until.is_some_and(|until| until <= now()) {
+                service.rules.borrow_mut().quiet_until = None;
+                service.publish();
+            }
+            glib::ControlFlow::Continue
+        });
         service
     }
     pub fn snapshot(&self) -> NotificationState {
         NotificationState {
             available: self.available.get(),
-            do_not_disturb: self.do_not_disturb.get(),
+            do_not_disturb: self.quiet(),
+            muted_apps: self.rules.borrow().muted_apps.clone(),
+            quiet_until: self.rules.borrow().quiet_until.filter(|until| *until > now()),
             items: self.entries.borrow().iter().rev().map(|e| e.item.clone()).collect(),
         }
     }
+    fn quiet(&self) -> bool { self.do_not_disturb.get() || self.rules.borrow().quiet_until.is_some_and(|until| until > now()) }
+    fn hide_toast(&self) { if let Some((_,window)) = self.toast.borrow_mut().take() { window.destroy(); } }
+    pub fn set_locked(&self, locked: bool) { self.locked.set(locked); if locked { self.hide_toast(); } }
+    pub fn configure(&self, change: meridian_protocol::WorkflowChange) -> Result<(), meridian_protocol::ErrorBody> {
+        let mut rules = self.rules.borrow().clone();
+        match change.action.as_str() {
+            "quiet" => {
+                let minutes = change.value.parse::<u32>().ok().filter(|n| [0,15,30,60,120].contains(n))
+                    .ok_or_else(|| meridian_protocol::ErrorBody::new(meridian_protocol::ErrorCode::InvalidRequest,"Choose a supported quiet duration"))?;
+                rules.quiet_until = (minutes > 0).then(|| now() + f64::from(minutes) * 60_000.0);
+            }
+            "mute-app" => {
+                if change.id.is_empty() || change.id.chars().count() > 128 { return Err(meridian_protocol::ErrorBody::new(meridian_protocol::ErrorCode::InvalidRequest,"Invalid application name")); }
+                rules.muted_apps.retain(|app| app != &change.id);
+                if change.value == "true" {
+                    if rules.muted_apps.len() >= 100 { return Err(meridian_protocol::ErrorBody::new(meridian_protocol::ErrorCode::InvalidRequest,"Too many application rules")); }
+                    rules.muted_apps.push(change.id);
+                }
+            }
+            _ => return Err(meridian_protocol::ErrorBody::new(meridian_protocol::ErrorCode::InvalidRequest,"Unknown notification preference")),
+        }
+        crate::config::save_versioned(&self.preferences_path.with_file_name("notification-rules.json"), &rules)?;
+        if change.action == "quiet" {
+            if let Err(error) = crate::config::save_versioned(&self.preferences_path, &false) {
+                let _ = crate::config::save_versioned(&self.preferences_path.with_file_name("notification-rules.json"), &*self.rules.borrow());
+                return Err(error);
+            }
+            self.do_not_disturb.set(false);
+        }
+        *self.rules.borrow_mut() = rules;
+        let quiet = self.quiet();
+        for entry in self.entries.borrow_mut().iter_mut() {
+            if quiet || self.rules.borrow().muted_apps.contains(&entry.item.app) { entry.item.unread = false; }
+        }
+        self.hide_toast(); self.publish(); Ok(())
+    }
+    fn show_toast(self: &Rc<Self>, item: &NotificationItem) {
+        if self.locked.get() || self.quiet() || self.rules.borrow().muted_apps.contains(&item.app) { return; }
+        self.hide_toast();
+        let window = gtk::Window::builder().title("Notification").default_width(360).resizable(false).decorated(false).build();
+        window.init_layer_shell(); window.set_layer(Layer::Top); window.set_namespace(Some("meridian-toast"));
+        window.set_anchor(Edge::Top, true); window.set_anchor(Edge::Right, true);
+        window.set_margin(Edge::Top, 56); window.set_margin(Edge::Right, 16); window.set_keyboard_mode(KeyboardMode::OnDemand);
+        let content = gtk::Box::new(gtk::Orientation::Vertical, 8);
+        content.set_margin_top(16); content.set_margin_bottom(16); content.set_margin_start(16); content.set_margin_end(16);
+        let app = gtk::Label::new(Some(&item.app)); app.set_xalign(0.0); content.append(&app);
+        let title = gtk::Label::new(Some(&item.summary)); title.set_wrap(true); title.set_max_width_chars(42); title.set_wrap_mode(gtk::pango::WrapMode::WordChar); title.set_xalign(0.0); title.add_css_class("heading"); content.append(&title);
+        let body = gtk::Label::new(Some(&item.body.chars().take(240).collect::<String>())); body.set_wrap(true); body.set_max_width_chars(42); body.set_wrap_mode(gtk::pango::WrapMode::WordChar); body.set_xalign(0.0); content.append(&body);
+        let actions = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        for (key,label) in item.actions.iter().take(3) {
+            let button = gtk::Button::with_label(label); let weak = Rc::downgrade(self); let id = item.id; let key = key.clone();
+            button.connect_clicked(move |_| { if let Some(service) = weak.upgrade() { service.activate(id,&key); } }); actions.append(&button);
+        }
+        let dismiss = gtk::Button::with_label("Dismiss"); let weak = Rc::downgrade(self); let id = item.id;
+        dismiss.connect_clicked(move |_| { if let Some(service) = weak.upgrade() { service.dismiss(id); } }); actions.append(&dismiss);
+        content.append(&actions); window.set_child(Some(&content));
+        // Present without requesting focus; keyboard access remains in notification history.
+        window.set_visible(true); *self.toast.borrow_mut() = Some((item.id, window));
+        let weak = Rc::downgrade(self); let id = item.id; let time = item.time;
+        glib::timeout_add_local_once(Duration::from_secs(8), move || {
+            if let Some(service) = weak.upgrade() {
+                let same = service.entries.borrow().iter().any(|entry| entry.item.id == id && entry.item.time == time);
+                if same && service.toast.borrow().as_ref().is_some_and(|(current,_)| *current == id) { service.hide_toast(); }
+            }
+        });
+    }
     pub fn set_do_not_disturb(&self, enabled: bool) -> Result<(), meridian_protocol::ErrorBody> {
         crate::config::save_versioned(&self.preferences_path, &enabled)?;
+        if !enabled {
+            let mut rules = self.rules.borrow().clone(); rules.quiet_until = None;
+            crate::config::save_versioned(&self.preferences_path.with_file_name("notification-rules.json"), &rules)?;
+            *self.rules.borrow_mut() = rules;
+        }
         self.do_not_disturb.set(enabled);
+        if enabled { self.hide_toast(); }
         if enabled {
             for entry in self.entries.borrow_mut().iter_mut() {
                 entry.item.unread = false;
@@ -165,6 +258,7 @@ impl Notifications {
         }
     }
     fn close(&self, id: u32, reason: u32, remove: bool) {
+        if self.toast.borrow().as_ref().is_some_and(|(current,_)| *current == id) { self.hide_toast(); }
         let mut entries = self.entries.borrow_mut();
         if let Some(index) = entries.iter().position(|e| e.item.id == id) {
             let entry = &mut entries[index];
@@ -188,6 +282,7 @@ impl Notifications {
         self.close(id, 2, true);
     }
     pub fn clear(&self) {
+        self.hide_toast();
         let entries = std::mem::take(&mut *self.entries.borrow_mut());
         for entry in entries {
             if let Some(timer) = entry.expiry {
@@ -270,7 +365,7 @@ impl Notifications {
                     summary: string(3).chars().take(256).collect(),
                     body: string(4).chars().take(4096).collect(),
                     time: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs_f64() * 1000.0,
-                    unread: !self.do_not_disturb.get(),
+                    unread: !self.quiet() && !self.rules.borrow().muted_apps.contains(&string(0).chars().take(128).collect::<String>()),
                     actions,
                 };
                 let mut entries = self.entries.borrow_mut();
@@ -284,6 +379,7 @@ impl Notifications {
                     let old = self.entries.borrow()[0].item.id;
                     self.close(old, 4, true);
                 }
+                self.show_toast(&item);
                 self.entries.borrow_mut().push(Entry {
                     item,
                     sender: sender.into(),
@@ -325,6 +421,7 @@ impl Notifications {
 
 impl Drop for Notifications {
     fn drop(&mut self) {
+        if let Some((_,window)) = self.toast.get_mut().take() { window.destroy(); }
         for entry in self.entries.get_mut() {
             if let Some(timer) = entry.expiry.take() {
                 timer.remove();
@@ -347,6 +444,7 @@ mod tests {
     use super::*;
     fn service() -> Notifications {
         Notifications {
+            rules: RefCell::default(), toast: RefCell::default(), locked: Cell::new(false),
             do_not_disturb: Cell::new(false),
             preferences_path: std::env::temp_dir()
                 .join(format!("meridian-notification-preferences-test-{}.json", std::process::id())),
@@ -434,3 +532,5 @@ mod tests {
         }
     }
 }
+
+fn now() -> f64 { SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs_f64() * 1000.0 }

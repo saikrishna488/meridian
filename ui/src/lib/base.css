@@ -1,8 +1,8 @@
 /* Base styles shared by every surface. */
-@import url("../vendor/glisse.css");
 @import url("tokens.css");
 @import url("../components/ui/components.css");
 @import url("motion.css");
+@import url("../meridian-ui/tokens.css");
 
 *,
 *::before,
@@ -35,6 +35,20 @@ button {
   font: inherit;
   color: inherit;
   letter-spacing: inherit;
+}
+
+/* Clickable controls share a hand cursor on every Meridian desktop surface. */
+:root :is(button, a[href], summary, select,
+  input[type="button"], input[type="submit"], input[type="reset"],
+  input[type="checkbox"], input[type="radio"], input[type="range"],
+  [role="button"], [role="link"], [role="menuitem"],
+  [role="menuitemcheckbox"], [role="menuitemradio"], [role="tab"],
+  [role="option"], [role="switch"]):not(:disabled):not([aria-disabled="true"]):not([data-disabled="true"]) {
+  cursor: pointer;
+}
+
+:root label:has(input:is([type="checkbox"], [type="radio"]):enabled) {
+  cursor: pointer;
 }
 
 :focus-visible {
@@ -154,7 +168,7 @@ body :where(h1,h2,h3,h4,p,span,label,strong,small,button,a,li,dt,dd,output) {
 
 :focus:not(:focus-visible) { outline: none; }
 
-/* Shared Glisse surface treatment for native-positioned menus and dialogs.
+/* Shared Meridian surface treatment for native-positioned menus and dialogs.
    These retain Meridian's focus and placement handling. */
 :root[data-theme="dark"] :is(.select-menu, .finder-context, .app-context, .desktop-context, .desktop-menu, .terminal-context, .ui-dialog, .device-dialog, .startup-dialog) {
   color: var(--ink);
@@ -177,3 +191,39 @@ body :where(h1,h2,h3,h4,p,span,label,strong,small,button,a,li,dt,dd,output) {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
+
+/* Native visual workload policy, shared by every Meridian WebView. */
+:root[data-engine-animations="off"] *,
+:root[data-engine-animations="off"] *::before,
+:root[data-engine-animations="off"] *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+:root[data-engine-transparency="off"] :is(.taskbar, .topbar, .menu, .desktop-menu, .select-menu, .finder-context, .app-context, .desktop-context, .terminal-context, .ui-dialog, .device-dialog, .startup-dialog) {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  background: var(--surface-raised) !important;
+}
+:root[data-engine-font="crisp"] body :where(h1,h2,h3,h4,p,span,label,strong,small,button,a,li,dt,dd,output),
+:root[data-engine-performance="efficient"] body :where(h1,h2,h3,h4,p,span,label,strong,small,button,a,li,dt,dd,output) {
+  text-shadow: none !important;
+  -webkit-text-stroke: 0 !important;
+  filter: none !important;
+}
+
+/* Meridian's identity is a wordmark, never a symbol beside a second label. */
+.meridian-logo { display: block; flex: none; width: 144px; height: 18px; color: inherit; }
+.topbar .meridian-logo, .taskbar .meridian-logo { width: 112px; height: 16px; }
+
+/* Desktop identity is a static wordmark, not a menu trigger. */
+:root :is(.taskbar, .topbar) span.menu-brand { display: inline-flex; align-items: center; flex: none; cursor: default; user-select: none; }
+
+/* Explicit comfort preferences supplement OS accessibility settings. */
+:root[data-reduced-motion="true"] *, :root[data-reduced-motion="true"] *::before, :root[data-reduced-motion="true"] *::after {
+  animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important;
+}
+:root[data-theme][data-high-contrast="true"] { --ink: #111; --ink-muted: #222; --line: #555; }
+:root[data-theme="dark"][data-high-contrast="true"] { --ink: #fff; --ink-muted: #eee; --line: #aaa; }
+:root[data-high-contrast="true"] :is(button,input,select,textarea,[role="button"]) { border: 1px solid currentColor; }
+:root[data-high-contrast="true"] :focus-visible { outline: 3px solid currentColor !important; outline-offset: 3px; }

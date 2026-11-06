@@ -12,6 +12,10 @@ use gtk::prelude::*;
 use meridian_shell::{greeter, install_css, paths, preflight};
 
 fn main() -> glib::ExitCode {
+    // No GTK or worker threads exist yet; renderers inherit this font profile.
+    unsafe {
+        meridian_shell::rendering::initialize_process();
+    }
     meridian_shell::init_logging();
     let _instance = match meridian_shell::instance::InstanceGuard::acquire("greeter") {
         Ok(guard) => guard,
