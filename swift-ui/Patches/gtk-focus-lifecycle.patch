@@ -1,0 +1,12 @@
+diff --git a/Sources/GtkBackend/Features/FocusHandling.swift b/Sources/GtkBackend/Features/FocusHandling.swift
+--- a/Sources/GtkBackend/Features/FocusHandling.swift
++++ b/Sources/GtkBackend/Features/FocusHandling.swift
+@@ -6,7 +6,7 @@ extension GtkBackend: BackendFeatures.FocusHandling, BackendFeatures.FocusDisabling {
+     public func setFocus(of widget: Gtk.Widget, to focus: SwiftCrossUI.Focus) {
+         if focus == .focused && ObjectIdentifier(widget) != lastFocusedWidget {
+             widget.makeKey()
+-        } else if focus == .unfocused {
++        } else if focus == .unfocused && ObjectIdentifier(widget) == lastFocusedWidget {
+             widget.root?.setFocus(to: nil)
+         }
+     }

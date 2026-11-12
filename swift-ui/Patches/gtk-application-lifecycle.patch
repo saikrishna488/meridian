@@ -1,0 +1,14 @@
+diff --git a/Sources/Gtk/Application.swift b/Sources/Gtk/Application.swift
+--- a/Sources/Gtk/Application.swift
++++ b/Sources/Gtk/Application.swift
+@@ -23,6 +23,10 @@ public class Application: GObject, GActionMap {
+             _menuBarModel
+         }
+         set {
++            guard g_application_get_is_registered(applicationPointer.cast()) != 0 else {
++                _menuBarModel = newValue
++                return
++            }
+             gtk_application_set_menubar(
+                 applicationPointer,
+                 (newValue?.pointer).map(UnsafeMutablePointer.init)

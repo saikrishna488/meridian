@@ -1,0 +1,24 @@
+#ifndef MERIDIAN_SURFACE_H
+#define MERIDIAN_SURFACE_H
+#include <stddef.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
+/* Configure a borrowed GtkWindow before realization on the GTK main thread.
+ * Returns 0 with an error if the display lacks layer-shell or it is too late.
+ * Repeated calls for a window configured here are harmless, even after mapping.
+ * Never use this for authentication: lockers require ext-session-lock-v1. */
+enum meridian_surface_role {
+    MERIDIAN_SURFACE_APPLICATIONS = 0,
+    MERIDIAN_SURFACE_WALLPAPER = 1,
+    MERIDIAN_SURFACE_TOPBAR = 2,
+    MERIDIAN_SURFACE_DOCK = 3
+};
+/* Bars reserve their actual height; wallpaper never takes keyboard focus.
+ * Applies to the compositor-selected output. Multi-output hosting is pending. */
+int meridian_surface_configure(void *gtk_window, enum meridian_surface_role role, char *error, size_t capacity);
+int meridian_surface_applications(void *gtk_window, char *error, size_t capacity);
+#ifdef __cplusplus
+}
+#endif
+#endif
