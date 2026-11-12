@@ -34,7 +34,7 @@ The standalone executable accepts `--desktop` for the workspace, `--desktop
   format. Saving preferences does not implement global desktop search.
 - Session mode provides a layer-shell wallpaper, top bar, and dock. Bars reserve
   their actual heights. Their navigation buttons select and reopen the workspace.
-  Wallpaper never accepts keyboard focus; bars request focus only on interaction.
+  Desktop and bar surfaces take keyboard focus on interaction.
 
 Blocking backend calls run on a Swift actor with separate capability-scoped
 clients for Files and Settings. Requests have a deadline, bounded native worker
@@ -75,9 +75,18 @@ unqualified.
 ## Remaining before production replacement
 
 This is a testable shell prototype, not full migration parity. Multi-monitor
-surface ownership/hotplug, task/window tracking, icons and pins, Control Center,
+surface ownership/hotplug, task/window tracking, dock drag reordering, Control Center,
 complete Settings, notifications, terminal/PTY, lock/greeter, installer/packaging,
 and physical-input/accessibility/release qualification remain. Session mode hosts
 surfaces on the compositor-selected output. Closing the test compositor is not a
 screen lock. The authentication path must use a compositor session-lock protocol
 and PAM/greetd before any production switchover.
+
+## macOS-style Swift component kit
+
+The shell now uses the reusable `MarsOSKit` Swift library, adapted from Luminare's
+surface and component architecture with BSD-3-Clause attribution. See
+[kit components and test commands](../swift-ui/KIT.md). It supplies native icon dock
+items, slim top-bar styling, grouped sections and actions. Desktop right-click
+includes Files, New Folder, Refresh, wallpaper choices and Settings. Application
+pins and wallpaper palette choices are persisted for the native shell.

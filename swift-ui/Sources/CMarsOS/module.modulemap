@@ -2,6 +2,7 @@ module CMarsOS [system] {
     header "../../../native/include/meridian.h"
     header "../../../native/include/meridian_surface.h"
     header "../../../native/include/meridian_backend.h"
+    header "../../../native/include/meridian_style.h"
     link "meridian-native"
     link "meridian-surfaces"
     export *

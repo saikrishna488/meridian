@@ -1,0 +1,11 @@
+diff --git a/Sources/GtkBackend/Features/FocusHandling.swift b/Sources/GtkBackend/Features/FocusHandling.swift
+--- a/Sources/GtkBackend/Features/FocusHandling.swift
++++ b/Sources/GtkBackend/Features/FocusHandling.swift
+@@ -47,4 +47,6 @@
+-            self.lastFocusedWidget = nil
++            if self.lastFocusedWidget == objectIdentifier {
++                self.lastFocusedWidget = nil
++            }
+             observers.forEach { observer in
+                 observer.didLoseFocus()
+             }

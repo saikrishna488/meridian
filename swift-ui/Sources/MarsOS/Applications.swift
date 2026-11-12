@@ -1,3 +1,4 @@
+import MarsOSKit
 import CMarsOS
 import DefaultBackend
 import Foundation
@@ -7,6 +8,7 @@ import SwiftCrossUI
 struct ApplicationEntry {
     let id: String
     let name: String
+    let icon: String
 }
 
 // C++ owns the immutable GIO snapshot; Swift copies display strings and releases
@@ -33,7 +35,8 @@ private final class CatalogStorage {
         entries = (0..<meridian_catalog_count(handle)).compactMap { index in
             guard let id = meridian_catalog_id(handle, index),
                   let name = meridian_catalog_name(handle, index) else { return nil }
-            return ApplicationEntry(id: String(cString: id), name: String(cString: name))
+            let icon = meridian_catalog_icon(handle, index).map { String(cString: $0) } ?? "application-x-executable"
+            return ApplicationEntry(id: String(cString: id), name: String(cString: name), icon: icon)
         }
         error = ""
     }
@@ -56,7 +59,21 @@ struct MarsOSApplications: App {
     @State private var status = ""
     @State private var catalog = Catalog()
     @State private var section = "Applications"
+    @State private var pins = Array((UserDefaults.standard.stringArray(forKey: "nativeDockPins") ?? []).prefix(8))
+    @State private var directory = ProcessInfo.processInfo.environment["MERIDIAN_NATIVE_DIRECTORY"] ?? FileManager.default.homeDirectoryForCurrentUser.path
+    @State private var desktopPath = ProcessInfo.processInfo.environment["MERIDIAN_NATIVE_DESKTOP_DIRECTORY"] ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop").path
+    @State private var desktopRevision = 0
+    @State private var palette = UserDefaults.standard.integer(forKey: "nativeDesktopPalette")
     private var sessionMode: Bool { ProcessInfo.processInfo.arguments.contains("--session") }
+
+    private func savePreference(_ value: Any, key: String) {
+        let defaults = UserDefaults.standard
+        defaults.set(value, forKey: key)
+        // Linux Foundation must flush before a shell process can be terminated.
+        if !defaults.synchronize() {
+            FileHandle.standardError.write(Data("Could not save native desktop preferences.\n".utf8))
+        }
+    }
 
     var matches: [ApplicationEntry] {
         catalog.entries.filter { query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) }
@@ -65,7 +82,9 @@ struct MarsOSApplications: App {
     var body: some Scene {
         Window("MarsOS Desktop Prototype", id: "workspace") {
             if ProcessInfo.processInfo.arguments.contains("--desktop") || sessionMode {
-                DesktopPrototype(section: $section)
+                DesktopPrototype(section: $section, pins: $pins, directory: $directory)
+                    .marsAppearance()
+                    .onChange(of: pins) { savePreference(pins, key: "nativeDockPins") }
             } else {
                 VStack(spacing: 16) {
                     HStack {
@@ -83,12 +102,13 @@ struct MarsOSApplications: App {
                     ScrollView {
                         VStack(spacing: 8) {
                             ForEach(matches, id: \.id) { app in
-                                ApplicationTile(name: app.name) { status = catalog.launch(app.id) }
+                                ApplicationTile(name: app.name, icon: app.icon) { status = catalog.launch(app.id) }
                             }
                         }
                     }
                 }.padding(24)
                     .background(MarsOSTheme.canvas)
+                    .marsAppearance()
                     .onAppear { searchFocused = true }
                     .inspectWindow { window in
                         if ProcessInfo.processInfo.arguments.contains("--overlay") {
@@ -106,33 +126,36 @@ struct MarsOSApplications: App {
             .defaultLaunchBehavior(.presented)
 
         Window("MarsOS wallpaper", id: "wallpaper") {
-            VStack {
-                Spacer()
-                Text("MarsOS").font(.title)
-                Text("Swift desktop preview")
-                Spacer()
-            }.frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(red: 0.10, green: 0.18, blue: 0.27))
-                .foregroundColor(.white)
+            DesktopSurface(section: $section, directory: $directory, desktopPath: $desktopPath,
+                           palette: palette, revision: desktopRevision)
+                .marsAppearance()
                 .inspectWindow { configureSurface(UnsafeMutableRawPointer($0.gobjectPointer), MERIDIAN_SURFACE_WALLPAPER) }
         }.defaultLaunchBehavior(sessionMode ? .presented : .suppressed)
 
         Window("MarsOS top bar", id: "topbar") {
-            HStack {
-                Text("MarsOS").font(.title)
-                Spacer()
-                Text("Native desktop prototype")
-                NativeNavigation(section: $section)
-            }.padding(8).background(MarsOSTheme.card)
+            DesktopTopBar(section: $section)
+                .marsAppearance()
                 .inspectWindow { configureSurface(UnsafeMutableRawPointer($0.gobjectPointer), MERIDIAN_SURFACE_TOPBAR) }
-        }.defaultSize(width: 1000, height: 48)
+        }.defaultSize(width: 1000, height: 32)
             .defaultLaunchBehavior(sessionMode ? .presented : .suppressed)
 
         Window("MarsOS dock", id: "dock") {
-            NativeNavigation(section: $section)
-                .padding(12).background(MarsOSTheme.card)
+            DesktopDock(section: $section, pins: $pins)
+                .marsAppearance()
+                .onChange(of: pins) { savePreference(pins, key: "nativeDockPins") }
                 .inspectWindow { configureSurface(UnsafeMutableRawPointer($0.gobjectPointer), MERIDIAN_SURFACE_DOCK) }
-        }.defaultSize(width: 340, height: 64)
+        }.defaultSize(width: 560, height: 72)
+            .windowResizability(.contentSize)
             .defaultLaunchBehavior(sessionMode ? .presented : .suppressed)
+
+        Window("New Folder", id: "desktop-new-folder") {
+            DesktopFolderCreator(path: desktopPath, revision: $desktopRevision).marsAppearance()
+        }.defaultSize(width: 440, height: 240)
+
+        Window("Desktop Appearance", id: "desktop-appearance") {
+            DesktopAppearance(palette: $palette)
+                .marsAppearance()
+                .onChange(of: palette) { savePreference(palette, key: "nativeDesktopPalette") }
+        }.defaultSize(width: 360, height: 320)
     }
 }

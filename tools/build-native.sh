@@ -22,6 +22,11 @@ for patch_file in "$root/swift-ui/Patches/"*.patch; do
 done
 read -r -a gio_flags <<< "$(pkg-config --libs-only-L --libs-only-l gio-unix-2.0 libsystemd gtk4 gtk4-layer-shell-0)"
 swift_flags=(-Xlinker "-L$root/target/native" -Xlinker -lmeridian-native -Xlinker -lmeridian-surfaces -Xlinker -lstdc++)
+# SwiftPM does not track external CMake archives as build inputs. Change a
+# link-only flag when their contents change so incremental builds cannot run
+# stale native code. GNU ld supports this absolute metadata symbol on Linux.
+native_hash=$(sha256sum "$root/target/native/libmeridian-native.a" "$root/target/native/libmeridian-surfaces.a" | sha256sum)
+swift_flags+=(-Xlinker "--defsym=meridian_native_build=0x${native_hash:0:15}")
 for flag in "${gio_flags[@]}"; do swift_flags+=(-Xlinker "$flag"); done
 # Swift 6.3's TBD validator misclassifies the GLib 2.88 GDBus constants used
 # by the pinned Gtk backend. Apply only to that compiler/library combination.

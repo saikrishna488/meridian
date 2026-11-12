@@ -1,4 +1,5 @@
 #include "meridian_surface.h"
+#include "meridian_style.h"
 #include <gtk/gtk.h>
 #include <gtk4-layer-shell.h>
 #include <cstdio>
@@ -28,6 +29,8 @@ extern "C" int meridian_surface_configure(void *pointer, meridian_surface_role r
     if (gtk_widget_get_realized(GTK_WIDGET(window))) return fail(error, capacity, "Surface must be configured before realization.");
     if (!gtk_layer_is_supported()) return fail(error, capacity, "The display does not support Wayland layer-shell.");
     if (gtk_layer_is_layer_window(window)) return fail(error, capacity, "Surface is already configured.");
+    meridian_widget_style(window, MERIDIAN_STYLE_PANEL);
+    gtk_widget_add_css_class(GTK_WIDGET(window), "mars-layer");
     gtk_window_set_decorated(window, FALSE);
     gtk_layer_init_for_window(window);
     const char *names[] = {"meridian-native-applications", "meridian-native-wallpaper", "meridian-native-topbar", "meridian-native-dock"};
@@ -37,7 +40,7 @@ extern "C" int meridian_surface_configure(void *pointer, meridian_surface_role r
     gtk_layer_set_layer(window, overlay ? GTK_LAYER_SHELL_LAYER_OVERLAY
         : wallpaper ? GTK_LAYER_SHELL_LAYER_BACKGROUND : GTK_LAYER_SHELL_LAYER_TOP);
     gtk_layer_set_keyboard_mode(window, overlay ? GTK_LAYER_SHELL_KEYBOARD_MODE_EXCLUSIVE
-        : wallpaper ? GTK_LAYER_SHELL_KEYBOARD_MODE_NONE : GTK_LAYER_SHELL_KEYBOARD_MODE_ON_DEMAND);
+        : GTK_LAYER_SHELL_KEYBOARD_MODE_ON_DEMAND);
     gtk_layer_set_exclusive_zone(window, -1);
     if (overlay || wallpaper || role == MERIDIAN_SURFACE_TOPBAR) {
         gtk_layer_set_anchor(window, GTK_LAYER_SHELL_EDGE_LEFT, TRUE);
@@ -45,6 +48,7 @@ extern "C" int meridian_surface_configure(void *pointer, meridian_surface_role r
     }
     gtk_layer_set_anchor(window, GTK_LAYER_SHELL_EDGE_TOP, overlay || wallpaper || role == MERIDIAN_SURFACE_TOPBAR);
     gtk_layer_set_anchor(window, GTK_LAYER_SHELL_EDGE_BOTTOM, overlay || wallpaper || role == MERIDIAN_SURFACE_DOCK);
+    if (role == MERIDIAN_SURFACE_DOCK) gtk_layer_set_margin(window, GTK_LAYER_SHELL_EDGE_BOTTOM, 10);
     if (!overlay && !wallpaper) gtk_layer_auto_exclusive_zone_enable(window);
     if (overlay) {
         auto *keys = gtk_event_controller_key_new();
