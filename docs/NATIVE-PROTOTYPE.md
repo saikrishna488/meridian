@@ -18,6 +18,10 @@ bash tools/dev-native-session.sh
 ```
 
 Super+Q exits the test compositor; Alt+Tab switches application windows.
+The launcher checks the executable and shared libraries before opening labwc,
+selects the newest debug/release build unless explicitly configured, and uses a
+private application bus. Startup output is saved to `target/native-session.log`.
+If the Swift shell exits, its test compositor exits too.
 The session starts only the native prototype, not meridian-shell or the web UI.
 The standalone executable accepts `--desktop` for the workspace, `--desktop
 --session` to add desktop surfaces, or `--overlay` for the keyboard launcher.
@@ -45,6 +49,7 @@ remain visible in the corresponding pane.
 
 ```sh
 bash tools/check-native.sh --wayland
+python3 tools/tests/native-session-startup.py
 MERIDIAN_BUILD_CONFIGURATION=debug MERIDIAN_NATIVE_TESTS=1 bash tools/build-native.sh
 python3 tools/tests/native-wayland.py \
   --launcher target/swift-ui/debug/meridian-native-applications

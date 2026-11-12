@@ -39,6 +39,7 @@ change the old React desktop's dock preferences.
 ```sh
 MERIDIAN_BUILD_CONFIGURATION=debug MERIDIAN_NATIVE_TESTS=1 bash tools/build-native.sh
 bash tools/dev-native-session.sh
+python3 tools/tests/native-session-startup.py
 bash tools/test-native-desktop.sh --screenshots target/native-chrome
 GTK_THEME=Adwaita:dark bash tools/test-native-desktop.sh --screenshots target/native-chrome-dark
 ```
@@ -54,3 +55,8 @@ current dock launches pinned apps; it does not invent running-state indicators.
 The build fingerprints both external CMake archives in a link flag so SwiftPM
 relinks after C++ changes. The focused-field lifecycle patches also protect
 cross-window focus bookkeeping; see `Patches/`.
+
+The session-startup regression exercises the actual launcher script: missing
+executable preflight, paths with spaces, private bus isolation, compositor exit
+when its client exits, and a visible Swift-rendered frame. It complements the
+workspace tests, which launch the executable directly for input checks.
